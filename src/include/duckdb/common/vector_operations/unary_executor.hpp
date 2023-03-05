@@ -71,25 +71,14 @@ private:
 		ASSERT_RESTRICT(ldata, ldata + max_index, result_data, result_data + count);
 #endif
 
-		if (!mask.AllValid()) {
-			result_mask.EnsureWritable();
-			for (idx_t i = 0; i < count; i++) {
-				auto idx = sel_vector->get_index(i);
-				if (mask.RowIsValidUnsafe(idx)) {
-					result_data[i] =
-					    OPWRAPPER::template Operation<OP, INPUT_TYPE, RESULT_TYPE>(ldata[idx], result_mask, i, dataptr);
-				} else {
-					result_mask.SetInvalid(i);
-				}
-			}
-		} else {
-			if (adds_nulls) {
-				result_mask.EnsureWritable();
-			}
-			for (idx_t i = 0; i < count; i++) {
-				auto idx = sel_vector->get_index(i);
+		result_mask.EnsureWritable();
+		for (idx_t i = 0; i < count; i++) {
+			auto idx = sel_vector->get_index(i);
+			if (mask.RowIsValidUnsafe(idx)) {
 				result_data[i] =
 				    OPWRAPPER::template Operation<OP, INPUT_TYPE, RESULT_TYPE>(ldata[idx], result_mask, i, dataptr);
+			} else {
+				result_mask.SetInvalid(i);
 			}
 		}
 	}
@@ -158,15 +147,6 @@ private:
 				*result_data = OPWRAPPER::template Operation<OP, INPUT_TYPE, RESULT_TYPE>(
 				    *ldata, ConstantVector::Validity(result), 0, dataptr);
 			}
-			break;
-		}
-		case VectorType::FLAT_VECTOR: {
-			result.SetVectorType(VectorType::FLAT_VECTOR);
-			auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
-			auto ldata = FlatVector::GetData<INPUT_TYPE>(input);
-
-			ExecuteFlat<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP>(ldata, result_data, count, FlatVector::Validity(input),
-			                                                    FlatVector::Validity(result), dataptr, adds_nulls);
 			break;
 		}
 		default: {

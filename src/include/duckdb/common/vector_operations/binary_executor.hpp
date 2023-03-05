@@ -188,25 +188,16 @@ struct BinaryExecutor {
 	                               RESULT_TYPE *__restrict result_data, const SelectionVector *__restrict lsel,
 	                               const SelectionVector *__restrict rsel, idx_t count, ValidityMask &lvalidity,
 	                               ValidityMask &rvalidity, ValidityMask &result_validity, FUNC fun) {
-		if (!lvalidity.AllValid() || !rvalidity.AllValid()) {
-			for (idx_t i = 0; i < count; i++) {
-				auto lindex = lsel->get_index(i);
-				auto rindex = rsel->get_index(i);
-				if (lvalidity.RowIsValid(lindex) && rvalidity.RowIsValid(rindex)) {
-					auto lentry = ldata[lindex];
-					auto rentry = rdata[rindex];
-					result_data[i] = OPWRAPPER::template Operation<FUNC, OP, LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(
-					    fun, lentry, rentry, result_validity, i);
-				} else {
-					result_validity.SetInvalid(i);
-				}
-			}
-		} else {
-			for (idx_t i = 0; i < count; i++) {
-				auto lentry = ldata[lsel->get_index(i)];
-				auto rentry = rdata[rsel->get_index(i)];
+		for (idx_t i = 0; i < count; i++) {
+			auto lindex = lsel->get_index(i);
+			auto rindex = rsel->get_index(i);
+			if (lvalidity.RowIsValid(lindex) && rvalidity.RowIsValid(rindex)) {
+				auto lentry = ldata[lindex];
+				auto rentry = rdata[rindex];
 				result_data[i] = OPWRAPPER::template Operation<FUNC, OP, LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(
 				    fun, lentry, rentry, result_validity, i);
+			} else {
+				result_validity.SetInvalid(i);
 			}
 		}
 	}
@@ -231,15 +222,6 @@ struct BinaryExecutor {
 		auto right_vector_type = right.GetVectorType();
 		if (left_vector_type == VectorType::CONSTANT_VECTOR && right_vector_type == VectorType::CONSTANT_VECTOR) {
 			ExecuteConstant<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC>(left, right, result, fun);
-		} else if (left_vector_type == VectorType::FLAT_VECTOR && right_vector_type == VectorType::CONSTANT_VECTOR) {
-			ExecuteFlat<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, false, true>(left, right, result,
-			                                                                                  count, fun);
-		} else if (left_vector_type == VectorType::CONSTANT_VECTOR && right_vector_type == VectorType::FLAT_VECTOR) {
-			ExecuteFlat<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, true, false>(left, right, result,
-			                                                                                  count, fun);
-		} else if (left_vector_type == VectorType::FLAT_VECTOR && right_vector_type == VectorType::FLAT_VECTOR) {
-			ExecuteFlat<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, false, false>(left, right, result,
-			                                                                                   count, fun);
 		} else {
 			ExecuteGeneric<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC>(left, right, result, count, fun);
 		}
