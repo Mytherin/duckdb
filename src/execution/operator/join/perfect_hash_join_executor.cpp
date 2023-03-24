@@ -120,7 +120,9 @@ bool PerfectHashJoinExecutor::TemplatedFillSelectionVectorBuild(Vector &source, 
 			}
 			seq_sel_vec.set_index(sel_idx++, i);
 		} else {
-			throw IOException("Perfect hash join - value %llu is not in range of provided min - max values (%llu - %llu). Potentially corrupt statistics encountered.", input_value, min_value, max_value);
+			throw IOException("Perfect hash join - value %llu is not in range of provided min - max values (%llu - "
+			                  "%llu). Potentially corrupt statistics encountered.",
+			                  input_value, min_value, max_value);
 		}
 	}
 	return true;
@@ -240,8 +242,9 @@ void PerfectHashJoinExecutor::TemplatedFillSelectionVectorProbe(Vector &source, 
 		auto input_value = data[data_idx];
 		// add index to selection vector if value in the range
 		if (min_value <= input_value && input_value <= max_value) {
-			auto idx = (idx_t)(input_value - min_value); // subtract min value to get the idx position
-														 // check for matches in the build
+			// subtract min value to get the idx position
+			auto idx = (idx_t)(input_value - min_value);
+			// check for matches in the build
 			if (bitmap_build_idx[idx]) {
 				build_sel_vec.set_index(sel_idx, idx);
 				probe_sel_vec.set_index(sel_idx++, i);
