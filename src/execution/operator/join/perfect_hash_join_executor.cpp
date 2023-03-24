@@ -119,6 +119,8 @@ bool PerfectHashJoinExecutor::TemplatedFillSelectionVectorBuild(Vector &source, 
 				unique_keys++;
 			}
 			seq_sel_vec.set_index(sel_idx++, i);
+		} else {
+			throw IOException("Perfect hash join - value %llu is not in range of provided min - max values (%llu - %llu). Potentially corrupt statistics encountered.", input_value, min_value, max_value);
 		}
 	}
 	return true;
@@ -227,41 +229,23 @@ void PerfectHashJoinExecutor::TemplatedFillSelectionVectorProbe(Vector &source, 
 	UnifiedVectorFormat vector_data;
 	source.ToUnifiedFormat(count, vector_data);
 	auto data = reinterpret_cast<T *>(vector_data.data);
-	auto validity_mask = &vector_data.validity;
+	auto &validity_mask = vector_data.validity;
 	// build selection vector for non-dense build
-	if (validity_mask->AllValid()) {
-		for (idx_t i = 0, sel_idx = 0; i < count; ++i) {
-			// retrieve value from vector
-			auto data_idx = vector_data.sel->get_index(i);
-			auto input_value = data[data_idx];
-			// add index to selection vector if value in the range
-			if (min_value <= input_value && input_value <= max_value) {
-				auto idx = (idx_t)(input_value - min_value); // subtract min value to get the idx position
-				                                             // check for matches in the build
-				if (bitmap_build_idx[idx]) {
-					build_sel_vec.set_index(sel_idx, idx);
-					probe_sel_vec.set_index(sel_idx++, i);
-					probe_sel_count++;
-				}
-			}
+	for (idx_t i = 0, sel_idx = 0; i < count; ++i) {
+		// retrieve value from vector
+		auto data_idx = vector_data.sel->get_index(i);
+		if (!validity_mask.RowIsValid(data_idx)) {
+			continue;
 		}
-	} else {
-		for (idx_t i = 0, sel_idx = 0; i < count; ++i) {
-			// retrieve value from vector
-			auto data_idx = vector_data.sel->get_index(i);
-			if (!validity_mask->RowIsValid(data_idx)) {
-				continue;
-			}
-			auto input_value = data[data_idx];
-			// add index to selection vector if value in the range
-			if (min_value <= input_value && input_value <= max_value) {
-				auto idx = (idx_t)(input_value - min_value); // subtract min value to get the idx position
-				                                             // check for matches in the build
-				if (bitmap_build_idx[idx]) {
-					build_sel_vec.set_index(sel_idx, idx);
-					probe_sel_vec.set_index(sel_idx++, i);
-					probe_sel_count++;
-				}
+		auto input_value = data[data_idx];
+		// add index to selection vector if value in the range
+		if (min_value <= input_value && input_value <= max_value) {
+			auto idx = (idx_t)(input_value - min_value); // subtract min value to get the idx position
+														 // check for matches in the build
+			if (bitmap_build_idx[idx]) {
+				build_sel_vec.set_index(sel_idx, idx);
+				probe_sel_vec.set_index(sel_idx++, i);
+				probe_sel_count++;
 			}
 		}
 	}
