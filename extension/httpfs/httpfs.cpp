@@ -377,12 +377,16 @@ unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, uint8_t flag
 void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	auto &hfh = handle.Cast<HTTPFileHandle>();
 
-	D_ASSERT(hfh.state);
-	auto &cached_file = hfh.state->cached_files[hfh.path];
-	if (cached_file.data) {
-		memcpy(buffer, cached_file.data.get() + location, nr_bytes);
-		hfh.file_offset = location + nr_bytes;
-		return;
+	if (hfh.state) {
+		auto entry = hfh.state->cached_files.find(hfh.path);
+		if (entry != hfh.state->cached_files.end()) {
+			auto &cached_file = entry->second;
+			if (!cached_file.data) {
+				throw InternalException("HTTPFS Cached entry without data");
+			}
+			memcpy(buffer, cached_file.data.get() + location, nr_bytes);
+			hfh.file_offset = location + nr_bytes;
+		}
 	}
 
 	idx_t to_read = nr_bytes;
@@ -539,9 +543,6 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 	InitializeClient();
 	auto &hfs = (HTTPFileSystem &)file_system;
 	state = HTTPState::TryGetState(opener);
-	if (!state) {
-		throw InternalException("State was not defined in this HTTP File Handle");
-	}
 
 	HTTPMetadataCache *current_cache = TryGetMetadataCache(opener, hfs);
 
@@ -628,7 +629,7 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 			throw IOException("Invalid Content-Length header received: %s", res->headers["Content-Length"]);
 		}
 	}
-	if (length == 0 || http_params.force_download) {
+	if (state && (length == 0 || http_params.force_download)) {
 		lock_guard<mutex> lock(state->cached_files_mutex);
 		auto &cached_file = state->cached_files[path];
 

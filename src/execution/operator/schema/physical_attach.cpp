@@ -43,10 +43,11 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 			unrecognized_option = entry.first;
 		}
 	}
+	auto &fs = FileSystem::GetFileSystem(context.client);
 	auto &db = DatabaseInstance::GetDatabase(context.client);
 	if (type.empty()) {
 		// try to extract type from path
-		auto path_and_type = DBPathAndType::Parse(info->path, config);
+		auto path_and_type = DBPathAndType::Parse(info->path, config, fs);
 		type = path_and_type.type;
 		info->path = path_and_type.path;
 	}

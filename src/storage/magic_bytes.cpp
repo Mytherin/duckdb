@@ -1,12 +1,9 @@
 #include "duckdb/storage/magic_bytes.hpp"
-#include "duckdb/common/local_file_system.hpp"
 #include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
 
-DataFileType MagicBytes::CheckMagicBytes(FileSystem *fs_p, const string &path) {
-	LocalFileSystem lfs;
-	FileSystem &fs = fs_p ? *fs_p : lfs;
+DataFileType MagicBytes::CheckMagicBytes(FileSystem &fs, const string &path) {
 	auto handle = fs.TryOpenFile(path, FileFlags::FILE_FLAGS_READ);
 	if (!handle) {
 		return DataFileType::FILE_DOES_NOT_EXIST;
