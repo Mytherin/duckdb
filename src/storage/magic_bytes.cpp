@@ -1,5 +1,6 @@
 #include "duckdb/storage/magic_bytes.hpp"
 #include "duckdb/storage/storage_info.hpp"
+#include "duckdb/common/file_system.hpp"
 
 namespace duckdb {
 
