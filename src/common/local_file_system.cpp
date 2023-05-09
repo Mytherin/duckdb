@@ -751,6 +751,11 @@ void LocalFileSystem::MoveFile(const string &source, const string &target) {
 	}
 }
 
+static DWORD WindowsGetFileAttributes(const string &filename) {
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
+	return GetFileAttributesW(unicode_path.c_str());
+}
+
 FileType LocalFileSystem::GetFileType(FileHandle &handle) {
 	auto path = ((WindowsFileHandle &)handle).path;
 	// pipes in windows are just files in '\\.\pipe\' folder
