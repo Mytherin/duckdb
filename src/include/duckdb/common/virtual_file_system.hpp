@@ -56,10 +56,6 @@ public:
 		handle.file_system.FileSync(handle);
 	}
 
-	// need to look up correct fs for this
-	bool DirectoryExists(const string &directory) override {
-		return FindFileSystem(directory)->DirectoryExists(directory);
-	}
 	void CreateDirectory(const string &directory) override {
 		FindFileSystem(directory)->CreateDirectory(directory);
 	}
@@ -77,12 +73,17 @@ public:
 		FindFileSystem(source)->MoveFile(source, target);
 	}
 
-	bool FileExists(const string &filename) override {
-		return FindFileSystem(filename)->FileExists(filename);
+	FileType GetFileType(const string &filename, optional_ptr<FileOpener> opener = nullptr) override {
+		return FindFileSystem(filename)->GetFileType(filename, opener);
 	}
-
-	bool IsPipe(const string &filename) override {
-		return FindFileSystem(filename)->IsPipe(filename);
+	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener = nullptr) override {
+		return FindFileSystem(directory)->DirectoryExists(directory, opener);
+	}
+	bool FileExists(const string &filename, optional_ptr<FileOpener> opener = nullptr) override {
+		return FindFileSystem(filename)->FileExists(filename, opener);
+	}
+	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener = nullptr) override {
+		return FindFileSystem(filename)->IsPipe(filename, opener);
 	}
 	virtual void RemoveFile(const string &filename) override {
 		FindFileSystem(filename)->RemoveFile(filename);

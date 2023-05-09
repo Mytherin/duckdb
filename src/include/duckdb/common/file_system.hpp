@@ -80,6 +80,18 @@ public:
 public:
 	FileSystem &file_system;
 	string path;
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return (TARGET &)*this;
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return (const TARGET &)*this;
+	}
 };
 
 enum class FileLockType : uint8_t { NO_LOCK = 0, READ_LOCK = 1, WRITE_LOCK = 2 };
@@ -138,8 +150,6 @@ public:
 	//! the file
 	DUCKDB_API virtual void Truncate(FileHandle &handle, int64_t new_size);
 
-	//! Check if a directory exists
-	DUCKDB_API virtual bool DirectoryExists(const string &directory);
 	//! Create a directory if it does not exist
 	DUCKDB_API virtual void CreateDirectory(const string &directory);
 	//! Recursively remove a directory and all files in it
@@ -152,10 +162,14 @@ public:
 	//! Move a file from source path to the target, StorageManager relies on this being an atomic action for ACID
 	//! properties
 	DUCKDB_API virtual void MoveFile(const string &source, const string &target);
+	//! Get the file type of a file
+	DUCKDB_API virtual FileType GetFileType(const string &filename, optional_ptr<FileOpener> opener = nullptr);
 	//! Check if a file exists
-	DUCKDB_API virtual bool FileExists(const string &filename);
+	DUCKDB_API virtual bool FileExists(const string &filename, optional_ptr<FileOpener> opener = nullptr);
 	//! Check if path is pipe
-	DUCKDB_API virtual bool IsPipe(const string &filename);
+	DUCKDB_API virtual bool IsPipe(const string &filename, optional_ptr<FileOpener> opener = nullptr);
+	//! Check if a directory exists
+	DUCKDB_API virtual bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener = nullptr);
 	//! Remove a file from disk
 	DUCKDB_API virtual void RemoveFile(const string &filename);
 	//! Sync a file handle to disk

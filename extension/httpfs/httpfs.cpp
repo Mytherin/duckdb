@@ -133,7 +133,7 @@ RunRequestWithRetry(const std::function<duckdb_httplib_openssl::Result(void)> &r
 unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, string url, HeaderMap header_map,
                                                         duckdb::unique_ptr<char[]> &buffer_out, idx_t &buffer_out_len,
                                                         char *buffer_in, idx_t buffer_in_len, string params) {
-	auto &hfs = (HTTPFileHandle &)handle;
+	auto &hfs = handle.Cast<HTTPFileHandle>();
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
 	auto headers = initialize_http_headers(header_map);
@@ -192,7 +192,7 @@ unique_ptr<duckdb_httplib_openssl::Client> HTTPFileSystem::GetClient(const HTTPP
 
 unique_ptr<ResponseWrapper> HTTPFileSystem::PutRequest(FileHandle &handle, string url, HeaderMap header_map,
                                                        char *buffer_in, idx_t buffer_in_len, string params) {
-	auto &hfs = (HTTPFileHandle &)handle;
+	auto &hfs = handle.Cast<HTTPFileHandle>();
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
 	auto headers = initialize_http_headers(header_map);
@@ -210,7 +210,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PutRequest(FileHandle &handle, strin
 }
 
 unique_ptr<ResponseWrapper> HTTPFileSystem::HeadRequest(FileHandle &handle, string url, HeaderMap header_map) {
-	auto &hfs = (HTTPFileHandle &)handle;
+	auto &hfs = handle.Cast<HTTPFileHandle>();
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
 	auto headers = initialize_http_headers(header_map);
@@ -229,7 +229,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::HeadRequest(FileHandle &handle, stri
 }
 
 unique_ptr<ResponseWrapper> HTTPFileSystem::GetRequest(FileHandle &handle, string url, HeaderMap header_map) {
-	auto &hfs = (HTTPFileHandle &)handle;
+	auto &hfs = handle.Cast<HTTPFileHandle>();
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
 	auto headers = initialize_http_headers(header_map);
@@ -296,7 +296,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRequest(FileHandle &handle, strin
 
 unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map,
                                                             idx_t file_offset, char *buffer_out, idx_t buffer_out_len) {
-	auto &hfs = (HTTPFileHandle &)handle;
+	auto &hfs = handle.Cast<HTTPFileHandle>();
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
 	auto headers = initialize_http_headers(header_map);
@@ -375,7 +375,7 @@ unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, uint8_t flag
 // Buffered read from http file.
 // Note that buffering is disabled when FileFlags::FILE_FLAGS_DIRECT_IO is set
 void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
-	auto &hfh = (HTTPFileHandle &)handle;
+	auto &hfh = handle.Cast<HTTPFileHandle>();
 
 	D_ASSERT(hfh.state);
 	auto &cached_file = hfh.state->cached_files[hfh.path];
@@ -444,7 +444,7 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
 }
 
 int64_t HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	auto &hfh = (HTTPFileHandle &)handle;
+	auto &hfh = handle.Cast<HTTPFileHandle>();
 	idx_t max_read = hfh.length - hfh.file_offset;
 	nr_bytes = MinValue<idx_t>(max_read, nr_bytes);
 	Read(handle, buffer, nr_bytes, hfh.file_offset);
@@ -456,7 +456,7 @@ void HTTPFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, i
 }
 
 int64_t HTTPFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	auto &hfh = (HTTPFileHandle &)handle;
+	auto &hfh = handle.Cast<HTTPFileHandle>();
 	Write(handle, buffer, nr_bytes, hfh.file_offset);
 	return nr_bytes;
 }
@@ -466,26 +466,39 @@ void HTTPFileSystem::FileSync(FileHandle &handle) {
 }
 
 int64_t HTTPFileSystem::GetFileSize(FileHandle &handle) {
-	auto &sfh = (HTTPFileHandle &)handle;
+	auto &sfh = handle.Cast<HTTPFileHandle>();
 	return sfh.length;
 }
 
 time_t HTTPFileSystem::GetLastModifiedTime(FileHandle &handle) {
-	auto &sfh = (HTTPFileHandle &)handle;
+	auto &sfh = handle.Cast<HTTPFileHandle>();
 	return sfh.last_modified;
 }
 
-bool HTTPFileSystem::FileExists(const string &filename) {
+FileType HTTPFileSystem::GetFileType(const string &filename, optional_ptr<FileOpener> opener) {
 	try {
-		auto handle = OpenFile(filename.c_str(), FileFlags::FILE_FLAGS_READ);
-		auto &sfh = (HTTPFileHandle &)*handle;
+		auto handle = OpenFile(filename.c_str(), FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK, FileCompressionType::UNCOMPRESSED, opener.get());
+		auto &sfh = handle->Cast<HTTPFileHandle>();
 		if (sfh.length == 0) {
-			return false;
+			return FileType::FILE_TYPE_INVALID;
 		}
-		return true;
+		return FileType::FILE_TYPE_REGULAR;
 	} catch (...) {
-		return false;
+		return FileType::FILE_TYPE_INVALID;
 	};
+}
+
+FileType HTTPFileSystem::GetFileType(FileHandle &handle) {
+	return FileType::FILE_TYPE_REGULAR;
+}
+
+
+bool HTTPFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
+	return GetFileType(filename) == FileType::FILE_TYPE_REGULAR;
+}
+
+bool HTTPFileSystem::DirectoryExists(const string &filename, optional_ptr<FileOpener> opener) {
+	throw NotImplementedException("DirectoryExists for HTTP files not implemented");
 }
 
 bool HTTPFileSystem::CanHandleFile(const string &fpath) {
@@ -493,7 +506,7 @@ bool HTTPFileSystem::CanHandleFile(const string &fpath) {
 }
 
 void HTTPFileSystem::Seek(FileHandle &handle, idx_t location) {
-	auto &sfh = (HTTPFileHandle &)handle;
+	auto &sfh = handle.Cast<HTTPFileHandle>();
 	sfh.file_offset = location;
 }
 

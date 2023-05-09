@@ -40,8 +40,6 @@ public:
 	//! the file
 	void Truncate(FileHandle &handle, int64_t new_size) override;
 
-	//! Check if a directory exists
-	bool DirectoryExists(const string &directory) override;
 	//! Create a directory if it does not exist
 	void CreateDirectory(const string &directory) override;
 	//! Recursively remove a directory and all files in it
@@ -52,11 +50,9 @@ public:
 	//! Move a file from source path to the target, StorageManager relies on this being an atomic action for ACID
 	//! properties
 	void MoveFile(const string &source, const string &target) override;
-	//! Check if a file exists
-	bool FileExists(const string &filename) override;
+	//! Get the file type of a file
+	FileType GetFileType(const string &filename, optional_ptr<FileOpener> opener = nullptr) override;
 
-	//! Check if path is a pipe
-	bool IsPipe(const string &filename) override;
 	//! Remove a file from disk
 	void RemoveFile(const string &filename) override;
 	//! Sync a file handle to disk

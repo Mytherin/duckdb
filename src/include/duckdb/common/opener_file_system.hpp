@@ -61,9 +61,6 @@ public:
 		GetFileSystem().FileSync(handle);
 	}
 
-	bool DirectoryExists(const string &directory) override {
-		return GetFileSystem().DirectoryExists(directory);
-	}
 	void CreateDirectory(const string &directory) override {
 		return GetFileSystem().CreateDirectory(directory);
 	}
@@ -92,12 +89,29 @@ public:
 		return FileSystem::ExpandPath(path, GetOpener());
 	}
 
-	bool FileExists(const string &filename) override {
-		return GetFileSystem().FileExists(filename);
+	FileType GetFileType(const string &filename, optional_ptr<FileOpener> opener = nullptr) {
+		if (opener) {
+			throw InternalException("OpenerFileSystem cannot take an opener - the opener is pushed automatically");
+		}
+		return GetFileSystem().GetFileType(filename, GetOpener());
 	}
-
-	bool IsPipe(const string &filename) override {
-		return GetFileSystem().IsPipe(filename);
+	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener = nullptr) override {
+		if (opener) {
+			throw InternalException("OpenerFileSystem cannot take an opener - the opener is pushed automatically");
+		}
+		return GetFileSystem().DirectoryExists(directory, GetOpener());
+	}
+	bool FileExists(const string &filename, optional_ptr<FileOpener> opener = nullptr) override {
+		if (opener) {
+			throw InternalException("OpenerFileSystem cannot take an opener - the opener is pushed automatically");
+		}
+		return GetFileSystem().FileExists(filename, GetOpener());
+	}
+	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener = nullptr) override {
+		if (opener) {
+			throw InternalException("OpenerFileSystem cannot take an opener - the opener is pushed automatically");
+		}
+		return GetFileSystem().IsPipe(filename, GetOpener());
 	}
 	virtual void RemoveFile(const string &filename) override {
 		GetFileSystem().RemoveFile(filename);
