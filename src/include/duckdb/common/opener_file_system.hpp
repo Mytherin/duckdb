@@ -89,7 +89,7 @@ public:
 		return FileSystem::ExpandPath(path, GetOpener());
 	}
 
-	FileType GetFileType(const string &filename, optional_ptr<FileOpener> opener = nullptr) {
+	FileType GetFileType(const string &filename, optional_ptr<FileOpener> opener = nullptr) override {
 		if (opener) {
 			throw InternalException("OpenerFileSystem cannot take an opener - the opener is pushed automatically");
 		}

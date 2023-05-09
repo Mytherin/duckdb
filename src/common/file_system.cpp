@@ -266,9 +266,10 @@ FileType FileSystem::GetFileType(FileHandle &handle) {
 
 FileType FileSystem::GetFileType(const string &filename, optional_ptr<FileOpener> opener) {
 	try {
-		auto handle = OpenFile(filename, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK, FileCompressionType::UNCOMPRESSED, opener.get());
+		auto handle = OpenFile(filename, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
+		                       FileCompressionType::UNCOMPRESSED, opener.get());
 		return GetFileType(*handle);
-	} catch(...) {
+	} catch (...) {
 		return FileType::FILE_TYPE_INVALID;
 	}
 }
