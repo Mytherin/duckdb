@@ -147,10 +147,11 @@ static FileType GetFileTypeInternal(int fd) { // LCOV_EXCL_START
 	}
 } // LCOV_EXCL_STOP
 
-unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock_type,
-                                                 FileCompressionType compression, FileOpener *opener) {
+unique_ptr<FileHandle> LocalFileSystem::TryOpenFile(const string &path, uint8_t flags, FileLockType lock_type,
+                                                    FileCompressionType compression, optional_ptr<FileOpener> opener,
+                                                    optional_ptr<string> out_error) {
 	if (compression != FileCompressionType::UNCOMPRESSED) {
-		throw NotImplementedException("Unsupported compression type for default file system");
+		throw InternalException("Unsupported compression type for default file system");
 	}
 
 	AssertValidFileFlags(flags);
@@ -194,7 +195,10 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t fla
 	}
 	int fd = open(path.c_str(), open_flags, 0666);
 	if (fd == -1) {
-		throw IOException("Cannot open file \"%s\": %s", path, strerror(errno));
+		if (out_error) {
+			*out_error = StringUtil::Format("Cannot open file \"%s\": %s", path, strerror(errno));
+		}
+		return nullptr;
 	}
 	// #if defined(__DARWIN__) || defined(__APPLE__)
 	// 	if (flags & FileFlags::FILE_FLAGS_DIRECT_IO) {
@@ -218,7 +222,10 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t fla
 			fl.l_len = 0;
 			rc = fcntl(fd, F_SETLK, &fl);
 			if (rc == -1) {
-				throw IOException("Could not set lock on file \"%s\": %s", path, strerror(errno));
+				if (out_error) {
+					*out_error = StringUtil::Format("Could not set lock on file \"%s\": %s", path, strerror(errno));
+				}
+				return nullptr;
 			}
 		}
 	}
@@ -477,10 +484,11 @@ public:
 	};
 };
 
-unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock_type,
-                                                 FileCompressionType compression, FileOpener *opener) {
+unique_ptr<FileHandle> LocalFileSystem::TryOpenFile(const string &path, uint8_t flags, FileLockType lock_type,
+                                                    FileCompressionType compression, optional_ptr<FileOpener> opener,
+                                                    optional_ptr<string> out_error) {
 	if (compression != FileCompressionType::UNCOMPRESSED) {
-		throw NotImplementedException("Unsupported compression type for default file system");
+		throw InternalException("Unsupported compression type for default file system");
 	}
 	AssertValidFileFlags(flags);
 
@@ -517,7 +525,10 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t fla
 	                           flags_and_attributes, NULL);
 	if (hFile == INVALID_HANDLE_VALUE) {
 		auto error = LocalFileSystem::GetLastErrorAsString();
-		throw IOException("Cannot open file \"%s\": %s", path.c_str(), error);
+		if (out_error) {
+			*out_error = StringUtil::Format("Cannot open file \"%s\": %s", path.c_str(), error);
+		}
+		return nullptr;
 	}
 	auto handle = make_uniq<WindowsFileHandle>(*this, path.c_str(), hFile);
 	if (flags & FileFlags::FILE_FLAGS_APPEND) {
@@ -758,6 +769,16 @@ FileType LocalFileSystem::GetFileType(FileHandle &handle) {
 }
 #endif
 
+unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,
+                                                 FileCompressionType compression, FileOpener *opener) {
+	string error;
+	auto handle = TryOpenFile(path, flags, lock, compression, opener, &error);
+	if (!handle) {
+		throw IOException(error);
+	}
+	return handle;
+}
+
 bool LocalFileSystem::CanSeek() {
 	return true;
 }
@@ -797,9 +818,11 @@ static bool IsCrawl(const string &glob) {
 	// glob must match exactly
 	return glob == "**";
 }
+
 static bool HasMultipleCrawl(const vector<string> &splits) {
 	return std::count(splits.begin(), splits.end(), "**") > 1;
 }
+
 static bool IsSymbolicLink(const string &path) {
 #ifndef _WIN32
 	struct stat status;

@@ -476,17 +476,16 @@ time_t HTTPFileSystem::GetLastModifiedTime(FileHandle &handle) {
 }
 
 FileType HTTPFileSystem::GetFileType(const string &filename, optional_ptr<FileOpener> opener) {
-	try {
-		auto handle = OpenFile(filename.c_str(), FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
-		                       FileCompressionType::UNCOMPRESSED, opener.get());
-		auto &sfh = handle->Cast<HTTPFileHandle>();
-		if (sfh.length == 0) {
-			return FileType::FILE_TYPE_INVALID;
-		}
-		return FileType::FILE_TYPE_REGULAR;
-	} catch (...) {
+	auto handle = TryOpenFile(filename.c_str(), FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
+	                          FileCompressionType::UNCOMPRESSED, opener.get());
+	if (!handle) {
 		return FileType::FILE_TYPE_INVALID;
-	};
+	}
+	auto &sfh = handle->Cast<HTTPFileHandle>();
+	if (sfh.length == 0) {
+		return FileType::FILE_TYPE_INVALID;
+	}
+	return FileType::FILE_TYPE_REGULAR;
 }
 
 FileType HTTPFileSystem::GetFileType(FileHandle &handle) {

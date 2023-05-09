@@ -14,6 +14,10 @@ namespace duckdb {
 
 class LocalFileSystem : public FileSystem {
 public:
+	unique_ptr<FileHandle> TryOpenFile(const string &path, uint8_t flags, FileLockType lock = FileLockType::NO_LOCK,
+	                                   FileCompressionType compression = FileCompressionType::UNCOMPRESSED,
+	                                   optional_ptr<FileOpener> opener = nullptr,
+	                                   optional_ptr<string> out_error = nullptr) override;
 	unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock = FileLockType::NO_LOCK,
 	                                FileCompressionType compression = FileCompressionType::UNCOMPRESSED,
 	                                FileOpener *opener = nullptr) override;

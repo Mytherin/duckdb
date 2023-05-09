@@ -236,6 +236,24 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const string &path, uint8_t flags, F
 	throw NotImplementedException("%s: OpenFile is not implemented!", GetName());
 }
 
+unique_ptr<FileHandle> FileSystem::TryOpenFile(const string &path, uint8_t flags, FileLockType lock,
+                                               FileCompressionType compression, optional_ptr<FileOpener> opener,
+                                               optional_ptr<string> out_error) {
+	try {
+		return OpenFile(path, flags, lock, compression, opener.get());
+	} catch (std::exception &ex) {
+		if (out_error) {
+			*out_error = ex.what();
+		}
+		return nullptr;
+	} catch (...) {
+		if (out_error) {
+			*out_error = "Unknown exception type in FileSystem::TryOpenFile";
+		}
+		return nullptr;
+	}
+}
+
 void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	throw NotImplementedException("%s: Read (with location) is not implemented!", GetName());
 }
