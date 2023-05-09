@@ -138,6 +138,7 @@ void SingleFileBlockManager::CreateNewDatabase() {
 
 	// open the RDBMS handle
 	auto &fs = FileSystem::Get(db);
+	flags |= FileFlags::FILE_FLAGS_MAIN_DATABASE;
 	handle = fs.OpenFile(path, flags, lock);
 
 	// if we create a new file, we fill the metadata of the file
@@ -186,6 +187,7 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 
 	// open the RDBMS handle
 	auto &fs = FileSystem::Get(db);
+	flags |= FileFlags::FILE_FLAGS_MAIN_DATABASE;
 	handle = fs.OpenFile(path, flags, lock);
 
 	MainHeader::CheckMagicBytes(*handle);

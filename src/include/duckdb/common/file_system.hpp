@@ -110,6 +110,8 @@ public:
 	static constexpr uint8_t FILE_FLAGS_FILE_CREATE_NEW = 1 << 4;
 	//! Open file in append mode
 	static constexpr uint8_t FILE_FLAGS_APPEND = 1 << 5;
+	//! Open the main database of the system
+	static constexpr uint8_t FILE_FLAGS_MAIN_DATABASE = 1 << 6;
 };
 
 class FileSystem {

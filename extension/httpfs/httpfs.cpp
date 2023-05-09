@@ -366,6 +366,9 @@ unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, uint8_t flag
                                                 FileCompressionType compression, FileOpener *opener) {
 	D_ASSERT(compression == FileCompressionType::UNCOMPRESSED);
 
+	if (flags & FileFlags::FILE_FLAGS_MAIN_DATABASE) {
+		flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
+	}
 	auto handle = CreateHandle(path, flags, lock, compression, opener);
 	handle->Initialize(opener);
 	return std::move(handle);
