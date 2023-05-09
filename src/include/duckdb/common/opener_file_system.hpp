@@ -127,6 +127,10 @@ public:
 	std::string GetName() const override {
 		return "OpenerFileSystem - " + GetFileSystem().GetName();
 	}
+
+	vector<string> GetSettingsList() override {
+		return GetFileSystem().GetSettingsList();
+	}
 };
 
 } // namespace duckdb

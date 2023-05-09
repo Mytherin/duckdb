@@ -123,6 +123,17 @@ public:
 		return "VirtualFileSystem";
 	}
 
+	vector<string> GetSettingsList() override {
+		vector<string> result;
+		for (auto &fs : sub_systems) {
+			auto new_settings = fs->GetSettingsList();
+			for (auto &setting : new_settings) {
+				result.push_back(std::move(setting));
+			}
+		}
+		return result;
+	}
+
 private:
 	FileSystem *FindFileSystem(const string &path) {
 		for (auto &sub_system : sub_systems) {

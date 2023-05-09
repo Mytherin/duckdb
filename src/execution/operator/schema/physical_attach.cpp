@@ -8,6 +8,8 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
 #include "duckdb/storage/storage_extension.hpp"
+#include "duckdb/main/client_data.hpp"
+#include "duckdb/common/file_opener.hpp"
 
 namespace duckdb {
 
@@ -76,6 +78,20 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 		throw BinderException("Database \"%s\" is already attached with alias \"%s\"", path, existing_db->GetName());
 	}
 	auto new_db = db.CreateAttachedDatabase(*info, type, access_mode);
+	// we copy over all of the FileOpener settings from the client to the attached database
+	// this is required for attaching databases over e.g. S3
+	// that is because the authentication details can be stored in the client context
+	// and the AttachedDatabase is separate from the client context that is used to attach the database
+	auto settings_list = fs.GetSettingsList();
+	auto &client_opener = *ClientData::Get(context.client).file_opener;
+	auto &db_opener = new_db->GetFileOpener();
+	for (auto &setting : settings_list) {
+		Value setting_value;
+		if (client_opener.TryGetCurrentSetting(setting, setting_value)) {
+			db_opener.SetOption(setting, std::move(setting_value));
+		}
+	}
+	// initialize the database after the settings have been copied over
 	new_db->Initialize();
 
 	db_manager.AddDatabase(context.client, std::move(new_db));

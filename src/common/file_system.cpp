@@ -409,6 +409,10 @@ unique_ptr<FileHandle> FileSystem::OpenCompressedFile(unique_ptr<FileHandle> han
 bool FileSystem::OnDiskFile(FileHandle &handle) {
 	throw NotImplementedException("%s: OnDiskFile is not implemented!", GetName());
 }
+
+vector<string> FileSystem::GetSettingsList() {
+	return vector<string>();
+}
 // LCOV_EXCL_STOP
 
 FileHandle::FileHandle(FileSystem &file_system, string path_p) : file_system(file_system), path(std::move(path_p)) {

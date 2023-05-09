@@ -971,6 +971,19 @@ string S3FileSystem::GetName() const {
 	return "S3FileSystem";
 }
 
+vector<string> S3FileSystem::GetSettingsList() {
+	vector<string> result;
+	result.emplace_back("s3_region");
+	result.emplace_back("s3_access_key_id");
+	result.emplace_back("s3_secret_access_key");
+	result.emplace_back("s3_session_token");
+	result.emplace_back("s3_endpoint");
+	result.emplace_back("s3_url_style");
+	result.emplace_back("s3_use_ssl");
+	result.emplace_back("s3_url_compatibility_mode");
+	return result;
+}
+
 bool S3FileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
                              FileOpener *opener) {
 	string trimmed_dir = directory;

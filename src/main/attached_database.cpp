@@ -6,8 +6,53 @@
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
+#include "duckdb/common/opener_file_system.hpp"
+#include "duckdb/common/file_opener.hpp"
 
 namespace duckdb {
+
+class AttachedDatabaseFileSystem : public OpenerFileSystem {
+public:
+	explicit AttachedDatabaseFileSystem(AttachedDatabase &db_p) : db(db_p) {
+	}
+
+	FileSystem &GetFileSystem() const override {
+		auto &config = DBConfig::GetConfig(db.GetDatabase());
+		return *config.file_system;
+	}
+	optional_ptr<FileOpener> GetOpener() const override {
+		return &db.GetFileOpener();
+	}
+
+private:
+	AttachedDatabase &db;
+};
+
+class AttachedDatabaseFileOpener : public FileOpener {
+public:
+	explicit AttachedDatabaseFileOpener() {
+	}
+
+	bool TryGetCurrentSetting(const string &key, Value &result) override {
+		auto entry = values.find(key);
+		if (entry == values.end()) {
+			return false;
+		}
+		result = entry->second;
+		return true;
+	}
+
+	void SetOption(string key, Value val) override {
+		values.insert(make_pair(std::move(key), std::move(val)));
+	}
+
+	optional_ptr<ClientContext> TryGetClientContext() override {
+		return nullptr;
+	};
+
+private:
+	unordered_map<string, Value> values;
+};
 
 AttachedDatabase::AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType type)
     : CatalogEntry(CatalogType::DATABASE_ENTRY,
@@ -19,7 +64,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType ty
 	}
 	catalog = make_uniq<DuckCatalog>(*this);
 	transaction_manager = make_uniq<DuckTransactionManager>(*this);
-	internal = true;
+	Construct();
 }
 
 AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, string name_p, string file_path_p,
@@ -31,7 +76,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 	storage = make_uniq<SingleFileStorageManager>(*this, std::move(file_path_p), access_mode == AccessMode::READ_ONLY);
 	catalog = make_uniq<DuckCatalog>(*this);
 	transaction_manager = make_uniq<DuckTransactionManager>(*this);
-	internal = true;
+	Construct();
 }
 
 AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, StorageExtension &storage_extension,
@@ -50,7 +95,13 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 		throw InternalException(
 		    "AttachedDatabase - create_transaction_manager function did not return a transaction manager");
 	}
+	Construct();
+}
+
+void AttachedDatabase::Construct() {
 	internal = true;
+	opener = make_uniq<AttachedDatabaseFileOpener>();
+	attached_file_system = make_uniq<AttachedDatabaseFileSystem>(*this);
 }
 
 AttachedDatabase::~AttachedDatabase() {
@@ -122,6 +173,14 @@ TransactionManager &AttachedDatabase::GetTransactionManager() {
 
 Catalog &AttachedDatabase::ParentCatalog() {
 	return *parent_catalog;
+}
+
+FileOpener &AttachedDatabase::GetFileOpener() {
+	return *opener;
+}
+
+FileSystem &AttachedDatabase::GetFileSystem() {
+	return *attached_file_system;
 }
 
 } // namespace duckdb

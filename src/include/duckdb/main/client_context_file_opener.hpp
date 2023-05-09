@@ -23,7 +23,7 @@ public:
 
 	bool TryGetCurrentSetting(const string &key, Value &result) override;
 
-	ClientContext *TryGetClientContext() override {
+	optional_ptr<ClientContext> TryGetClientContext() override {
 		return &context;
 	};
 

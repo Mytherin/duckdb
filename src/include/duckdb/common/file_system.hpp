@@ -245,6 +245,9 @@ public:
 
 	//! Return the name of the filesytem. Used for forming diagnosis messages.
 	DUCKDB_API virtual std::string GetName() const = 0;
+
+	//! Returns a list of settings that this file system can use through the FileOpener
+	DUCKDB_API virtual vector<string> GetSettingsList();
 };
 
 } // namespace duckdb

@@ -85,7 +85,7 @@ FileSystem &FileSystem::GetFileSystem(DatabaseInstance &db) {
 }
 
 FileSystem &FileSystem::Get(AttachedDatabase &db) {
-	return FileSystem::GetFileSystem(db.GetDatabase());
+	return db.GetFileSystem();
 }
 
 DBConfig &DBConfig::GetConfig(DatabaseInstance &db) {

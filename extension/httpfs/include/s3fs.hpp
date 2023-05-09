@@ -219,6 +219,8 @@ public:
 		return true;
 	}
 
+	vector<string> GetSettingsList() override;
+
 protected:
 	duckdb::unique_ptr<HTTPFileHandle> CreateHandle(const string &path, uint8_t flags, FileLockType lock,
 	                                                FileCompressionType compression, FileOpener *opener) override;

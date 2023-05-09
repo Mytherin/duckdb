@@ -17,6 +17,8 @@
 namespace duckdb {
 class Catalog;
 class DatabaseInstance;
+class FileSystem;
+class FileOpener;
 class StorageManager;
 class TransactionManager;
 class StorageExtension;
@@ -48,6 +50,8 @@ public:
 	StorageManager &GetStorageManager();
 	Catalog &GetCatalog();
 	TransactionManager &GetTransactionManager();
+	FileSystem &GetFileSystem();
+	FileOpener &GetFileOpener();
 	DatabaseInstance &GetDatabase() {
 		return db;
 	}
@@ -61,12 +65,17 @@ public:
 	static string ExtractDatabaseName(const string &dbpath);
 
 private:
+	void Construct();
+
+private:
 	DatabaseInstance &db;
 	unique_ptr<StorageManager> storage;
 	unique_ptr<Catalog> catalog;
 	unique_ptr<TransactionManager> transaction_manager;
 	AttachedDatabaseType type;
 	optional_ptr<Catalog> parent_catalog;
+	unique_ptr<FileSystem> attached_file_system;
+	unique_ptr<FileOpener> opener;
 };
 
 } // namespace duckdb
