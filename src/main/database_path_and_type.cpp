@@ -16,6 +16,9 @@ DBPathAndType DBPathAndType::Parse(const string &combined_path, const DBConfig &
 }
 
 DBPathAndType DBPathAndType::Parse(const string &combined_path, const DBConfig &config, FileSystem &fs) {
+	if (combined_path.empty()) {
+		return {"", ""};
+	}
 	auto extension = ExtensionHelper::ExtractExtensionPrefixFromPath(combined_path);
 	if (!extension.empty()) {
 		// path is prefixed with an extension - remove it

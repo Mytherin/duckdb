@@ -497,7 +497,7 @@ FileType HTTPFileSystem::GetFileType(FileHandle &handle) {
 }
 
 bool HTTPFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
-	return GetFileType(filename) == FileType::FILE_TYPE_REGULAR;
+	return GetFileType(filename, opener) == FileType::FILE_TYPE_REGULAR;
 }
 
 bool HTTPFileSystem::DirectoryExists(const string &filename, optional_ptr<FileOpener> opener) {
