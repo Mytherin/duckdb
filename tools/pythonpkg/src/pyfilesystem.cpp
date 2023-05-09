@@ -110,7 +110,7 @@ FileType PythonFilesystem::GetFileType(const string &filename, optional_ptr<File
 	return FileType::FILE_TYPE_INVALID;
 }
 
-FileType PythonFilesystem::GetFileType(FileHandle &handle) override {
+FileType PythonFilesystem::GetFileType(FileHandle &handle) {
 	return FileType::FILE_TYPE_REGULAR;
 }
 
