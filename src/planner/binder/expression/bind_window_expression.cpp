@@ -210,7 +210,7 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	auto result = make_uniq<BoundWindowExpression>(window.type, sql_type, std::move(aggregate), std::move(bind_info));
 	result->children = std::move(children);
 	for (auto &child : window.partitions) {
-		result->partitions.push_back(GetExpression(child));
+		result->partitions.push_back(PushCollation(context, GetExpression(child)));
 	}
 	result->ignore_nulls = window.ignore_nulls;
 
@@ -270,7 +270,7 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	for (auto &order : window.orders) {
 		auto type = config.ResolveOrder(order.type);
 		auto null_order = config.ResolveNullOrder(type, order.null_order);
-		auto expression = GetExpression(order.expression);
+		auto expression = PushCollation(context, GetExpression(order.expression));
 		result->orders.emplace_back(type, null_order, std::move(expression));
 	}
 

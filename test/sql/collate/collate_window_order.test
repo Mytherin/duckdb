@@ -1,0 +1,44 @@
+# name: test/sql/collate/collate_window_order.test
+# description: Test collation in window functions
+# group: [collate]
+
+statement ok
+CREATE TABLE collate_test(s VARCHAR)
+
+statement ok
+INSERT INTO collate_test VALUES ('ä'), ('b'), ('c')
+
+# collate in ORDER BY
+query II
+SELECT s, row_number() OVER (ORDER BY s) FROM collate_test ORDER BY s
+----
+b	1
+c	2
+ä	3
+
+query II
+SELECT s, row_number() OVER (ORDER BY s COLLATE NOACCENT) FROM collate_test ORDER BY s COLLATE NOACCENT
+----
+ä	1
+b	2
+c	3
+
+# collate in PARTITION BY
+statement ok
+INSERT INTO collate_test VALUES ('a')
+
+query II
+SELECT s, row_number() OVER (PARTITION BY s ORDER BY s) FROM collate_test ORDER BY s COLLATE NOACCENT, s
+----
+a	1
+ä	1
+b	1
+c	1
+
+query II
+SELECT s, row_number() OVER (PARTITION BY s COLLATE NOACCENT ORDER BY s) FROM collate_test ORDER BY s COLLATE NOACCENT, s
+----
+a	1
+ä	2
+b	1
+c	1

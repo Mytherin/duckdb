@@ -67,6 +67,15 @@ void ExpressionBinder::TestCollation(ClientContext &context, const string &colla
 	PushCollation(context, make_uniq<BoundConstantExpression>(Value("")), collation);
 }
 
+unique_ptr<Expression> ExpressionBinder::PushCollation(ClientContext &context, unique_ptr<Expression> source) {
+	if (source->return_type.id() != LogicalTypeId::VARCHAR) {
+		return source;
+	}
+	// handle collation
+	auto collation = StringType::GetCollation(source->return_type);
+	return PushCollation(context, std::move(source), collation);
+}
+
 LogicalType BoundComparisonExpression::BindComparison(LogicalType left_type, LogicalType right_type) {
 	auto result_type = LogicalType::MaxLogicalType(left_type, right_type);
 	switch (result_type.id()) {
