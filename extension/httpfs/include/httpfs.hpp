@@ -56,8 +56,6 @@ public:
 
 	const HTTPParams http_params;
 
-	mutex read_lock;
-
 	// File handle info
 	uint8_t flags;
 	idx_t length;

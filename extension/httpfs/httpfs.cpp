@@ -378,7 +378,6 @@ unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, uint8_t flag
 // Note that buffering is disabled when FileFlags::FILE_FLAGS_DIRECT_IO is set
 void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	auto &hfh = handle.Cast<HTTPFileHandle>();
-	lock_guard<mutex> lock(hfh.read_lock);
 	if (hfh.state) {
 		auto entry = hfh.state->cached_files.find(hfh.path);
 		if (entry != hfh.state->cached_files.end()) {
