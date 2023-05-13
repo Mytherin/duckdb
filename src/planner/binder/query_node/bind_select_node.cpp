@@ -5,6 +5,7 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
@@ -285,14 +286,36 @@ void Binder::BindWhereStarExpression(unique_ptr<ParsedExpression> &expr) {
 			throw ParserException("STAR expression is not allowed in the WHERE clause. Use COLUMNS(*) instead.");
 		}
 	}
+	auto conjunction_type = ExpressionType::CONJUNCTION_AND;
+	bool is_conjunction_any = false;
+	bool is_conjunction_all = false;
+	if (expr->type == ExpressionType::FUNCTION) {
+		auto &function = expr->Cast<FunctionExpression>();
+		is_conjunction_any = StringUtil::CIEquals(function.function_name, "columns_or");
+		is_conjunction_all = StringUtil::CIEquals(function.function_name, "columns_and");
+		if (is_conjunction_any || is_conjunction_all) {
+			if (function.children.size() != 1) {
+				throw ParserException("COLUMNS_OR/COLUMNS_AND must have exactly one child expression");
+			}
+			if (is_conjunction_any) {
+				conjunction_type = ExpressionType::CONJUNCTION_OR;
+			} else {
+				conjunction_type = ExpressionType::CONJUNCTION_AND;
+			}
+			expr = std::move(function.children[0]);
+		}
+	}
 	// expand the stars for this expression
 	vector<unique_ptr<ParsedExpression>> new_conditions;
-	ExpandStarExpression(std::move(expr), new_conditions);
+	bool found_star = ExpandStarExpression(std::move(expr), new_conditions);
+	if (!found_star && (is_conjunction_any || is_conjunction_all)) {
+		throw BinderException("COLUMNS_OR/COLUMNS_AND must be used together with COLUMNS");
+	}
 
 	// set up an AND conjunction between the expanded conditions
 	expr = std::move(new_conditions[0]);
 	for (idx_t i = 1; i < new_conditions.size(); i++) {
-		auto and_conj = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(expr),
+		auto and_conj = make_uniq<ConjunctionExpression>(conjunction_type, std::move(expr),
 		                                                 std::move(new_conditions[i]));
 		expr = std::move(and_conj);
 	}

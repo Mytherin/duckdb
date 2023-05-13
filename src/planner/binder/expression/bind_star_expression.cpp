@@ -83,14 +83,14 @@ void Binder::ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_pt
 	    *expr, [&](unique_ptr<ParsedExpression> &child_expr) { ReplaceStarExpression(child_expr, replacement); });
 }
 
-void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
+bool Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
                                   vector<unique_ptr<ParsedExpression>> &new_select_list) {
 	StarExpression *star = nullptr;
 	if (!FindStarExpression(expr, &star, true, false)) {
 		// no star expression: add it as-is
 		D_ASSERT(!star);
 		new_select_list.push_back(std::move(expr));
-		return;
+		return false;
 	}
 	D_ASSERT(star);
 	vector<unique_ptr<ParsedExpression>> star_list;
@@ -182,6 +182,7 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 		ReplaceStarExpression(new_expr, star_list[i]);
 		new_select_list.push_back(std::move(new_expr));
 	}
+	return true;
 }
 
 void Binder::ExpandStarExpressions(vector<unique_ptr<ParsedExpression>> &select_list,

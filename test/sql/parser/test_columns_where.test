@@ -16,6 +16,12 @@ SELECT * FROM tbl WHERE COLUMNS(*) >= 2 ORDER BY ALL
 ----
 2	100	20
 
+
+query III
+SELECT * FROM tbl WHERE COLUMNS_OR(COLUMNS(*) >= 2) ORDER BY ALL
+----
+2	100	20
+
 query III
 SELECT * FROM tbl WHERE COLUMNS(['col1', 'col2']) >= 2 ORDER BY ALL
 ----
