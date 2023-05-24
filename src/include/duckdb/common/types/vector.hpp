@@ -16,6 +16,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/common/vector_size.hpp"
+#include "duckdb/common/array_ptr.hpp"
 
 namespace duckdb {
 
@@ -243,11 +244,11 @@ struct ConstantVector {
 	}
 	template <class T>
 	static inline const T *GetData(const Vector &vector) {
-		return (const T *)ConstantVector::GetData(vector);
+		return reinterpret_cast<const T *>(ConstantVector::GetData(vector));
 	}
 	template <class T>
 	static inline T *GetData(Vector &vector) {
-		return (T *)ConstantVector::GetData(vector);
+		return reinterpret_cast<T *>(ConstantVector::GetData(vector));
 	}
 	static inline bool IsNull(const Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
@@ -269,25 +270,33 @@ struct ConstantVector {
 struct DictionaryVector {
 	static inline const SelectionVector &SelVector(const Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
-		return ((const DictionaryBuffer &)*vector.buffer).GetSelVector();
+		return vector.buffer->Cast<DictionaryBuffer>().GetSelVector();
 	}
 	static inline SelectionVector &SelVector(Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
-		return ((DictionaryBuffer &)*vector.buffer).GetSelVector();
+		return vector.buffer->Cast<DictionaryBuffer>().GetSelVector();
 	}
 	static inline const Vector &Child(const Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
-		return ((const VectorChildBuffer &)*vector.auxiliary).data;
+		return vector.auxiliary->Cast<VectorChildBuffer>().data;
 	}
 	static inline Vector &Child(Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
-		return ((VectorChildBuffer &)*vector.auxiliary).data;
+		return vector.auxiliary->Cast<VectorChildBuffer>().data;
 	}
 };
 
 struct FlatVector {
 	static inline data_ptr_t GetData(Vector &vector) {
 		return ConstantVector::GetData(vector);
+	}
+	template <class T>
+	static inline unsafe_array_ptr<const T> GetUnsafeArray(const Vector &vector) {
+		return unsafe_array_ptr<const T>(ConstantVector::GetData<T>(vector), NumericLimits<idx_t>::Maximum());
+	}
+	template <class T>
+	static inline unsafe_array_ptr<T> GetUnsafeArrayMutable(Vector &vector) {
+		return unsafe_array_ptr<T>(ConstantVector::GetData<T>(vector), NumericLimits<idx_t>::Maximum());
 	}
 	template <class T>
 	static inline const T *GetData(const Vector &vector) {

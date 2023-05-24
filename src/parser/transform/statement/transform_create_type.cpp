@@ -17,7 +17,7 @@ Vector Transformer::PGListToVector(optional_ptr<duckdb_libpgquery::PGList> colum
 	}
 
 	Vector result(LogicalType::VARCHAR, size);
-	auto result_ptr = FlatVector::GetData<string_t>(result);
+	auto result_ptr = FlatVector::GetUnsafeArrayMutable<string_t>(result);
 
 	size = 0;
 	for (auto c = column_list->head; c != nullptr; c = lnext(c)) {

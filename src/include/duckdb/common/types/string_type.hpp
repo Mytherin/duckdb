@@ -11,6 +11,7 @@
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/array_ptr.hpp"
 
 #include <cstring>
 
@@ -77,6 +78,10 @@ public:
 
 	char *GetDataWriteable() const {
 		return IsInlined() ? (char *)value.inlined.inlined : value.pointer.ptr; // NOLINT
+	}
+
+	inline unsafe_array_ptr<const char> GetUnsafeArray() const {
+		return unsafe_array_ptr<const char>(GetData(), GetSize());
 	}
 
 	const char *GetPrefix() const {

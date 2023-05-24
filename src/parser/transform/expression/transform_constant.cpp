@@ -3,6 +3,7 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/optional_idx.hpp"
 
 namespace duckdb {
 
@@ -16,16 +17,17 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(duckdb_libpgquery::PG
 		return make_uniq<ConstantExpression>(Value(string(val.val.str)));
 	case duckdb_libpgquery::T_PGFloat: {
 		string_t str_val(val.val.str);
+		auto str_data = str_val.GetUnsafeArray();
 		bool try_cast_as_integer = true;
 		bool try_cast_as_decimal = true;
-		int decimal_position = -1;
-		for (idx_t i = 0; i < str_val.GetSize(); i++) {
-			if (val.val.str[i] == '.') {
+		optional_idx decimal_position;
+		for (idx_t i = 0; i < str_data.size(); i++) {
+			if (str_data[i] == '.') {
 				// decimal point: cast as either decimal or double
 				try_cast_as_integer = false;
 				decimal_position = i;
 			}
-			if (val.val.str[i] == 'e' || val.val.str[i] == 'E') {
+			if (str_data[i] == 'e' || str_data[i] == 'E') {
 				// found exponent, cast as double
 				try_cast_as_integer = false;
 				try_cast_as_decimal = false;
@@ -45,20 +47,20 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(duckdb_libpgquery::PG
 				return make_uniq<ConstantExpression>(Value::HUGEINT(hugeint_value));
 			}
 		}
-		idx_t decimal_offset = val.val.str[0] == '-' ? 3 : 2;
-		if (try_cast_as_decimal && decimal_position >= 0 &&
-		    str_val.GetSize() < Decimal::MAX_WIDTH_DECIMAL + decimal_offset) {
+		idx_t decimal_offset = str_data[0] == '-' ? 3 : 2;
+		if (try_cast_as_decimal && decimal_position.IsValid() &&
+		    str_data.size() < Decimal::MAX_WIDTH_DECIMAL + decimal_offset) {
 			// figure out the width/scale based on the decimal position
-			auto width = uint8_t(str_val.GetSize() - 1);
-			auto scale = uint8_t(width - decimal_position);
-			if (val.val.str[0] == '-') {
+			auto width = uint8_t(str_data.size() - 1);
+			auto scale = uint8_t(width - decimal_position.GetIndex());
+			if (str_data[0] == '-') {
 				width--;
 			}
 			if (width <= Decimal::MAX_WIDTH_DECIMAL) {
 				// we can cast the value as a decimal
-				Value val = Value(str_val);
-				val = val.DefaultCastAs(LogicalType::DECIMAL(width, scale));
-				return make_uniq<ConstantExpression>(std::move(val));
+				Value dec_val(str_val);
+				dec_val = dec_val.DefaultCastAs(LogicalType::DECIMAL(width, scale));
+				return make_uniq<ConstantExpression>(std::move(dec_val));
 			}
 		}
 		// if there is a decimal or the value is too big to cast as either hugeint or bigint

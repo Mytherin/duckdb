@@ -348,6 +348,7 @@ static StaticFunctionDefinition internal_functions[] = {
 	FINAL_FUNCTION
 };
 
+// FIXME: turn into array_ptr, and add statically defined count
 StaticFunctionDefinition *StaticFunctionDefinition::GetFunctionList() {
 	return internal_functions;
 }

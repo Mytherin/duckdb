@@ -11,7 +11,7 @@
 #include "postgres_parser.hpp"
 #include "duckdb/parser/query_error_context.hpp"
 #include "duckdb/parser/parser_extension.hpp"
-
+#include "duckdb/common/array_ptr.hpp"
 #include "parser/parser.hpp"
 
 namespace duckdb {
@@ -51,11 +51,10 @@ static bool StripUnicodeSpaces(const string &query_str, string &new_query) {
 	idx_t pos = 0;
 	unsigned char quote;
 	vector<UnicodeSpace> unicode_spaces;
-	auto query = const_uchar_ptr_cast(query_str.c_str());
-	auto qsize = query_str.size();
+	const_array_ptr<unsigned char> query(const_uchar_ptr_cast(query_str.c_str()), query_str.size());
 
 regular:
-	for (; pos + 2 < qsize; pos++) {
+	for (; pos + 2 < query.size(); pos++) {
 		if (query[pos] == 0xC2) {
 			if (query[pos + 1] == 0xA0) {
 				// U+00A0 - C2A0
@@ -101,7 +100,7 @@ regular:
 	}
 	goto end;
 in_quotes:
-	for (; pos + 1 < qsize; pos++) {
+	for (; pos + 1 < query.size(); pos++) {
 		if (query[pos] == quote) {
 			if (query[pos + 1] == quote) {
 				// escaped quote
@@ -114,7 +113,7 @@ in_quotes:
 	}
 	goto end;
 in_comment:
-	for (; pos < qsize; pos++) {
+	for (; pos < query.size(); pos++) {
 		if (query[pos] == '\n' || query[pos] == '\r') {
 			goto regular;
 		}
