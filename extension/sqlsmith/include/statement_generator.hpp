@@ -51,9 +51,11 @@ private:
 	unique_ptr<SQLStatement> GenerateStatement(StatementType type);
 
 	unique_ptr<SQLStatement> GenerateSelect();
+	unique_ptr<SQLStatement> GenerateInsert();
 	unique_ptr<QueryNode> GenerateQueryNode();
 
 	void GenerateCTEs(QueryNode &node);
+	void GenerateCTEMap(CommonTableExpressionMap &cte_map);
 	unique_ptr<TableRef> GenerateTableRef();
 	unique_ptr<ParsedExpression> GenerateExpression();
 

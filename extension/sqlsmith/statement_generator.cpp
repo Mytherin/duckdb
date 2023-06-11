@@ -72,6 +72,8 @@ unique_ptr<SQLStatement> StatementGenerator::GenerateStatement(StatementType typ
 	switch (type) {
 	case StatementType::SELECT_STATEMENT:
 		return GenerateSelect();
+	case StatementType::INSERT_STATEMENT:
+		return GenerateInsert();
 	default:
 		throw InternalException("Unsupported type");
 	}
@@ -86,6 +88,63 @@ unique_ptr<SQLStatement> StatementGenerator::GenerateSelect() {
 	return std::move(select);
 }
 
+unique_ptr<SQLStatement> StatementGenerator::GenerateInsert() {
+	auto insert = make_uniq<InsertStatement>();
+	// table name
+	auto &entry_ref = Choose(generator_context->tables_and_views);
+	auto &entry = entry_ref.get();
+	insert->table = entry.name;
+	current_relation_names.push_back(insert->table);
+	if (entry.type == CatalogType::TABLE_ENTRY) {
+		auto &table = entry.Cast<TableCatalogEntry>();
+		for(auto &col : table.GetColumns().Physical()) {
+			current_column_names.push_back(col.GetName());
+		}
+	}
+	if (RandomPercentage(3)) {
+		insert->default_values = true;
+	}
+	if (RandomPercentage(10)) {
+		insert->column_order = InsertColumnOrder::INSERT_BY_NAME;
+	}
+	// returning list
+	while (RandomPercentage(20)) {
+		insert->returning_list.push_back(GenerateExpression());
+	}
+	if (RandomPercentage(20)) {
+		while(true) {
+			insert->columns.push_back(GenerateColumnName());
+			if (RandomPercentage(30)) {
+				break;
+			}
+		}
+	}
+
+
+//
+//	auto result = make_uniq<BaseTableRef>();
+//	idx_t column_count;
+//	switch (entry.type) {
+//	case CatalogType::TABLE_ENTRY: {
+//		auto &table = entry.Cast<TableCatalogEntry>();
+//		column_count = table.GetColumns().LogicalColumnCount();
+//		break;
+//	}
+//	case CatalogType::VIEW_ENTRY: {
+//		auto &view = entry.Cast<ViewCatalogEntry>();
+//		column_count = view.types.size();
+//		break;
+//	}
+//	default:
+//		throw InternalException("StatementGenerator::GenerateBaseTableRef");
+//	}
+//	GenerateRelationName()
+	// ctes + select
+	GenerateCTEMap(insert->cte_map);
+	insert->select_statement = unique_ptr_cast<SQLStatement, SelectStatement>(GenerateSelect());
+	return std::move(insert);
+}
+
 //===--------------------------------------------------------------------===//
 // Query Node
 //===--------------------------------------------------------------------===//
@@ -93,15 +152,20 @@ void StatementGenerator::GenerateCTEs(QueryNode &node) {
 	if (depth > 0) {
 		return;
 	}
+	GenerateCTEMap(node.cte_map);
+}
+
+void StatementGenerator::GenerateCTEMap(CommonTableExpressionMap &cte_map) {
 	while (RandomPercentage(20)) {
 		auto cte = make_uniq<CommonTableExpressionInfo>();
 		cte->query = unique_ptr_cast<SQLStatement, SelectStatement>(GenerateSelect());
 		for (idx_t i = 0; i < 1 + RandomValue(10); i++) {
 			cte->aliases.push_back(GenerateIdentifier());
 		}
-		node.cte_map.map.insert(make_pair(GenerateTableIdentifier(), std::move(cte)));
+		cte_map.map.insert(make_pair(GenerateTableIdentifier(), std::move(cte)));
 	}
 }
+
 unique_ptr<QueryNode> StatementGenerator::GenerateQueryNode() {
 	unique_ptr<QueryNode> result;
 	bool is_distinct = false;
