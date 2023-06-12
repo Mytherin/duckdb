@@ -48,6 +48,8 @@ CREATE TABLE "SAME_NAME"(i INTEGER, j INTEGER);
 
 statement error
 CREATE TABLE "same_name"(i INTEGER, j INTEGER);
+----
+already exists!
 
 statement ok
 INSERT INTO "SAME_NAME" VALUES (1, 1), (2, 2)

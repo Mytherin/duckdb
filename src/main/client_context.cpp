@@ -406,7 +406,17 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 		query_progress = 0;
 	}
 	auto stream_result = parameters.allow_stream_result && statement.properties.allow_stream_result;
-	if (!stream_result && statement.properties.return_type == StatementReturnType::QUERY_RESULT) {
+	//	bool allow_result_collector = statement.properties.return_type == StatementReturnType::QUERY_RESULT;
+	bool allow_result_collector = true;
+	switch (statement.plan->type) {
+	case PhysicalOperatorType::SET:
+	case PhysicalOperatorType::RESET:
+		allow_result_collector = false;
+		break;
+	default:
+		break;
+	}
+	if (!stream_result && allow_result_collector) {
 		unique_ptr<PhysicalResultCollector> collector;
 		auto &config = ClientConfig::GetConfig(*this);
 		auto get_method =
@@ -431,6 +441,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &lock, PendingQueryResult &result) {
 	D_ASSERT(active_query);
 	D_ASSERT(active_query->open_result == &result);
+	bool invalidate_query = true;
 	try {
 		auto result = active_query->executor->ExecuteTask();
 		if (active_query->progress_bar) {
@@ -443,6 +454,10 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 		result.SetError(PreservedError(ex));
 		auto &db = DatabaseInstance::GetDatabase(*this);
 		ValidChecker::Invalidate(db, ex.what());
+	} catch (StandardException &ex) {
+		// standard exceptions do not invalidate the current transaction
+		result.SetError(PreservedError(ex));
+		invalidate_query = false;
 	} catch (const Exception &ex) {
 		result.SetError(PreservedError(ex));
 	} catch (std::exception &ex) {
@@ -450,7 +465,7 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 	} catch (...) { // LCOV_EXCL_START
 		result.SetError(PreservedError("Unhandled exception in ExecuteTaskInternal"));
 	} // LCOV_EXCL_STOP
-	EndQueryInternal(lock, false, true);
+	EndQueryInternal(lock, false, invalidate_query);
 	return PendingExecutionResult::EXECUTION_ERROR;
 }
 
