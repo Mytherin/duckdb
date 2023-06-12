@@ -411,6 +411,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 	switch (statement.plan->type) {
 	case PhysicalOperatorType::SET:
 	case PhysicalOperatorType::RESET:
+	case PhysicalOperatorType::PRAGMA:
 		allow_result_collector = false;
 		break;
 	default:
