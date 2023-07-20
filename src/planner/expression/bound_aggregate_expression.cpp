@@ -18,6 +18,18 @@ BoundAggregateExpression::BoundAggregateExpression(AggregateFunction function, v
 	D_ASSERT(!this->function.name.empty());
 }
 
+BoundAggregateExpression::BoundAggregateExpression(FormatDeserializer &deserializer, ClientContext &context, const string &name, vector<LogicalType> arguments, vector<LogicalType> original_arguments, LogicalType return_type, vector<unique_ptr<Expression>> children_p, bool has_serialize)
+  : Expression(ExpressionType::BOUND_AGGREGATE, ExpressionClass::BOUND_AGGREGATE, std::move(return_type)), function(DeserializeFunction(context, name, std::move(arguments), std::move(original_arguments))), children(std::move(children_p)) {
+	bind_info = FunctionSerializer::FormatDeserialize(deserializer, context, function, has_serialize, children);
+}
+
+bool BoundAggregateExpression::SerializeFunction(FormatSerializer &serializer) const {
+	return FunctionSerializer::FormatSerialize<AggregateFunction>(serializer, function, bind_info.get());
+}
+
+AggregateFunction BoundAggregateExpression::DeserializeFunction(ClientContext &context, const string &name, vector<LogicalType> arguments, vector<LogicalType> original_arguments) {
+	return FunctionSerializer::FormatDeserializeFunction<AggregateFunction, AggregateFunctionCatalogEntry>(context, name, std::move(arguments), std::move(original_arguments), CatalogType::SCALAR_FUNCTION_ENTRY);
+}
 string BoundAggregateExpression::ToString() const {
 	return FunctionExpression::ToString<BoundAggregateExpression, Expression, BoundOrderModifier>(
 	    *this, string(), function.name, false, IsDistinct(), filter.get(), order_bys.get());

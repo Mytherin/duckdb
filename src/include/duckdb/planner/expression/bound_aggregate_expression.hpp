@@ -57,5 +57,14 @@ public:
 	unique_ptr<Expression> Copy() override;
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<Expression> Deserialize(ExpressionDeserializationState &state, FieldReader &reader);
+
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<Expression> FormatDeserialize(FormatDeserializer &deserializer);
+
+private:
+	BoundAggregateExpression(FormatDeserializer &deserializer, ClientContext &context, const string &name, vector<LogicalType> arguments, vector<LogicalType> original_arguments, LogicalType return_type, vector<unique_ptr<Expression>> children, bool has_serialize);
+
+	bool SerializeFunction(FormatSerializer &serializer) const;
+	static AggregateFunction DeserializeFunction(ClientContext &context, const string &name, vector<LogicalType> arguments, vector<LogicalType> original_arguments);
 };
 } // namespace duckdb

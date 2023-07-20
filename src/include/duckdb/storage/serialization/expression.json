@@ -307,13 +307,63 @@
         "type": "vector<Expression*>"
       },
       {
+        "name": "has_serialize",
+        "type": "bool",
+        "serialize_property": "SerializeFunction(serializer)"
+      },
+      {
         "name": "is_operator",
         "type": "bool"
+      }
+    ],
+    "constructor": ["$FormatDeserializer", "$ClientContext", "name&", "arguments", "original_arguments", "return_type", "children", "has_serialize"]
+  },
+  {
+    "class": "BoundAggregateExpression",
+    "base": "Expression",
+    "enum": "BOUND_AGGREGATE",
+    "members": [
+      {
+        "name": "name",
+        "type": "string",
+        "serialize_property": "function.name"
+      },
+      {
+        "name": "arguments",
+        "type": "vector<LogicalType>",
+        "serialize_property": "function.arguments"
+      },
+      {
+        "name": "original_arguments",
+        "type": "vector<LogicalType>",
+        "serialize_property": "function.original_arguments"
+      },
+      {
+        "name": "return_type",
+        "type": "LogicalType"
+      },
+      {
+        "name": "children",
+        "type": "vector<Expression*>"
       },
       {
         "name": "has_serialize",
         "type": "bool",
         "serialize_property": "SerializeFunction(serializer)"
+      },
+      {
+        "name": "aggr_type",
+        "type": "AggregateType"
+      },
+      {
+        "name": "filter",
+        "type": "Expression*",
+        "optional": true
+      },
+      {
+        "name": "order_bys",
+        "type": "BoundOrderModifier*",
+        "optional": true
       }
     ],
     "constructor": ["$FormatDeserializer", "$ClientContext", "name&", "arguments", "original_arguments", "return_type", "children", "has_serialize"]

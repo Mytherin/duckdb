@@ -22,6 +22,9 @@ unique_ptr<Expression> Expression::FormatDeserialize(FormatDeserializer &deseria
 	deserializer.Set<ExpressionType>(type);
 	unique_ptr<Expression> result;
 	switch (expression_class) {
+	case ExpressionClass::BOUND_AGGREGATE:
+		result = BoundAggregateExpression::FormatDeserialize(deserializer);
+		break;
 	case ExpressionClass::BOUND_BETWEEN:
 		result = BoundBetweenExpression::FormatDeserialize(deserializer);
 		break;
@@ -73,6 +76,33 @@ unique_ptr<Expression> Expression::FormatDeserialize(FormatDeserializer &deseria
 	deserializer.Unset<ExpressionType>();
 	result->alias = std::move(alias);
 	return result;
+}
+
+void BoundAggregateExpression::FormatSerialize(FormatSerializer &serializer) const {
+	Expression::FormatSerialize(serializer);
+	serializer.WriteProperty("name", function.name);
+	serializer.WriteProperty("arguments", function.arguments);
+	serializer.WriteProperty("original_arguments", function.original_arguments);
+	serializer.WriteProperty("return_type", return_type);
+	serializer.WriteProperty("children", children);
+	serializer.WriteProperty("has_serialize", SerializeFunction(serializer));
+	serializer.WriteProperty("aggr_type", aggr_type);
+	serializer.WriteOptionalProperty("filter", filter);
+	serializer.WriteOptionalProperty("order_bys", order_bys);
+}
+
+unique_ptr<Expression> BoundAggregateExpression::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto name = deserializer.ReadProperty<string>("name");
+	auto arguments = deserializer.ReadProperty<vector<LogicalType>>("arguments");
+	auto original_arguments = deserializer.ReadProperty<vector<LogicalType>>("original_arguments");
+	auto return_type = deserializer.ReadProperty<LogicalType>("return_type");
+	auto children = deserializer.ReadProperty<vector<unique_ptr<Expression>>>("children");
+	auto has_serialize = deserializer.ReadProperty<bool>("has_serialize");
+	auto result = duckdb::unique_ptr<BoundAggregateExpression>(new BoundAggregateExpression(deserializer, deserializer.Get<ClientContext &>(), name, std::move(arguments), std::move(original_arguments), std::move(return_type), std::move(children), has_serialize));
+	deserializer.ReadProperty("aggr_type", result->aggr_type);
+	deserializer.ReadOptionalProperty("filter", result->filter);
+	deserializer.ReadOptionalProperty("order_bys", result->order_bys);
+	return std::move(result);
 }
 
 void BoundBetweenExpression::FormatSerialize(FormatSerializer &serializer) const {
@@ -192,8 +222,8 @@ void BoundFunctionExpression::FormatSerialize(FormatSerializer &serializer) cons
 	serializer.WriteProperty("original_arguments", function.original_arguments);
 	serializer.WriteProperty("return_type", return_type);
 	serializer.WriteProperty("children", children);
-	serializer.WriteProperty("is_operator", is_operator);
 	serializer.WriteProperty("has_serialize", SerializeFunction(serializer));
+	serializer.WriteProperty("is_operator", is_operator);
 }
 
 unique_ptr<Expression> BoundFunctionExpression::FormatDeserialize(FormatDeserializer &deserializer) {
@@ -202,10 +232,9 @@ unique_ptr<Expression> BoundFunctionExpression::FormatDeserialize(FormatDeserial
 	auto original_arguments = deserializer.ReadProperty<vector<LogicalType>>("original_arguments");
 	auto return_type = deserializer.ReadProperty<LogicalType>("return_type");
 	auto children = deserializer.ReadProperty<vector<unique_ptr<Expression>>>("children");
-	auto is_operator = deserializer.ReadProperty<bool>("is_operator");
 	auto has_serialize = deserializer.ReadProperty<bool>("has_serialize");
 	auto result = duckdb::unique_ptr<BoundFunctionExpression>(new BoundFunctionExpression(deserializer, deserializer.Get<ClientContext &>(), name, std::move(arguments), std::move(original_arguments), std::move(return_type), std::move(children), has_serialize));
-	result->is_operator = is_operator;
+	deserializer.ReadProperty("is_operator", result->is_operator);
 	return std::move(result);
 }
 

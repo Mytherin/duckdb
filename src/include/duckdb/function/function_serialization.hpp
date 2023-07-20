@@ -97,6 +97,54 @@ public:
 		function.return_type = return_type;
 		return function;
 	}
+
+	template<class FUNC>
+	static bool FormatSerialize(FormatSerializer &serializer, const FUNC &function, const optional_ptr<FunctionData> bind_info) {
+		if (!function.format_serialize) {
+			// no serialization function specified
+			return false;
+		}
+		function.format_serialize(serializer, bind_info, function);
+		return true;
+	}
+
+	template <class FUNC, class CATALOG_ENTRY>
+	static FUNC FormatDeserializeFunction(ClientContext &context, const string &name, vector<LogicalType> arguments, vector<LogicalType> original_arguments, CatalogType catalog_type) {
+		auto &func_catalog = Catalog::GetEntry(context, catalog_type, SYSTEM_CATALOG, DEFAULT_SCHEMA, name);
+		if (func_catalog.type != catalog_type) {
+			throw InternalException("DeserializeFunction - cant find catalog entry for function %s", name);
+		}
+		auto &functions = func_catalog.Cast<CATALOG_ENTRY>();
+		auto function = functions.functions.GetFunctionByArguments(
+			context, original_arguments.empty() ? arguments : original_arguments);
+		function.arguments = std::move(arguments);
+		function.original_arguments = std::move(original_arguments);
+		return function;
+	}
+
+
+	template <class FUNC>
+	static unique_ptr<FunctionData> FormatDeserialize(FormatDeserializer &deserializer, ClientContext &context, FUNC &function, bool has_serialize, vector<unique_ptr<Expression>> &children) {
+		if (has_serialize) {
+			if (!function.deserialize) {
+				throw SerializationException("Function requires deserialization but no deserialization function for %s",
+											 function.name);
+			}
+			return function.format_deserialize(deserializer, function);
+		}
+		if (function.serialize || function.deserialize) {
+			throw SerializationException("Function \"%s\" marked as not requiring deserialization but function has deserialization routine specified",
+										 function.name);
+		}
+		if (function.bind) {
+			// no serialize function specified but there is a bind function
+			// rebind
+			return function.bind(context, function, children);
+		}
+		return nullptr;
+	}
+
+
 };
 
 } // namespace duckdb
