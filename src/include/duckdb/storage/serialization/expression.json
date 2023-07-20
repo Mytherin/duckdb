@@ -277,5 +277,45 @@
       }
     ],
     "constructor": ["return_type"]
+  },
+  {
+    "class": "BoundFunctionExpression",
+    "base": "Expression",
+    "enum": "BOUND_FUNCTION",
+    "members": [
+      {
+        "name": "name",
+        "type": "string",
+        "serialize_property": "function.name"
+      },
+      {
+        "name": "arguments",
+        "type": "vector<LogicalType>",
+        "serialize_property": "function.arguments"
+      },
+      {
+        "name": "original_arguments",
+        "type": "vector<LogicalType>",
+        "serialize_property": "function.original_arguments"
+      },
+      {
+        "name": "return_type",
+        "type": "LogicalType"
+      },
+      {
+        "name": "children",
+        "type": "vector<Expression*>"
+      },
+      {
+        "name": "is_operator",
+        "type": "bool"
+      },
+      {
+        "name": "has_serialize",
+        "type": "bool",
+        "serialize_property": "SerializeFunction(serializer)"
+      }
+    ],
+    "constructor": ["$FormatDeserializer", "$ClientContext", "name&", "arguments", "original_arguments", "return_type", "children", "has_serialize"]
   }
 ]

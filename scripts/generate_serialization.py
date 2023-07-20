@@ -330,6 +330,9 @@ def generate_class_code(class_entry):
             if constructor_entry.startswith('$'):
                 if len(constructor_parameters) > 0:
                     constructor_parameters += ", "
+                if constructor_entry == '$FormatDeserializer':
+                    constructor_parameters += 'deserializer'
+                    continue
                 param_type = constructor_entry.replace('$', '')
                 if param_type in reference_list:
                     param_type += ' &'

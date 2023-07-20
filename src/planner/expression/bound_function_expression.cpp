@@ -15,6 +15,49 @@ BoundFunctionExpression::BoundFunctionExpression(LogicalType return_type, Scalar
 	D_ASSERT(!function.name.empty());
 }
 
+BoundFunctionExpression::BoundFunctionExpression(FormatDeserializer &deserializer, ClientContext &context, const string &name, vector<LogicalType> arguments, vector<LogicalType> original_arguments, LogicalType return_type, vector<unique_ptr<Expression>> children_p, bool has_serialize)
+  : Expression(ExpressionType::BOUND_FUNCTION, ExpressionClass::BOUND_FUNCTION, std::move(return_type)), function(DeserializeFunction(context, name, std::move(arguments), std::move(original_arguments))), children(std::move(children_p)) {
+	if (has_serialize) {
+		if (!function.deserialize) {
+			throw SerializationException("Function requires deserialization but no deserialization function for %s",
+										 function.name);
+		}
+		bind_info = function.format_deserialize(deserializer, function);
+	} else {
+		if (function.serialize || function.deserialize) {
+			throw SerializationException("Function \"%s\" marked as not requiring deserialization but function has deserialization routine specified",
+										 function.name);
+		}
+		if (function.bind) {
+			// no serialize function specified but there is a bind function
+			// rebind
+			bind_info = function.bind(context, function, children);
+		}
+	}
+}
+
+bool BoundFunctionExpression::SerializeFunction(FormatSerializer &serializer) const {
+	if (!function.format_serialize) {
+		// no serialization function specified
+		return false;
+	}
+	function.format_serialize(serializer, bind_info.get(), function);
+	return true;
+}
+
+ScalarFunction BoundFunctionExpression::DeserializeFunction(ClientContext &context, const string &name, vector<LogicalType> arguments, vector<LogicalType> original_arguments) {
+	auto &func_catalog = Catalog::GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, SYSTEM_CATALOG, DEFAULT_SCHEMA, name);
+	if (func_catalog.type != CatalogType::SCALAR_FUNCTION_ENTRY) {
+		throw InternalException("DeserializeFunction - cant find catalog entry for function %s", name);
+	}
+	auto &functions = func_catalog.Cast<ScalarFunctionCatalogEntry>();
+	auto function = functions.functions.GetFunctionByArguments(
+		context, original_arguments.empty() ? arguments : original_arguments);
+	function.arguments = std::move(arguments);
+	function.original_arguments = std::move(original_arguments);
+	return function;
+}
+
 bool BoundFunctionExpression::HasSideEffects() const {
 	return function.side_effects == FunctionSideEffects::HAS_SIDE_EFFECTS ? true : Expression::HasSideEffects();
 }

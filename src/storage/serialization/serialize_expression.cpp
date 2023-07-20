@@ -46,6 +46,9 @@ unique_ptr<Expression> Expression::FormatDeserialize(FormatDeserializer &deseria
 	case ExpressionClass::BOUND_DEFAULT:
 		result = BoundDefaultExpression::FormatDeserialize(deserializer);
 		break;
+	case ExpressionClass::BOUND_FUNCTION:
+		result = BoundFunctionExpression::FormatDeserialize(deserializer);
+		break;
 	case ExpressionClass::BOUND_LAMBDA:
 		result = BoundLambdaExpression::FormatDeserialize(deserializer);
 		break;
@@ -179,6 +182,30 @@ void BoundDefaultExpression::FormatSerialize(FormatSerializer &serializer) const
 unique_ptr<Expression> BoundDefaultExpression::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto return_type = deserializer.ReadProperty<LogicalType>("return_type");
 	auto result = duckdb::unique_ptr<BoundDefaultExpression>(new BoundDefaultExpression(std::move(return_type)));
+	return std::move(result);
+}
+
+void BoundFunctionExpression::FormatSerialize(FormatSerializer &serializer) const {
+	Expression::FormatSerialize(serializer);
+	serializer.WriteProperty("name", function.name);
+	serializer.WriteProperty("arguments", function.arguments);
+	serializer.WriteProperty("original_arguments", function.original_arguments);
+	serializer.WriteProperty("return_type", return_type);
+	serializer.WriteProperty("children", children);
+	serializer.WriteProperty("is_operator", is_operator);
+	serializer.WriteProperty("has_serialize", SerializeFunction(serializer));
+}
+
+unique_ptr<Expression> BoundFunctionExpression::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto name = deserializer.ReadProperty<string>("name");
+	auto arguments = deserializer.ReadProperty<vector<LogicalType>>("arguments");
+	auto original_arguments = deserializer.ReadProperty<vector<LogicalType>>("original_arguments");
+	auto return_type = deserializer.ReadProperty<LogicalType>("return_type");
+	auto children = deserializer.ReadProperty<vector<unique_ptr<Expression>>>("children");
+	auto is_operator = deserializer.ReadProperty<bool>("is_operator");
+	auto has_serialize = deserializer.ReadProperty<bool>("has_serialize");
+	auto result = duckdb::unique_ptr<BoundFunctionExpression>(new BoundFunctionExpression(deserializer, deserializer.Get<ClientContext &>(), name, std::move(arguments), std::move(original_arguments), std::move(return_type), std::move(children), has_serialize));
+	result->is_operator = is_operator;
 	return std::move(result);
 }
 
