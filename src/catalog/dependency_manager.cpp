@@ -137,9 +137,9 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 	if (new_obj.type == CatalogType::TABLE_ENTRY) {
 		auto &table = new_obj.Cast<TableCatalogEntry>();
 		for (auto &column : table.GetColumns().Logical()) {
-			auto user_type_catalog = EnumType::GetCatalog(column.Type());
-			if (user_type_catalog) {
-				to_add.push_back(*user_type_catalog);
+			if (column.Type().id() == LogicalTypeId::CATALOG_REFERENCE) {
+				auto &user_type_catalog = CatalogReferenceType::GetCatalog(column.Type());
+				to_add.push_back(user_type_catalog);
 			}
 		}
 	}

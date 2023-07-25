@@ -260,23 +260,10 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 		} else {
 			type = Catalog::GetType(context, INVALID_CATALOG, schema, user_type_name);
 		}
-	} else if (type.id() == LogicalTypeId::ENUM) {
-		auto enum_type_name = EnumType::GetTypeName(type);
-		optional_ptr<TypeCatalogEntry> enum_type_catalog;
-		if (catalog) {
-			enum_type_catalog =
-			    catalog->GetEntry<TypeCatalogEntry>(context, schema, enum_type_name, OnEntryNotFound::RETURN_NULL);
-			if (!enum_type_catalog) {
-				// look in the system catalog if the type was not found
-				enum_type_catalog = Catalog::GetEntry<TypeCatalogEntry>(context, SYSTEM_CATALOG, schema, enum_type_name,
-				                                                        OnEntryNotFound::RETURN_NULL);
-			}
-		} else {
-			enum_type_catalog = Catalog::GetEntry<TypeCatalogEntry>(context, INVALID_CATALOG, schema, enum_type_name,
-			                                                        OnEntryNotFound::RETURN_NULL);
-		}
-
-		EnumType::SetCatalog(type, enum_type_catalog.get());
+		Binder::BindLogicalType(context, type);
+	} else if (type.id() == LogicalTypeId::CATALOG_REFERENCE) {
+		type = CatalogReferenceType::GetType(type);
+		D_ASSERT(type.id() != LogicalTypeId::CATALOG_REFERENCE);
 	}
 }
 
@@ -650,15 +637,12 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			result.plan->AddChild(std::move(query));
 		} else if (create_type_info.type.id() == LogicalTypeId::USER) {
 			// two cases:
-			// 1: create a type with a non-existant type as source, catalog.GetType(...) will throw exception.
+			// 1: create a type with a non-existent type as source, catalog.GetType(...) will throw exception.
 			// 2: create a type alias with a custom type.
 			// eg. CREATE TYPE a AS INT; CREATE TYPE b AS a;
 			// We set b to be an alias for the underlying type of a
 			auto inner_type = Catalog::GetType(context, schema.catalog.GetName(), schema.name,
 			                                   UserType::GetTypeName(create_type_info.type));
-			// clear to nullptr, we don't need this
-			EnumType::SetCatalog(inner_type, nullptr);
-			inner_type.SetAlias(create_type_info.name);
 			create_type_info.type = inner_type;
 		}
 		break;

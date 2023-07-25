@@ -150,6 +150,8 @@ PhysicalType LogicalType::GetInternalType() {
 		return PhysicalType::UNKNOWN;
 	case LogicalTypeId::AGGREGATE_STATE:
 		return PhysicalType::VARCHAR;
+	case LogicalTypeId::CATALOG_REFERENCE:
+		return PhysicalType::INVALID;
 	default:
 		throw InternalException("Invalid LogicalType %s", ToString());
 	}
@@ -395,10 +397,14 @@ string LogicalType::ToString() const {
 		return StringUtil::Format("DECIMAL(%d,%d)", width, scale);
 	}
 	case LogicalTypeId::ENUM: {
-		return KeywordHelper::WriteOptionallyQuoted(EnumType::GetTypeName(*this));
+		throw InternalException("Cannot convert ENUM to SQL string");
+//		return KeywordHelper::WriteOptionallyQuoted(EnumType::GetTypeName(*this));
 	}
 	case LogicalTypeId::USER: {
 		return KeywordHelper::WriteOptionallyQuoted(UserType::GetTypeName(*this));
+	}
+	case LogicalTypeId::CATALOG_REFERENCE: {
+		return KeywordHelper::WriteOptionallyQuoted(CatalogReferenceType::GetTypeName(*this));
 	}
 	case LogicalTypeId::AGGREGATE_STATE: {
 		return AggregateStateType::GetTypeName(*this);
@@ -995,34 +1001,8 @@ LogicalType LogicalType::USER(const string &user_type_name) {
 //===--------------------------------------------------------------------===//
 // Enum Type
 //===--------------------------------------------------------------------===//
-void EnumType::Serialize(FieldWriter &writer, const ExtraTypeInfo &type_info, bool serialize_internals) {
-	D_ASSERT(type_info.type == ExtraTypeInfoType::ENUM_TYPE_INFO);
-	auto &enum_info = type_info.Cast<EnumTypeInfo>();
-	// Store Schema Name
-	writer.WriteString(enum_info.GetSchemaName());
-	// Store Enum Name
-	writer.WriteString(enum_info.GetEnumName());
-	// Store If we are serializing the internals
-	writer.WriteField<bool>(serialize_internals);
-	if (serialize_internals) {
-		// We must serialize the internals
-		auto dict_size = enum_info.GetDictSize();
-		// Store Dictionary Size
-		writer.WriteField<uint32_t>(dict_size);
-		// Store Vector Order By Insertion
-		((Vector &)enum_info.GetValuesInsertOrder()).Serialize(dict_size, writer.GetSerializer()); // NOLINT - FIXME
-	}
-}
-
-const string &EnumType::GetTypeName(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::ENUM);
-	auto info = type.AuxInfo();
-	D_ASSERT(info);
-	return info->Cast<EnumTypeInfo>().GetEnumName();
-}
-
-LogicalType LogicalType::ENUM(const string &enum_name, Vector &ordered_data, idx_t size) {
-	return EnumTypeInfo::CreateType(enum_name, ordered_data, size);
+LogicalType LogicalType::ENUM(Vector &ordered_data, idx_t size) {
+	return EnumTypeInfo::CreateType(ordered_data, size);
 }
 
 const string EnumType::GetValue(const Value &val) {
@@ -1045,27 +1025,6 @@ idx_t EnumType::GetSize(const LogicalType &type) {
 	return info->Cast<EnumTypeInfo>().GetDictSize();
 }
 
-void EnumType::SetCatalog(LogicalType &type, optional_ptr<TypeCatalogEntry> catalog_entry) {
-	auto info = type.AuxInfo();
-	if (!info) {
-		return;
-	}
-	((ExtraTypeInfo &)*info).catalog_entry = catalog_entry;
-}
-
-optional_ptr<TypeCatalogEntry> EnumType::GetCatalog(const LogicalType &type) {
-	auto info = type.AuxInfo();
-	if (!info) {
-		return nullptr;
-	}
-	return info->catalog_entry;
-}
-
-string EnumType::GetSchemaName(const LogicalType &type) {
-	auto catalog_entry = EnumType::GetCatalog(type);
-	return catalog_entry ? catalog_entry->schema.name : "";
-}
-
 PhysicalType EnumType::GetPhysicalType(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::ENUM);
 	auto aux_info = type.AuxInfo();
@@ -1073,6 +1032,34 @@ PhysicalType EnumType::GetPhysicalType(const LogicalType &type) {
 	auto &info = aux_info->Cast<EnumTypeInfo>();
 	D_ASSERT(info.GetEnumDictType() == EnumDictType::VECTOR_DICT);
 	return EnumTypeInfo::DictType(info.GetDictSize());
+}
+//===--------------------------------------------------------------------===//
+// Catalog Reference Type
+//===--------------------------------------------------------------------===//
+LogicalType LogicalType::CATALOG_REFERENCE(TypeCatalogEntry &entry) {
+	auto info = make_shared<CatalogReferenceTypeInfo>(entry);
+	return LogicalType(LogicalTypeId::CATALOG_REFERENCE, std::move(info));
+}
+
+LogicalType CatalogReferenceType::GetType(const LogicalType &type) {
+	return CatalogReferenceType::GetCatalog(type).user_type;
+}
+
+TypeCatalogEntry &CatalogReferenceType::GetCatalog(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::CATALOG_REFERENCE);
+	return (TypeCatalogEntry &) type.AuxInfo()->Cast<CatalogReferenceTypeInfo>().GetEntry(); // NOLINT
+}
+
+const string &CatalogReferenceType::GetTypeName(const LogicalType &type) {
+	return CatalogReferenceType::GetCatalog(type).name;
+}
+
+const string &CatalogReferenceType::GetSchemaName(const LogicalType &type) {
+	return CatalogReferenceType::GetCatalog(type).schema.name;
+}
+
+const string &CatalogReferenceType::GetCatalogName(const LogicalType &type) {
+	return CatalogReferenceType::GetCatalog(type).catalog.GetName();
 }
 
 //===--------------------------------------------------------------------===//
@@ -1087,15 +1074,6 @@ void LogicalType::Serialize(Serializer &serializer) const {
 	FieldWriter writer(serializer);
 	writer.WriteField<LogicalTypeId>(id_);
 	ExtraTypeInfo::Serialize(type_info_.get(), writer);
-	writer.Finalize();
-}
-
-void LogicalType::SerializeEnumType(Serializer &serializer) const {
-	FieldWriter writer(serializer);
-	writer.WriteField<LogicalTypeId>(id_);
-	writer.WriteField<ExtraTypeInfoType>(type_info_->type);
-	EnumType::Serialize(writer, *type_info_, true);
-	writer.WriteString(type_info_->alias);
 	writer.Finalize();
 }
 

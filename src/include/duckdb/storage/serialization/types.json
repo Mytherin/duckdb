@@ -115,5 +115,28 @@
     "base": "ExtraTypeInfo",
     "enum": "GENERIC_TYPE_INFO",
     "custom_switch_code": "result = make_shared<ExtraTypeInfo>(type);\nbreak;"
+  },
+  {
+    "class": "CatalogReferenceTypeInfo",
+    "base": "ExtraTypeInfo",
+    "enum": "CATALOG_REFERENCE_TYPE_INFO",
+    "members": [
+      {
+        "name": "catalog",
+        "type": "string",
+        "serialize_property": "GetCatalogName()"
+      },
+      {
+        "name": "schema",
+        "type": "string",
+        "serialize_property": "GetSchemaName()"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "serialize_property": "GetTypeName()"
+      }
+    ],
+    "constructor": ["$ClientContext", "catalog&",  "schema&", "name&"]
   }
 ]

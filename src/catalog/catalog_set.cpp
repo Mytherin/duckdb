@@ -544,11 +544,8 @@ void CatalogSet::UpdateTimestamp(CatalogEntry &entry, transaction_t timestamp) {
 }
 
 void CatalogSet::AdjustUserDependency(CatalogEntry &entry, ColumnDefinition &column, bool remove) {
-	auto user_type_catalog_p = EnumType::GetCatalog(column.Type());
-	if (!user_type_catalog_p) {
-		return;
-	}
-	auto &user_type_catalog = user_type_catalog_p->Cast<CatalogEntry>();
+	auto &user_type_catalog_p = CatalogReferenceType::GetCatalog(column.Type());
+	auto &user_type_catalog = user_type_catalog_p.Cast<CatalogEntry>();
 	auto &dependency_manager = catalog.GetDependencyManager();
 	if (remove) {
 		dependency_manager.dependents_map[user_type_catalog].erase(*entry.parent);
@@ -564,7 +561,7 @@ void CatalogSet::AdjustDependency(CatalogEntry &entry, TableCatalogEntry &table,
 	bool found = false;
 	if (column.Type().id() == LogicalTypeId::ENUM) {
 		for (auto &old_column : table.GetColumns().Logical()) {
-			if (old_column.Name() == column.Name() && old_column.Type().id() != LogicalTypeId::ENUM) {
+			if (old_column.Name() == column.Name() && old_column.Type().id() != LogicalTypeId::CATALOG_REFERENCE) {
 				AdjustUserDependency(entry, column, remove);
 				found = true;
 			}
