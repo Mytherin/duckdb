@@ -390,6 +390,11 @@ int64_t TemplatedGetPos(const string_map_t<T> &map, const string_t &key) {
 	return it->second;
 }
 
+string_t EnumType::GetString(const LogicalType &type, idx_t pos) {
+	D_ASSERT(pos < EnumType::GetSize(type));
+	return FlatVector::GetData<string_t>(EnumType::GetValuesInsertOrder(type))[pos];
+}
+
 int64_t EnumType::GetPos(const LogicalType &type, const string_t &key) {
 	auto info = type.AuxInfo();
 	switch (type.InternalType()) {

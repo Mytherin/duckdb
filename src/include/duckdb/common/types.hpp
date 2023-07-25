@@ -415,6 +415,7 @@ struct CatalogReferenceType {
 
 struct EnumType {
 	DUCKDB_API static int64_t GetPos(const LogicalType &type, const string_t& key);
+	DUCKDB_API static string_t GetString(const LogicalType &type, idx_t pos);
 	DUCKDB_API static const Vector &GetValuesInsertOrder(const LogicalType &type);
 	DUCKDB_API static idx_t GetSize(const LogicalType &type);
 	DUCKDB_API static const string GetValue(const Value &val);

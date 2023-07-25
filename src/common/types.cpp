@@ -397,8 +397,15 @@ string LogicalType::ToString() const {
 		return StringUtil::Format("DECIMAL(%d,%d)", width, scale);
 	}
 	case LogicalTypeId::ENUM: {
-		throw InternalException("Cannot convert ENUM to SQL string");
-//		return KeywordHelper::WriteOptionallyQuoted(EnumType::GetTypeName(*this));
+		string ret = "ENUM(";
+		for(idx_t i = 0; i < EnumType::GetSize(*this); i++) {
+			if (i > 0) {
+				ret += ", ";
+			}
+			ret += "'" + KeywordHelper::WriteOptionallyQuoted(EnumType::GetString(*this, i).GetString(), '\'') + "'";
+		}
+		ret += ")";
+		return ret;
 	}
 	case LogicalTypeId::USER: {
 		return KeywordHelper::WriteOptionallyQuoted(UserType::GetTypeName(*this));
