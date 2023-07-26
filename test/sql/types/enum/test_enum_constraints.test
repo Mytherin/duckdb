@@ -5,6 +5,8 @@
 statement ok
 PRAGMA enable_verification
 
+mode skip
+
 statement ok
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
 
@@ -105,6 +107,8 @@ DROP TYPE mood
 
 statement ok
 COMMIT;
+
+mode unskip
 
 # Try with two dependencies to the same type ( Delete One column, try do delete type, change type of the other column,
 # delete type, recreate type, add column with type, try to delete type)

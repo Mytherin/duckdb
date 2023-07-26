@@ -210,7 +210,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 }
 
 void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional_ptr<Catalog> catalog,
-                             const string &schema, optional_ptr<DependencyList> dependencies) {
+                             const string &schema) {
 	if (type.id() == LogicalTypeId::LIST || type.id() == LogicalTypeId::MAP) {
 		auto child_type = ListType::GetChildType(type);
 		BindLogicalType(context, child_type, catalog, schema, dependencies);
@@ -260,9 +260,6 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 			entry = &Catalog::GetEntry<TypeCatalogEntry>(context, INVALID_CATALOG, schema, user_type_name);
 		}
 		D_ASSERT(entry);
-		if (dependencies) {
-			dependencies->AddDependency(*entry);
-		}
 		type = entry->user_type;
 	}
 }

@@ -176,7 +176,7 @@ public:
 
 	static void BindSchemaOrCatalog(ClientContext &context, string &catalog, string &schema);
 	static void BindLogicalType(ClientContext &context, LogicalType &type, optional_ptr<Catalog> catalog = nullptr,
-	                            const string &schema = INVALID_SCHEMA, optional_ptr<DependencyList> dependencies = nullptr);
+	                            const string &schema = INVALID_SCHEMA);
 
 	bool HasMatchingBinding(const string &table_name, const string &column_name, string &error_message);
 	bool HasMatchingBinding(const string &schema_name, const string &table_name, const string &column_name,

@@ -268,6 +268,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::RenameColumn(ClientContext &context, Re
 	}
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info));
+	info.dependencies = std::move(bound_create_info->dependencies);
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage);
 }
 
@@ -288,7 +289,6 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddCo
 	for (auto &constraint : constraints) {
 		create_info->constraints.push_back(constraint->Copy());
 	}
-	Binder::BindLogicalType(context, info.new_column.TypeMutable(), &catalog, schema.name);
 	info.new_column.SetOid(columns.LogicalColumnCount());
 	info.new_column.SetStorageOid(columns.PhysicalColumnCount());
 	auto col = info.new_column.Copy();
@@ -299,6 +299,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddCo
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info));
 	auto new_storage =
 	    make_shared<DataTable>(context, *storage, info.new_column, *bound_create_info->bound_defaults.back());
+	info.dependencies = std::move(bound_create_info->dependencies);
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage);
 }
 
@@ -429,6 +430,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::RemoveColumn(ClientContext &context, Re
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info));
+	info.dependencies = std::move(bound_create_info->dependencies);
 	if (columns.GetColumn(LogicalIndex(removed_index)).Generated()) {
 		return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage);
 	}
@@ -464,11 +466,11 @@ unique_ptr<CatalogEntry> DuckTableEntry::SetDefault(ClientContext &context, SetD
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info));
+	info.dependencies = std::move(bound_create_info->dependencies);
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage);
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::SetNotNull(ClientContext &context, SetNotNullInfo &info) {
-
 	auto create_info = make_uniq<CreateTableInfo>(schema, name);
 	create_info->columns = columns.Copy();
 
@@ -492,6 +494,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::SetNotNull(ClientContext &context, SetN
 	}
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info));
+	info.dependencies = std::move(bound_create_info->dependencies);
 
 	// Early return
 	if (has_not_null) {
@@ -523,15 +526,11 @@ unique_ptr<CatalogEntry> DuckTableEntry::DropNotNull(ClientContext &context, Dro
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info));
+	info.dependencies = std::move(bound_create_info->dependencies);
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage);
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info) {
-	if (info.target_type.id() == LogicalTypeId::USER) {
-		// FIXME: this seems wrong - how does this work with structs/lists containing user types?
-		info.target_type =
-		    Catalog::GetType(context, catalog.GetName(), schema.name, UserType::GetTypeName(info.target_type));
-	}
 	auto change_idx = GetColumnIndex(info.column_name);
 	auto create_info = make_uniq<CreateTableInfo>(schema, name);
 	create_info->temporary = temporary;
@@ -603,6 +602,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context
 	auto expression = info.expression->Copy();
 	auto bound_expression = expr_binder.Bind(expression);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info));
+	info.dependencies = std::move(bound_create_info->dependencies);
 	vector<column_t> storage_oids;
 	for (idx_t i = 0; i < bound_columns.size(); i++) {
 		storage_oids.push_back(columns.LogicalToPhysical(bound_columns[i]).index);
@@ -638,6 +638,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddForeignKeyConstraint(ClientContext &
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info));
+	info.dependencies = std::move(bound_create_info->dependencies);
 
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage);
 }
@@ -661,6 +662,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::DropForeignKeyConstraint(ClientContext 
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info));
+	info.dependencies = std::move(bound_create_info->dependencies);
 
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage);
 }

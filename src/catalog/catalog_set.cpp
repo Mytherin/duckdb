@@ -267,8 +267,7 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 	// Note that we do this AFTER the new entry has been entirely set up in the catalog set
 	// that is because in case the alter fails because of a dependency conflict, we need to be able to cleanly roll back
 	// to the old entry.
-	catalog.GetDependencyManager().AlterObject(transaction, *entry, *new_entry, alter_info.removed_dependencies, alter_info.new_dependencies);
-
+	catalog.GetDependencyManager().AlterObject(transaction, *entry, *new_entry, std::move(alter_info.dependencies));
 	return true;
 }
 

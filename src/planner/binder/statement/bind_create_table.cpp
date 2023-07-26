@@ -291,18 +291,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		if (column.Type().id() == LogicalTypeId::VARCHAR) {
 			ExpressionBinder::TestCollation(context, StringType::GetCollation(column.Type()));
 		}
-		DependencyList column_dependencies;
-		BindLogicalType(context, column.TypeMutable(), &result->schema.catalog, result->schema.name, &column_dependencies);
-		for(auto &dep : column_dependencies.GetDependencies()) {
-			auto &type = dep.get().Cast<TypeCatalogEntry>();
-			if (type.catalog.IsTemporaryCatalog()) {
-				// for types that are used in tables in the temp catalog, we can't create a (cross-catalog) dependency
-				// instead copy the type
-				column.SetUnboundType(column.Type());
-			} else {
-				result->dependencies.AddDependency(type);
-			}
-		}
+		BindLogicalType(context, column.TypeMutable(), &result->schema.catalog, result->schema.name);
 	}
 	result->dependencies.VerifyDependencies(schema.catalog, result->Base().table);
 	properties.allow_stream_result = false;

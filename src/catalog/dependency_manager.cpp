@@ -78,7 +78,7 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 }
 
 void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj,
-									catalog_entry_set_t removed_dependencies, catalog_entry_set_t new_dependencies) {
+									DependencyList new_obj_dependencies) {
 	D_ASSERT(dependents_map.find(old_obj) != dependents_map.end());
 	D_ASSERT(dependencies_map.find(old_obj) != dependencies_map.end());
 
@@ -105,26 +105,12 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 		                          "depend on it.",
 		                          old_obj.name);
 	}
-	// add the new object to the dependents_map of each object that it depends on
-	auto &old_dependencies = dependencies_map[old_obj];
-	for (auto &dep : old_dependencies) {
-		auto &dependency = dep.get();
+	for (auto &dependency : new_obj_dependencies.set) {
 		dependents_map[dependency].insert(new_obj);
 	}
-	for (auto &dep : removed_dependencies) {
-		auto &dependency = dep.get();
-		old_dependencies.erase(dependency);
-		dependents_map[dependency].erase(old_obj);
-	}
-
 	// add the new object to the dependency manager
 	dependents_map[new_obj] = dependency_set_t();
-	dependencies_map[new_obj] = old_dependencies;
-
-	for (auto &dependency : new_dependencies) {
-		dependencies_map[new_obj].insert(dependency);
-		dependents_map[dependency].insert(new_obj);
-	}
+	dependencies_map[new_obj] = std::move(new_obj_dependencies.set);
 
 	for (auto &dependency : owned_objects_to_add) {
 		dependents_map[new_obj].insert(Dependency(dependency, DependencyType::DEPENDENCY_OWNS));
