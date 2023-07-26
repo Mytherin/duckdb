@@ -405,7 +405,7 @@ struct UserType {
 
 struct CatalogReferenceType {
 	//! Return the underlying LogicalType
-	DUCKDB_API static LogicalType GetType(const LogicalType &type);
+	DUCKDB_API static const LogicalType &GetType(const LogicalType &type);
 	//! Gets a reference to the catalog entry
 	DUCKDB_API static TypeCatalogEntry &GetCatalog(const LogicalType &type);
 	DUCKDB_API static const string &GetTypeName(const LogicalType &type);

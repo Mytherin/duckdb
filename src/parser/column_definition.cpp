@@ -65,6 +65,9 @@ void ColumnDefinition::SetDefaultValue(unique_ptr<ParsedExpression> default_valu
 }
 
 const LogicalType &ColumnDefinition::Type() const {
+	if (type.id() == LogicalTypeId::CATALOG_REFERENCE) {
+		return CatalogReferenceType::GetType(type);
+	}
 	return type;
 }
 
@@ -164,7 +167,7 @@ string ColumnDefinition::GetName() const {
 }
 
 LogicalType ColumnDefinition::GetType() const {
-	return type;
+	return Type();
 }
 
 void ColumnDefinition::SetGeneratedExpression(unique_ptr<ParsedExpression> new_expr) {

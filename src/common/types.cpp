@@ -1048,8 +1048,9 @@ LogicalType LogicalType::CATALOG_REFERENCE(TypeCatalogEntry &entry) {
 	return LogicalType(LogicalTypeId::CATALOG_REFERENCE, std::move(info));
 }
 
-LogicalType CatalogReferenceType::GetType(const LogicalType &type) {
-	return CatalogReferenceType::GetCatalog(type).user_type;
+const LogicalType &CatalogReferenceType::GetType(const LogicalType &type) {
+	auto &catalog_entry = CatalogReferenceType::GetCatalog(type);
+	return catalog_entry.user_type;
 }
 
 TypeCatalogEntry &CatalogReferenceType::GetCatalog(const LogicalType &type) {

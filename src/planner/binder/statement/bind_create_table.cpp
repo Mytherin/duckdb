@@ -291,7 +291,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		if (column.Type().id() == LogicalTypeId::VARCHAR) {
 			ExpressionBinder::TestCollation(context, StringType::GetCollation(column.Type()));
 		}
-		BindLogicalType(context, column.TypeMutable(), &result->schema.catalog);
+		BindLogicalType(context, column.TypeMutable(), &result->schema.catalog, result->schema.name, false);
 
 		if (column.Type() == LogicalTypeId::CATALOG_REFERENCE) {
 			// Add a catalog dependency

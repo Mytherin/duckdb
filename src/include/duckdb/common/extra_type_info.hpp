@@ -233,6 +233,9 @@ protected:
 
 private:
 	TypeCatalogEntry &catalog_entry;
+	string catalog;
+	string schema;
+	string name;
 };
 
 } // namespace duckdb

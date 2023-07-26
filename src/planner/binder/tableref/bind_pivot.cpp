@@ -374,7 +374,7 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 	idx_t total_pivots = 1;
 	for (auto &pivot : ref.pivots) {
 		if (!pivot.pivot_enum.empty()) {
-			auto type = Catalog::GetType(context, INVALID_CATALOG, INVALID_SCHEMA, pivot.pivot_enum);
+			auto type = CatalogReferenceType::GetType(Catalog::GetType(context, INVALID_CATALOG, INVALID_SCHEMA, pivot.pivot_enum));
 			if (type.id() != LogicalTypeId::ENUM) {
 				throw BinderException(
 				    FormatError(ref, StringUtil::Format("Pivot must reference an ENUM type: \"%s\" is of type \"%s\"",

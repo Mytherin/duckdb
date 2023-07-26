@@ -91,6 +91,9 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(FieldReader &reader) {
 	case ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO:
 		extra_info = AggregateStateTypeInfo::Deserialize(reader);
 		break;
+	case ExtraTypeInfoType::CATALOG_REFERENCE_TYPE_INFO:
+		extra_info = CatalogReferenceTypeInfo::Deserialize(reader);
+		break;
 	default:
 		throw InternalException("Unimplemented type info in ExtraTypeInfo::Deserialize");
 	}
@@ -484,21 +487,24 @@ void EnumTypeInfo::FormatSerialize(FormatSerializer &serializer) const {
 // Catalog Reference Type Info
 //===--------------------------------------------------------------------===//
 CatalogReferenceTypeInfo::CatalogReferenceTypeInfo(TypeCatalogEntry &catalog_entry) :
-	ExtraTypeInfo(ExtraTypeInfoType::CATALOG_REFERENCE_TYPE_INFO), catalog_entry(catalog_entry) {}
+	ExtraTypeInfo(ExtraTypeInfoType::CATALOG_REFERENCE_TYPE_INFO), catalog_entry(catalog_entry),
+	catalog(catalog_entry.catalog.GetName()), schema(catalog_entry.schema.name), name(catalog_entry.name) {
+}
 
 CatalogReferenceTypeInfo::CatalogReferenceTypeInfo(ClientContext &context, const string &catalog, const string &schema, const string &name) :
-	ExtraTypeInfo(ExtraTypeInfoType::CATALOG_REFERENCE_TYPE_INFO), catalog_entry(Catalog::GetEntry<TypeCatalogEntry>(context, catalog, schema, name)) {}
+	CatalogReferenceTypeInfo(Catalog::GetEntry<TypeCatalogEntry>(context, catalog, schema, name)) {
+}
 
 const string &CatalogReferenceTypeInfo::GetTypeName() const {
-	return GetEntry().name;
+	return name;
 }
 
 const string &CatalogReferenceTypeInfo::GetSchemaName() const {
-	return GetEntry().schema.name;
+	return schema;
 }
 
 const string &CatalogReferenceTypeInfo::GetCatalogName() const {
-	return GetEntry().catalog.GetName();
+	return catalog;
 }
 
 const TypeCatalogEntry &CatalogReferenceTypeInfo::GetEntry() const {
@@ -510,11 +516,16 @@ TypeCatalogEntry &CatalogReferenceTypeInfo::GetEntry() {
 }
 
 void CatalogReferenceTypeInfo::Serialize(FieldWriter &writer) const {
-	throw InternalException("FIXME: cannot serialize catalog reference type");
+	writer.WriteString(GetCatalogName());
+	writer.WriteString(GetSchemaName());
+	writer.WriteString(GetTypeName());
 }
 
 shared_ptr<ExtraTypeInfo> CatalogReferenceTypeInfo::Deserialize(FieldReader &reader) {
-	throw InternalException("FIXME: cannot deserialize catalog reference type");
+	auto catalog = reader.ReadRequired<string>();
+	auto schema = reader.ReadRequired<string>();
+	auto table = reader.ReadRequired<string>();
+	return make_shared<CatalogReferenceTypeInfo>(reader.GetSource().GetContext(), catalog, schema, table);
 }
 
 bool CatalogReferenceTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {

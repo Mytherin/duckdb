@@ -210,10 +210,10 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 }
 
 void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional_ptr<Catalog> catalog,
-                             const string &schema) {
+                             const string &schema, bool bind_catalog_reference) {
 	if (type.id() == LogicalTypeId::LIST || type.id() == LogicalTypeId::MAP) {
 		auto child_type = ListType::GetChildType(type);
-		BindLogicalType(context, child_type, catalog, schema);
+		BindLogicalType(context, child_type, catalog, schema, bind_catalog_reference);
 		auto alias = type.GetAlias();
 		if (type.id() == LogicalTypeId::LIST) {
 			type = LogicalType::LIST(child_type);
@@ -226,7 +226,7 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 	} else if (type.id() == LogicalTypeId::STRUCT) {
 		auto child_types = StructType::GetChildTypes(type);
 		for (auto &child_type : child_types) {
-			BindLogicalType(context, child_type.second, catalog, schema);
+			BindLogicalType(context, child_type.second, catalog, schema, bind_catalog_reference);
 		}
 		// Generate new Struct Type
 		auto alias = type.GetAlias();
@@ -235,7 +235,7 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 	} else if (type.id() == LogicalTypeId::UNION) {
 		auto member_types = UnionType::CopyMemberTypes(type);
 		for (auto &member_type : member_types) {
-			BindLogicalType(context, member_type.second, catalog, schema);
+			BindLogicalType(context, member_type.second, catalog, schema, bind_catalog_reference);
 		}
 		// Generate new Union Type
 		auto alias = type.GetAlias();
@@ -260,8 +260,11 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 		} else {
 			type = Catalog::GetType(context, INVALID_CATALOG, schema, user_type_name);
 		}
-		Binder::BindLogicalType(context, type);
+		Binder::BindLogicalType(context, type, catalog, schema, bind_catalog_reference);
 	} else if (type.id() == LogicalTypeId::CATALOG_REFERENCE) {
+		if (!bind_catalog_reference) {
+			return;
+		}
 		type = CatalogReferenceType::GetType(type);
 		D_ASSERT(type.id() != LogicalTypeId::CATALOG_REFERENCE);
 	}
@@ -641,9 +644,9 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			// 2: create a type alias with a custom type.
 			// eg. CREATE TYPE a AS INT; CREATE TYPE b AS a;
 			// We set b to be an alias for the underlying type of a
-			auto inner_type = Catalog::GetType(context, schema.catalog.GetName(), schema.name,
-			                                   UserType::GetTypeName(create_type_info.type));
-			create_type_info.type = inner_type;
+			auto &user_type = UserType::GetTypeName(create_type_info.type);
+			auto inner_type = Catalog::GetType(context, schema.catalog.GetName(), schema.name, user_type);
+			create_type_info.type = CatalogReferenceType::GetType(inner_type);
 		}
 		break;
 	}
