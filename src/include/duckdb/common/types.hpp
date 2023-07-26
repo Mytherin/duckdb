@@ -227,8 +227,7 @@ enum class LogicalTypeId : uint8_t {
 	ENUM = 104,
 	AGGREGATE_STATE = 105,
 	LAMBDA = 106,
-	UNION = 107,
-	CATALOG_REFERENCE = 108
+	UNION = 107
 };
 
 
@@ -376,7 +375,6 @@ public:
 	DUCKDB_API static LogicalType UNION( child_list_t<LogicalType> members);     // NOLINT
 	DUCKDB_API static LogicalType ENUM(Vector &ordered_data, idx_t size); // NOLINT
 	DUCKDB_API static LogicalType USER(const string &user_type_name); // NOLINT
-	DUCKDB_API static LogicalType CATALOG_REFERENCE(TypeCatalogEntry &entry); // NOLINT
 	//! A list of all NUMERIC types (integral and floating point types)
 	DUCKDB_API static const vector<LogicalType> Numeric();
 	//! A list of all INTEGRAL types
@@ -401,16 +399,6 @@ struct ListType {
 
 struct UserType {
 	DUCKDB_API static const string &GetTypeName(const LogicalType &type);
-};
-
-struct CatalogReferenceType {
-	//! Return the underlying LogicalType
-	DUCKDB_API static const LogicalType &GetType(const LogicalType &type);
-	//! Gets a reference to the catalog entry
-	DUCKDB_API static TypeCatalogEntry &GetCatalog(const LogicalType &type);
-	DUCKDB_API static const string &GetTypeName(const LogicalType &type);
-	DUCKDB_API static const string &GetSchemaName(const LogicalType &type);
-	DUCKDB_API static const string &GetCatalogName(const LogicalType &type);
 };
 
 struct EnumType {

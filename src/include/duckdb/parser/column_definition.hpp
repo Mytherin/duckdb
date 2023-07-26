@@ -37,11 +37,13 @@ public:
 	//! type
 	DUCKDB_API const LogicalType &Type() const;
 	LogicalType &TypeMutable();
-	void SetType(const LogicalType &type);
+	void SetType(LogicalType type);
+
+	void SetUnboundType(LogicalType type);
 
 	//! name
 	DUCKDB_API const string &Name() const;
-	void SetName(const string &name);
+	void SetName(string name);
 
 	//! compression_type
 	const duckdb::CompressionType &CompressionType() const;
@@ -73,7 +75,6 @@ public:
 	//===--------------------------------------------------------------------===//
 	// Generated Columns (VIRTUAL)
 	//===--------------------------------------------------------------------===//
-
 	ParsedExpression &GeneratedExpressionMutable();
 	const ParsedExpression &GeneratedExpression() const;
 	void SetGeneratedExpression(unique_ptr<ParsedExpression> expression);
@@ -89,6 +90,8 @@ private:
 	string name;
 	//! The type of the column
 	LogicalType type;
+	//! The unbound type of the column
+	LogicalType unbound_type;
 	//! Compression Type used for this column
 	duckdb::CompressionType compression_type = duckdb::CompressionType::COMPRESSION_AUTO;
 	//! The index of the column in the storage of the table

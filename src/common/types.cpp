@@ -150,8 +150,6 @@ PhysicalType LogicalType::GetInternalType() {
 		return PhysicalType::UNKNOWN;
 	case LogicalTypeId::AGGREGATE_STATE:
 		return PhysicalType::VARCHAR;
-	case LogicalTypeId::CATALOG_REFERENCE:
-		return PhysicalType::INVALID;
 	default:
 		throw InternalException("Invalid LogicalType %s", ToString());
 	}
@@ -409,9 +407,6 @@ string LogicalType::ToString() const {
 	}
 	case LogicalTypeId::USER: {
 		return KeywordHelper::WriteOptionallyQuoted(UserType::GetTypeName(*this));
-	}
-	case LogicalTypeId::CATALOG_REFERENCE: {
-		return KeywordHelper::WriteOptionallyQuoted(CatalogReferenceType::GetTypeName(*this));
 	}
 	case LogicalTypeId::AGGREGATE_STATE: {
 		return AggregateStateType::GetTypeName(*this);
@@ -1039,35 +1034,6 @@ PhysicalType EnumType::GetPhysicalType(const LogicalType &type) {
 	auto &info = aux_info->Cast<EnumTypeInfo>();
 	D_ASSERT(info.GetEnumDictType() == EnumDictType::VECTOR_DICT);
 	return EnumTypeInfo::DictType(info.GetDictSize());
-}
-//===--------------------------------------------------------------------===//
-// Catalog Reference Type
-//===--------------------------------------------------------------------===//
-LogicalType LogicalType::CATALOG_REFERENCE(TypeCatalogEntry &entry) {
-	auto info = make_shared<CatalogReferenceTypeInfo>(entry);
-	return LogicalType(LogicalTypeId::CATALOG_REFERENCE, std::move(info));
-}
-
-const LogicalType &CatalogReferenceType::GetType(const LogicalType &type) {
-	auto &catalog_entry = CatalogReferenceType::GetCatalog(type);
-	return catalog_entry.user_type;
-}
-
-TypeCatalogEntry &CatalogReferenceType::GetCatalog(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::CATALOG_REFERENCE);
-	return (TypeCatalogEntry &) type.AuxInfo()->Cast<CatalogReferenceTypeInfo>().GetEntry(); // NOLINT
-}
-
-const string &CatalogReferenceType::GetTypeName(const LogicalType &type) {
-	return CatalogReferenceType::GetCatalog(type).name;
-}
-
-const string &CatalogReferenceType::GetSchemaName(const LogicalType &type) {
-	return CatalogReferenceType::GetCatalog(type).schema.name;
-}
-
-const string &CatalogReferenceType::GetCatalogName(const LogicalType &type) {
-	return CatalogReferenceType::GetCatalog(type).catalog.GetName();
 }
 
 //===--------------------------------------------------------------------===//

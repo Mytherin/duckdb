@@ -528,6 +528,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::DropNotNull(ClientContext &context, Dro
 
 unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info) {
 	if (info.target_type.id() == LogicalTypeId::USER) {
+		// FIXME: this seems wrong - how does this work with structs/lists containing user types?
 		info.target_type =
 		    Catalog::GetType(context, catalog.GetName(), schema.name, UserType::GetTypeName(info.target_type));
 	}

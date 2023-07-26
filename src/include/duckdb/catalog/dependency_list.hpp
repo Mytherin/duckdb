@@ -23,6 +23,10 @@ public:
 
 	DUCKDB_API void VerifyDependencies(Catalog &catalog, const string &name);
 
+	inline const catalog_entry_set_t &GetDependencies() const {
+		return set;
+	}
+
 private:
 	catalog_entry_set_t set;
 };

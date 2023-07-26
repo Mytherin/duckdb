@@ -655,13 +655,13 @@ LogicalType Catalog::GetType(ClientContext &context, const string &schema, const
 	if (!type_entry) {
 		return LogicalType::INVALID;
 	}
-	return LogicalType::CATALOG_REFERENCE(*type_entry);
+	return type_entry->user_type;
 }
 
 LogicalType Catalog::GetType(ClientContext &context, const string &catalog_name, const string &schema,
                              const string &name) {
 	auto &type_entry = Catalog::GetEntry<TypeCatalogEntry>(context, catalog_name, schema, name);
-	return LogicalType::CATALOG_REFERENCE(type_entry);
+	return type_entry.user_type;
 }
 
 vector<reference<SchemaCatalogEntry>> Catalog::GetSchemas(ClientContext &context) {

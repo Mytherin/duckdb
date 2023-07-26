@@ -48,7 +48,7 @@ private:
 private:
 	void AddObject(CatalogTransaction transaction, CatalogEntry &object, DependencyList &dependencies);
 	void DropObject(CatalogTransaction transaction, CatalogEntry &object, bool cascade);
-	void AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj);
+	void AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj, catalog_entry_set_t removed_dependencies, catalog_entry_set_t new_dependencies);
 	void EraseObjectInternal(CatalogEntry &object);
 };
 } // namespace duckdb

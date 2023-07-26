@@ -25,8 +25,7 @@ enum class ExtraTypeInfoType : uint8_t {
 	STRUCT_TYPE_INFO = 5,
 	ENUM_TYPE_INFO = 6,
 	USER_TYPE_INFO = 7,
-	AGGREGATE_STATE_TYPE_INFO = 8,
-	CATALOG_REFERENCE_TYPE_INFO = 9
+	AGGREGATE_STATE_TYPE_INFO = 8
 };
 
 struct ExtraTypeInfo {
@@ -209,33 +208,6 @@ protected:
 private:
 	EnumDictType dict_type;
 	idx_t dict_size;
-};
-
-struct CatalogReferenceTypeInfo : public ExtraTypeInfo {
-public:
-	explicit CatalogReferenceTypeInfo(TypeCatalogEntry &catalog_entry);
-	explicit CatalogReferenceTypeInfo(ClientContext &context, const string &catalog, const string &schema, const string &name);
-
-	const string &GetTypeName() const;
-	const string &GetSchemaName() const;
-	const string &GetCatalogName() const;
-	const TypeCatalogEntry &GetEntry() const;
-	TypeCatalogEntry &GetEntry();
-	void Serialize(FieldWriter &writer) const override;
-	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader);
-
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &source);
-
-protected:
-	// Equalities are only used in enums with different catalog entries
-	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
-
-private:
-	TypeCatalogEntry &catalog_entry;
-	string catalog;
-	string schema;
-	string name;
 };
 
 } // namespace duckdb

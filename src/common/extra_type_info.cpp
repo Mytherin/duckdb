@@ -91,9 +91,6 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(FieldReader &reader) {
 	case ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO:
 		extra_info = AggregateStateTypeInfo::Deserialize(reader);
 		break;
-	case ExtraTypeInfoType::CATALOG_REFERENCE_TYPE_INFO:
-		extra_info = CatalogReferenceTypeInfo::Deserialize(reader);
-		break;
 	default:
 		throw InternalException("Unimplemented type info in ExtraTypeInfo::Deserialize");
 	}
@@ -481,56 +478,6 @@ void EnumTypeInfo::FormatSerialize(FormatSerializer &serializer) const {
 	ExtraTypeInfo::FormatSerialize(serializer);
 	serializer.WriteProperty("dict_size", dict_size);
 	((Vector &)values_insert_order).FormatSerialize(serializer, dict_size); // NOLINT - FIXME
-}
-
-//===--------------------------------------------------------------------===//
-// Catalog Reference Type Info
-//===--------------------------------------------------------------------===//
-CatalogReferenceTypeInfo::CatalogReferenceTypeInfo(TypeCatalogEntry &catalog_entry) :
-	ExtraTypeInfo(ExtraTypeInfoType::CATALOG_REFERENCE_TYPE_INFO), catalog_entry(catalog_entry),
-	catalog(catalog_entry.catalog.GetName()), schema(catalog_entry.schema.name), name(catalog_entry.name) {
-}
-
-CatalogReferenceTypeInfo::CatalogReferenceTypeInfo(ClientContext &context, const string &catalog, const string &schema, const string &name) :
-	CatalogReferenceTypeInfo(Catalog::GetEntry<TypeCatalogEntry>(context, catalog, schema, name)) {
-}
-
-const string &CatalogReferenceTypeInfo::GetTypeName() const {
-	return name;
-}
-
-const string &CatalogReferenceTypeInfo::GetSchemaName() const {
-	return schema;
-}
-
-const string &CatalogReferenceTypeInfo::GetCatalogName() const {
-	return catalog;
-}
-
-const TypeCatalogEntry &CatalogReferenceTypeInfo::GetEntry() const {
-	return catalog_entry;
-}
-
-TypeCatalogEntry &CatalogReferenceTypeInfo::GetEntry() {
-	return catalog_entry;
-}
-
-void CatalogReferenceTypeInfo::Serialize(FieldWriter &writer) const {
-	writer.WriteString(GetCatalogName());
-	writer.WriteString(GetSchemaName());
-	writer.WriteString(GetTypeName());
-}
-
-shared_ptr<ExtraTypeInfo> CatalogReferenceTypeInfo::Deserialize(FieldReader &reader) {
-	auto catalog = reader.ReadRequired<string>();
-	auto schema = reader.ReadRequired<string>();
-	auto table = reader.ReadRequired<string>();
-	return make_shared<CatalogReferenceTypeInfo>(reader.GetSource().GetContext(), catalog, schema, table);
-}
-
-bool CatalogReferenceTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
-	auto &other = other_p->Cast<CatalogReferenceTypeInfo>();
-	return RefersToSameObject(catalog_entry, other.catalog_entry);
 }
 
 } // namespace duckdb

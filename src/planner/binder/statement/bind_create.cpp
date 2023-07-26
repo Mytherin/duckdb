@@ -210,10 +210,10 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 }
 
 void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional_ptr<Catalog> catalog,
-                             const string &schema, bool bind_catalog_reference) {
+                             const string &schema, optional_ptr<DependencyList> dependencies) {
 	if (type.id() == LogicalTypeId::LIST || type.id() == LogicalTypeId::MAP) {
 		auto child_type = ListType::GetChildType(type);
-		BindLogicalType(context, child_type, catalog, schema, bind_catalog_reference);
+		BindLogicalType(context, child_type, catalog, schema, dependencies);
 		auto alias = type.GetAlias();
 		if (type.id() == LogicalTypeId::LIST) {
 			type = LogicalType::LIST(child_type);
@@ -226,7 +226,7 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 	} else if (type.id() == LogicalTypeId::STRUCT) {
 		auto child_types = StructType::GetChildTypes(type);
 		for (auto &child_type : child_types) {
-			BindLogicalType(context, child_type.second, catalog, schema, bind_catalog_reference);
+			BindLogicalType(context, child_type.second, catalog, schema, dependencies);
 		}
 		// Generate new Struct Type
 		auto alias = type.GetAlias();
@@ -235,7 +235,7 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 	} else if (type.id() == LogicalTypeId::UNION) {
 		auto member_types = UnionType::CopyMemberTypes(type);
 		for (auto &member_type : member_types) {
-			BindLogicalType(context, member_type.second, catalog, schema, bind_catalog_reference);
+			BindLogicalType(context, member_type.second, catalog, schema, dependencies);
 		}
 		// Generate new Union Type
 		auto alias = type.GetAlias();
@@ -243,30 +243,27 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 		type.SetAlias(alias);
 	} else if (type.id() == LogicalTypeId::USER) {
 		auto user_type_name = UserType::GetTypeName(type);
+		optional_ptr<TypeCatalogEntry> entry;
 		if (catalog) {
 			// The search order is:
 			// 1) In the same schema as the table
 			// 2) In the same catalog
 			// 3) System catalog
-			type = catalog->GetType(context, schema, user_type_name, OnEntryNotFound::RETURN_NULL);
-
-			if (type.id() == LogicalTypeId::INVALID) {
-				type = catalog->GetType(context, INVALID_SCHEMA, user_type_name, OnEntryNotFound::RETURN_NULL);
+			entry = catalog->GetEntry<TypeCatalogEntry>(context, schema, user_type_name, OnEntryNotFound::RETURN_NULL);
+			if (!entry) {
+				entry = catalog->GetEntry<TypeCatalogEntry>(context, INVALID_SCHEMA, user_type_name, OnEntryNotFound::RETURN_NULL);
 			}
-
-			if (type.id() == LogicalTypeId::INVALID) {
-				type = Catalog::GetType(context, INVALID_CATALOG, schema, user_type_name);
+			if (!entry) {
+				entry = &catalog->GetEntry<TypeCatalogEntry>(context, INVALID_CATALOG, schema, user_type_name);
 			}
 		} else {
-			type = Catalog::GetType(context, INVALID_CATALOG, schema, user_type_name);
+			entry = &Catalog::GetEntry<TypeCatalogEntry>(context, INVALID_CATALOG, schema, user_type_name);
 		}
-		Binder::BindLogicalType(context, type, catalog, schema, bind_catalog_reference);
-	} else if (type.id() == LogicalTypeId::CATALOG_REFERENCE) {
-		if (!bind_catalog_reference) {
-			return;
+		D_ASSERT(entry);
+		if (dependencies) {
+			dependencies->AddDependency(*entry);
 		}
-		type = CatalogReferenceType::GetType(type);
-		D_ASSERT(type.id() != LogicalTypeId::CATALOG_REFERENCE);
+		type = entry->user_type;
 	}
 }
 
@@ -645,8 +642,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			// eg. CREATE TYPE a AS INT; CREATE TYPE b AS a;
 			// We set b to be an alias for the underlying type of a
 			auto &user_type = UserType::GetTypeName(create_type_info.type);
-			auto inner_type = Catalog::GetType(context, schema.catalog.GetName(), schema.name, user_type);
-			create_type_info.type = CatalogReferenceType::GetType(inner_type);
+			create_type_info.type = Catalog::GetType(context, schema.catalog.GetName(), schema.name, user_type);
 		}
 		break;
 	}

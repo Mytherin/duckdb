@@ -77,7 +77,8 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 	}
 }
 
-void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj) {
+void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj,
+									catalog_entry_set_t removed_dependencies, catalog_entry_set_t new_dependencies) {
 	D_ASSERT(dependents_map.find(old_obj) != dependents_map.end());
 	D_ASSERT(dependencies_map.find(old_obj) != dependencies_map.end());
 
@@ -106,48 +107,21 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 	}
 	// add the new object to the dependents_map of each object that it depends on
 	auto &old_dependencies = dependencies_map[old_obj];
-	catalog_entry_vector_t to_delete;
 	for (auto &dep : old_dependencies) {
 		auto &dependency = dep.get();
-		if (dependency.type == CatalogType::TYPE_ENTRY) {
-			auto &user_type = dependency.Cast<TypeCatalogEntry>();
-			auto &table = new_obj.Cast<TableCatalogEntry>();
-			bool deleted_dependency = true;
-			for (auto &column : table.GetColumns().Logical()) {
-				if (column.Type() == user_type.user_type) {
-					deleted_dependency = false;
-					break;
-				}
-			}
-			if (deleted_dependency) {
-				to_delete.push_back(dependency);
-				continue;
-			}
-		}
 		dependents_map[dependency].insert(new_obj);
 	}
-	for (auto &dep : to_delete) {
+	for (auto &dep : removed_dependencies) {
 		auto &dependency = dep.get();
 		old_dependencies.erase(dependency);
 		dependents_map[dependency].erase(old_obj);
 	}
 
-	// We might have to add a type dependency
-	catalog_entry_vector_t to_add;
-	if (new_obj.type == CatalogType::TABLE_ENTRY) {
-		auto &table = new_obj.Cast<TableCatalogEntry>();
-		for (auto &column : table.GetColumns().Logical()) {
-			if (column.Type().id() == LogicalTypeId::CATALOG_REFERENCE) {
-				auto &user_type_catalog = CatalogReferenceType::GetCatalog(column.Type());
-				to_add.push_back(user_type_catalog);
-			}
-		}
-	}
 	// add the new object to the dependency manager
 	dependents_map[new_obj] = dependency_set_t();
 	dependencies_map[new_obj] = old_dependencies;
 
-	for (auto &dependency : to_add) {
+	for (auto &dependency : new_dependencies) {
 		dependencies_map[new_obj].insert(dependency);
 		dependents_map[dependency].insert(new_obj);
 	}

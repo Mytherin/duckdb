@@ -8,17 +8,18 @@
 namespace duckdb {
 
 ColumnDefinition::ColumnDefinition(string name_p, LogicalType type_p)
-    : name(std::move(name_p)), type(std::move(type_p)) {
+    : name(std::move(name_p)), type(std::move(type_p)), unbound_type(type) {
 }
 
 ColumnDefinition::ColumnDefinition(string name_p, LogicalType type_p, unique_ptr<ParsedExpression> expression,
                                    TableColumnType category)
-    : name(std::move(name_p)), type(std::move(type_p)), category(category), expression(std::move(expression)) {
+    : name(std::move(name_p)), type(std::move(type_p)), unbound_type(type), category(category), expression(std::move(expression)) {
 }
 
 ColumnDefinition ColumnDefinition::Copy() const {
 	ColumnDefinition copy(name, type);
 	copy.oid = oid;
+	copy.unbound_type = unbound_type;
 	copy.storage_oid = storage_oid;
 	copy.expression = expression ? expression->Copy() : nullptr;
 	copy.compression_type = compression_type;
@@ -29,7 +30,7 @@ ColumnDefinition ColumnDefinition::Copy() const {
 void ColumnDefinition::Serialize(Serializer &serializer) const {
 	FieldWriter writer(serializer);
 	writer.WriteString(name);
-	writer.WriteSerializable(type);
+	writer.WriteSerializable(unbound_type);
 	writer.WriteOptional(expression);
 	writer.WriteField<TableColumnType>(category);
 	writer.WriteField<duckdb::CompressionType>(compression_type);
@@ -39,13 +40,14 @@ void ColumnDefinition::Serialize(Serializer &serializer) const {
 ColumnDefinition ColumnDefinition::Deserialize(Deserializer &source) {
 	FieldReader reader(source);
 	auto column_name = reader.ReadRequired<string>();
-	auto column_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
+	auto unbound_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 	auto expression = reader.ReadOptional<ParsedExpression>(nullptr);
 	auto category = reader.ReadField<TableColumnType>(TableColumnType::STANDARD);
 	auto compression_type = reader.ReadField<duckdb::CompressionType>(duckdb::CompressionType::COMPRESSION_AUTO);
 	reader.Finalize();
 
-	ColumnDefinition result(column_name, column_type, std::move(expression), category);
+
+	ColumnDefinition result(column_name, std::move(unbound_type), std::move(expression), category);
 	result.compression_type = compression_type;
 	return result;
 }
@@ -65,9 +67,6 @@ void ColumnDefinition::SetDefaultValue(unique_ptr<ParsedExpression> default_valu
 }
 
 const LogicalType &ColumnDefinition::Type() const {
-	if (type.id() == LogicalTypeId::CATALOG_REFERENCE) {
-		return CatalogReferenceType::GetType(type);
-	}
 	return type;
 }
 
@@ -75,16 +74,20 @@ LogicalType &ColumnDefinition::TypeMutable() {
 	return type;
 }
 
-void ColumnDefinition::SetType(const LogicalType &type) {
-	this->type = type;
+void ColumnDefinition::SetType(LogicalType type) {
+	this->type = std::move(type);
+}
+
+void ColumnDefinition::SetUnboundType(LogicalType type) {
+	this->unbound_type = std::move(type);
 }
 
 const string &ColumnDefinition::Name() const {
 	return name;
 }
 
-void ColumnDefinition::SetName(const string &name) {
-	this->name = name;
+void ColumnDefinition::SetName(string name) {
+	this->name = std::move(name);
 }
 
 const duckdb::CompressionType &ColumnDefinition::CompressionType() const {

@@ -22,9 +22,6 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::FormatDeserialize(FormatDeserializer &d
 	case ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO:
 		result = AggregateStateTypeInfo::FormatDeserialize(deserializer);
 		break;
-	case ExtraTypeInfoType::CATALOG_REFERENCE_TYPE_INFO:
-		result = CatalogReferenceTypeInfo::FormatDeserialize(deserializer);
-		break;
 	case ExtraTypeInfoType::DECIMAL_TYPE_INFO:
 		result = DecimalTypeInfo::FormatDeserialize(deserializer);
 		break;
@@ -67,21 +64,6 @@ shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::FormatDeserialize(FormatDeseri
 	deserializer.ReadProperty("function_name", result->state_type.function_name);
 	deserializer.ReadProperty("return_type", result->state_type.return_type);
 	deserializer.ReadProperty("bound_argument_types", result->state_type.bound_argument_types);
-	return std::move(result);
-}
-
-void CatalogReferenceTypeInfo::FormatSerialize(FormatSerializer &serializer) const {
-	ExtraTypeInfo::FormatSerialize(serializer);
-	serializer.WriteProperty("catalog", GetCatalogName());
-	serializer.WriteProperty("schema", GetSchemaName());
-	serializer.WriteProperty("name", GetTypeName());
-}
-
-shared_ptr<ExtraTypeInfo> CatalogReferenceTypeInfo::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto catalog = deserializer.ReadProperty<string>("catalog");
-	auto schema = deserializer.ReadProperty<string>("schema");
-	auto name = deserializer.ReadProperty<string>("name");
-	auto result = duckdb::shared_ptr<CatalogReferenceTypeInfo>(new CatalogReferenceTypeInfo(deserializer.Get<ClientContext &>(), catalog, schema, name));
 	return std::move(result);
 }
 
