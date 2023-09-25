@@ -33,7 +33,8 @@ public:
 
 	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, ScalarFunction &function) {
 		auto stype = deserializer.ReadProperty<LogicalType>(100, "stype");
-		auto lambda_expr = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(101, "lambda_expr", unique_ptr<Expression>());
+		auto lambda_expr =
+		    deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(101, "lambda_expr", unique_ptr<Expression>());
 		return make_uniq<ListLambdaBindData>(stype, std::move(lambda_expr));
 	}
 };
