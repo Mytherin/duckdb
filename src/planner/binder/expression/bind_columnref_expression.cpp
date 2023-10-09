@@ -120,7 +120,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 		    StringUtil::Format("Referenced column \"%s\" not found in FROM clause!%s", column_name, candidate_str);
 		return nullptr;
 	}
-	return binder.bind_context.CreateColumnReference(table_name, column_name);
+	return binder.bind_context.CreateQualifiedReference(table_name, column_name);
 }
 
 void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr) {
@@ -250,7 +250,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 		// first check if part1 is a table, and part2 is a standard column
 		if (binder.HasMatchingBinding(colref.column_names[0], colref.column_names[1], error_message)) {
 			// it is! return the colref directly
-			return binder.bind_context.CreateColumnReference(colref.column_names[0], colref.column_names[1]);
+			return binder.bind_context.CreateQualifiedReference(colref.column_names[0], colref.column_names[1]);
 		} else {
 			// otherwise check if we can turn this into a struct extract
 			auto new_colref = make_uniq<ColumnRefExpression>(colref.column_names[0]);

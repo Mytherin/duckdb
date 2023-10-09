@@ -225,6 +225,21 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &sc
 	return CreateColumnReference(catalog_name, schema_name, table_name, column_name);
 }
 
+unique_ptr<ParsedExpression> BindContext::CreateQualifiedReference(const string &table_name,
+                                                                   const string &column_name) {
+	string error;
+	auto binding = GetBinding(table_name, error);
+	if (!binding) {
+		throw InternalException("CreateQualifiedReference - Binding could not be found: %s", error);
+	}
+	auto entry = binding->GetStandardEntry();
+	if (!entry) {
+		// not a table
+		return CreateColumnReference(table_name, column_name);
+	}
+	return CreateColumnReference(entry->schema.name, table_name, column_name);
+}
+
 optional_ptr<Binding> BindContext::GetCTEBinding(const string &ctename) {
 	auto match = cte_bindings.find(ctename);
 	if (match == cte_bindings.end()) {
