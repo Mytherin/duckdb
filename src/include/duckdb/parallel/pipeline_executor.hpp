@@ -106,6 +106,8 @@ private:
 	//! This flag is set when the pipeline gets interrupted by the Sink -> the final_chunk should be re-sink-ed.
 	bool remaining_sink_chunk = false;
 
+	//! Whether or not the source state has been initialized
+	bool source_is_initialized = false;
 	//! This flag is set when the pipeline gets interrupted by NextBatch -> NextBatch should be called again and the
 	//! source_chunk should be sent through the pipeline
 	bool next_batch_blocked = false;

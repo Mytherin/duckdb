@@ -15,15 +15,7 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 	if (pipeline.sink) {
 		local_sink_state = pipeline.sink->GetLocalSinkState(context);
 		requires_batch_index = pipeline.sink->RequiresBatchIndex() && pipeline.source->SupportsBatchIndex();
-		if (requires_batch_index) {
-			auto &partition_info = local_sink_state->partition_info;
-			D_ASSERT(!partition_info.batch_index.IsValid());
-			// batch index is not set yet - initialize before fetching anything
-			partition_info.batch_index = pipeline.RegisterNewBatchIndex();
-			partition_info.min_batch_index = partition_info.batch_index;
-		}
 	}
-	local_source_state = pipeline.source->GetLocalSourceState(context, *pipeline.source_state);
 
 	intermediate_chunks.reserve(pipeline.operators.size());
 	intermediate_states.reserve(pipeline.operators.size());
@@ -556,6 +548,17 @@ SinkResultType PipelineExecutor::Sink(DataChunk &chunk, OperatorSinkInput &input
 SourceResultType PipelineExecutor::FetchFromSource(DataChunk &result) {
 	StartOperator(*pipeline.source);
 
+	if (!source_is_initialized) {
+		if (requires_batch_index) {
+			auto &partition_info = local_sink_state->partition_info;
+			D_ASSERT(!partition_info.batch_index.IsValid());
+			// batch index is not set yet - initialize before fetching anything
+			partition_info.batch_index = pipeline.RegisterNewBatchIndex();
+			partition_info.min_batch_index = partition_info.batch_index;
+		}
+		local_source_state = pipeline.source->GetLocalSourceState(context, *pipeline.source_state);
+		source_is_initialized = true;
+	}
 	OperatorSourceInput source_input = {*pipeline.source_state, *local_source_state, interrupt_state};
 	auto res = GetData(result, source_input);
 
