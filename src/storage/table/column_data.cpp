@@ -374,11 +374,11 @@ void ColumnData::Update(TransactionData transaction, idx_t column_index, Vector 
 	updates->Update(transaction, column_index, update_vector, row_ids, update_count, base_vector);
 }
 
-void ColumnData::UpdateColumn(TransactionData transaction, const vector<column_t> &column_path, Vector &update_vector,
-                              row_t *row_ids, idx_t update_count, idx_t depth) {
+void ColumnData::UpdateColumn(TransactionData transaction, const ColumnIndex &update_index, Vector &update_vector,
+                              row_t *row_ids, idx_t update_count) {
 	// this method should only be called at the end of the path in the base column case
-	D_ASSERT(depth >= column_path.size());
-	ColumnData::Update(transaction, column_path[0], update_vector, row_ids, update_count);
+	D_ASSERT(update_index.ChildIndexCount() == 0);
+	ColumnData::Update(transaction, update_index.GetPrimaryIndex(), update_vector, row_ids, update_count);
 }
 
 unique_ptr<BaseStatistics> ColumnData::GetUpdateStatistics() {

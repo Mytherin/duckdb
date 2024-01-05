@@ -580,16 +580,16 @@ void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_
 	}
 }
 
-void RowGroupCollection::UpdateColumn(TransactionData transaction, Vector &row_ids, const vector<column_t> &column_path,
+void RowGroupCollection::UpdateColumn(TransactionData transaction, Vector &row_ids, const ColumnIndex &update_index,
                                       DataChunk &updates) {
 	auto first_id = FlatVector::GetValue<row_t>(row_ids, 0);
 	if (first_id >= MAX_ROW_ID) {
 		throw NotImplementedException("Cannot update a column-path on transaction local data");
 	}
 	// find the row_group this id belongs to
-	auto primary_column_idx = column_path[0];
+	auto primary_column_idx = update_index.GetPrimaryIndex();
 	auto row_group = row_groups->GetSegment(first_id);
-	row_group->UpdateColumn(transaction, updates, row_ids, column_path);
+	row_group->UpdateColumn(transaction, updates, row_ids, update_index);
 
 	row_group->MergeIntoStatistics(primary_column_idx, stats.GetStats(primary_column_idx).Statistics());
 }

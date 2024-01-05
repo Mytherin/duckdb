@@ -17,6 +17,7 @@
 #include "duckdb/parser/column_list.hpp"
 #include "duckdb/storage/table/segment_base.hpp"
 #include "duckdb/storage/block.hpp"
+#include "duckdb/common/column_index.hpp"
 
 namespace duckdb {
 class AttachedDatabase;
@@ -131,7 +132,7 @@ public:
 	//! Update a single column; corresponds to DataTable::UpdateColumn
 	//! This method should only be called from the WAL
 	void UpdateColumn(TransactionData transaction, DataChunk &updates, Vector &row_ids,
-	                  const vector<column_t> &column_path);
+	                  const ColumnIndex &column_index);
 
 	void MergeStatistics(idx_t column_idx, const BaseStatistics &other);
 	void MergeIntoStatistics(idx_t column_idx, BaseStatistics &other);

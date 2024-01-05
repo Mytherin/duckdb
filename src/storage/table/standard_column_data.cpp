@@ -118,14 +118,15 @@ void StandardColumnData::Update(TransactionData transaction, idx_t column_index,
 	validity.Update(transaction, column_index, update_vector, row_ids, update_count);
 }
 
-void StandardColumnData::UpdateColumn(TransactionData transaction, const vector<column_t> &column_path,
-                                      Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth) {
-	if (depth >= column_path.size()) {
+void StandardColumnData::UpdateColumn(TransactionData transaction, const ColumnIndex &update_index,
+                                      Vector &update_vector, row_t *row_ids, idx_t update_count) {
+	if (!update_index.HasChildren()) {
 		// update this column
-		ColumnData::Update(transaction, column_path[0], update_vector, row_ids, update_count);
+		ColumnData::Update(transaction, update_index.GetPrimaryIndex(), update_vector, row_ids, update_count);
 	} else {
 		// update the child column (i.e. the validity column)
-		validity.UpdateColumn(transaction, column_path, update_vector, row_ids, update_count, depth + 1);
+		D_ASSERT(update_index.ChildIndexCount() == 1);
+		validity.UpdateColumn(transaction, update_index.GetChildIndex(0), update_vector, row_ids, update_count);
 	}
 }
 

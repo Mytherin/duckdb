@@ -700,15 +700,15 @@ void RowGroup::Update(TransactionData transaction, DataChunk &update_chunk, row_
 }
 
 void RowGroup::UpdateColumn(TransactionData transaction, DataChunk &updates, Vector &row_ids,
-                            const vector<column_t> &column_path) {
+                            const ColumnIndex &column_index) {
 	D_ASSERT(updates.ColumnCount() == 1);
 	auto ids = FlatVector::GetData<row_t>(row_ids);
 
-	auto primary_column_idx = column_path[0];
+	auto primary_column_idx = column_index.GetPrimaryIndex();
 	D_ASSERT(primary_column_idx != COLUMN_IDENTIFIER_ROW_ID);
 	D_ASSERT(primary_column_idx < columns.size());
 	auto &col_data = GetColumn(primary_column_idx);
-	col_data.UpdateColumn(transaction, column_path, updates.data[0], ids, updates.size(), 1);
+	col_data.UpdateColumn(transaction, column_index, updates.data[0], ids, updates.size());
 	MergeStatistics(primary_column_idx, *col_data.GetUpdateStatistics());
 }
 

@@ -168,22 +168,22 @@ void StructColumnData::Update(TransactionData transaction, idx_t column_index, V
 	}
 }
 
-void StructColumnData::UpdateColumn(TransactionData transaction, const vector<column_t> &column_path,
-                                    Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth) {
+void StructColumnData::UpdateColumn(TransactionData transaction, const ColumnIndex &update_index, Vector &update_vector,
+                                    row_t *row_ids, idx_t update_count) {
 	// we can never DIRECTLY update a struct column
-	if (depth >= column_path.size()) {
+	if (!update_index.HasChildren()) {
 		throw InternalException("Attempting to directly update a struct column - this should not be possible");
 	}
-	auto update_column = column_path[depth];
+	auto update_column = update_index.GetChildIndex(0).GetPrimaryIndex();
 	if (update_column == 0) {
 		// update the validity column
-		validity.UpdateColumn(transaction, column_path, update_vector, row_ids, update_count, depth + 1);
+		validity.UpdateColumn(transaction, update_index.GetChildIndex(0), update_vector, row_ids, update_count);
 	} else {
 		if (update_column > sub_columns.size()) {
 			throw InternalException("Update column_path out of range");
 		}
-		sub_columns[update_column - 1]->UpdateColumn(transaction, column_path, update_vector, row_ids, update_count,
-		                                             depth + 1);
+		sub_columns[update_column - 1]->UpdateColumn(transaction, update_index.GetChildIndex(0), update_vector, row_ids,
+		                                             update_count);
 	}
 }
 

@@ -134,8 +134,8 @@ void ArrayColumnData::Update(TransactionData transaction, idx_t column_index, Ve
 	throw NotImplementedException("Array Update is not supported.");
 }
 
-void ArrayColumnData::UpdateColumn(TransactionData transaction, const vector<column_t> &column_path,
-                                   Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth) {
+void ArrayColumnData::UpdateColumn(TransactionData transaction, const ColumnIndex &update_index, Vector &update_vector,
+                                   row_t *row_ids, idx_t update_count) {
 	throw NotImplementedException("Array Update Column is not supported");
 }
 

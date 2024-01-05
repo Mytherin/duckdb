@@ -15,6 +15,7 @@
 #include "duckdb/storage/statistics/segment_statistics.hpp"
 #include "duckdb/storage/table/segment_tree.hpp"
 #include "duckdb/storage/table/column_segment_tree.hpp"
+#include "duckdb/common/column_index.hpp"
 #include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
@@ -111,8 +112,8 @@ public:
 
 	virtual void Update(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
 	                    idx_t update_count);
-	virtual void UpdateColumn(TransactionData transaction, const vector<column_t> &column_path, Vector &update_vector,
-	                          row_t *row_ids, idx_t update_count, idx_t depth);
+	virtual void UpdateColumn(TransactionData transaction, const ColumnIndex &update_index, Vector &update_vector,
+	                          row_t *row_ids, idx_t update_count);
 	virtual unique_ptr<BaseStatistics> GetUpdateStatistics();
 
 	virtual void CommitDropColumn();

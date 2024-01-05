@@ -690,8 +690,17 @@ void WriteAheadLogDeserializer::ReplayUpdate() {
 	auto row_ids = std::move(chunk.data.back());
 	chunk.data.pop_back();
 
+	// construct the ColumnIndex from the column path
+	ColumnIndex index(column_path[0]);
+	reference<ColumnIndex> current_index = index;
+	for (idx_t i = 1; i < column_path.size(); i++) {
+		ColumnIndex new_index(column_path[i]);
+		current_index.get().AddChildIndex(std::move(new_index));
+		current_index = current_index.get().GetChildIndex(0);
+	}
+
 	// now perform the update
-	state.current_table->GetStorage().UpdateColumn(*state.current_table, context, row_ids, column_path, chunk);
+	state.current_table->GetStorage().UpdateColumn(*state.current_table, context, row_ids, index, chunk);
 }
 
 void WriteAheadLogDeserializer::ReplayCheckpoint() {
