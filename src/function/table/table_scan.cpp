@@ -67,9 +67,9 @@ static unique_ptr<LocalTableFunctionState> TableScanInitLocal(ExecutionContext &
 	auto result = make_uniq<TableScanLocalState>();
 	auto &bind_data = input.bind_data->Cast<TableScanBindData>();
 	vector<ColumnIndex> column_ids;
-	for (auto &col : input.column_ids) {
-		auto storage_idx = GetStorageIndex(bind_data.table, col);
-		column_ids.emplace_back(storage_idx);
+	for (auto &col : input.column_indexes) {
+		auto storage_idx = GetStorageIndex(bind_data.table, col.GetPrimaryIndex());
+		column_ids.emplace_back(storage_idx, col.GetChildIndexes());
 	}
 	result->scan_state.Initialize(std::move(column_ids), input.filters.get());
 	TableScanParallelStateNext(context.client, input.bind_data.get(), result.get(), gstate);
@@ -222,9 +222,10 @@ static unique_ptr<GlobalTableFunctionState> IndexScanInitGlobal(ClientContext &c
 	auto result = make_uniq<IndexScanGlobalState>(row_id_data);
 	auto &local_storage = LocalStorage::Get(context, bind_data.table.catalog);
 
-	result->column_ids.reserve(input.column_ids.size());
-	for (auto &id : input.column_ids) {
-		result->column_ids.emplace_back(GetStorageIndex(bind_data.table, id));
+	result->column_ids.reserve(input.column_indexes.size());
+	for (auto &col : input.column_indexes) {
+		auto storage_idx = GetStorageIndex(bind_data.table, col.GetPrimaryIndex());
+		result->column_ids.emplace_back(storage_idx, col.GetChildIndexes());
 	}
 	result->local_storage_state.Initialize(result->column_ids, input.filters.get());
 	local_storage.InitializeScan(bind_data.table.GetStorage(), result->local_storage_state.local_state, input.filters);

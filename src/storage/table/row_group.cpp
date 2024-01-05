@@ -155,7 +155,7 @@ void CollectionScanState::Initialize(const vector<LogicalType> &types) {
 	auto &column_ids = GetColumnIds();
 	column_scans = make_unsafe_uniq_array<ColumnScanState>(column_ids.size());
 	for (idx_t i = 0; i < column_ids.size(); i++) {
-        auto col_id = column_ids[i].GetPrimaryIndex();
+		auto col_id = column_ids[i].GetPrimaryIndex();
 		if (col_id == COLUMN_IDENTIFIER_ROW_ID) {
 			continue;
 		}

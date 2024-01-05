@@ -129,7 +129,7 @@ PreservedError LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, 
 	source.Scan(transaction, columns, [&](DataChunk &chunk) -> bool {
 		// construct the mock chunk by referencing the required columns
 		for (idx_t i = 0; i < columns.size(); i++) {
-            auto col_id = columns[i].GetPrimaryIndex();
+			auto col_id = columns[i].GetPrimaryIndex();
 			mock_chunk.data[col_id].Reference(chunk.data[i]);
 		}
 		mock_chunk.SetCardinality(chunk);

@@ -194,8 +194,8 @@ void DataTable::InitializeScan(TableScanState &state, const vector<ColumnIndex> 
 	row_groups->InitializeScan(state.table_state, column_ids, table_filters);
 }
 
-void DataTable::InitializeScan(DuckTransaction &transaction, TableScanState &state, const vector<ColumnIndex> &column_ids,
-                               TableFilterSet *table_filters) {
+void DataTable::InitializeScan(DuckTransaction &transaction, TableScanState &state,
+                               const vector<ColumnIndex> &column_ids, TableFilterSet *table_filters) {
 	InitializeScan(state, column_ids, table_filters);
 	auto &local_storage = LocalStorage::Get(transaction);
 	local_storage.InitializeScan(*this, state.local_state, table_filters);

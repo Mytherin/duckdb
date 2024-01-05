@@ -90,7 +90,7 @@ unique_ptr<PhysicalOperator> DuckCatalog::PlanInsert(ClientContext &context, Log
 		                                        op.estimated_cardinality);
 	} else {
 		vector<ColumnIndex> columns_to_fetch;
-		for(auto &col_id : op.columns_to_fetch) {
+		for (auto &col_id : op.columns_to_fetch) {
 			columns_to_fetch.emplace_back(col_id);
 		}
 		insert = make_uniq<PhysicalInsert>(

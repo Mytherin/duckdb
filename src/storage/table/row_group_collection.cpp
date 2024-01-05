@@ -1043,7 +1043,8 @@ shared_ptr<RowGroupCollection> RowGroupCollection::RemoveColumn(idx_t col_idx) {
 
 shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &context, idx_t changed_idx,
                                                              const LogicalType &target_type,
-                                                             const vector<ColumnIndex> &bound_columns, Expression &cast_expr) {
+                                                             const vector<ColumnIndex> &bound_columns,
+                                                             Expression &cast_expr) {
 	D_ASSERT(changed_idx < types.size());
 	auto new_types = types;
 	new_types[changed_idx] = target_type;
@@ -1054,7 +1055,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 
 	vector<LogicalType> scan_types;
 	for (idx_t i = 0; i < bound_columns.size(); i++) {
-        auto col_index = bound_columns[i].GetPrimaryIndex();
+		auto col_index = bound_columns[i].GetPrimaryIndex();
 		if (col_index == COLUMN_IDENTIFIER_ROW_ID) {
 			scan_types.emplace_back(LogicalType::ROW_TYPE);
 		} else {
