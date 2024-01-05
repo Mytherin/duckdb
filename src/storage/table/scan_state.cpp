@@ -8,7 +8,7 @@
 
 namespace duckdb {
 
-void TableScanState::Initialize(vector<column_t> column_ids, TableFilterSet *table_filters) {
+void TableScanState::Initialize(vector<ColumnIndex> column_ids, TableFilterSet *table_filters) {
 	this->column_ids = std::move(column_ids);
 	this->table_filters = table_filters;
 	if (table_filters) {
@@ -17,7 +17,7 @@ void TableScanState::Initialize(vector<column_t> column_ids, TableFilterSet *tab
 	}
 }
 
-const vector<column_t> &TableScanState::GetColumnIds() {
+const vector<ColumnIndex> &TableScanState::GetColumnIds() {
 	D_ASSERT(!column_ids.empty());
 	return column_ids;
 }
@@ -55,7 +55,7 @@ void ColumnScanState::Next(idx_t count) {
 	}
 }
 
-const vector<storage_t> &CollectionScanState::GetColumnIds() {
+const vector<ColumnIndex> &CollectionScanState::GetColumnIds() {
 	return parent.GetColumnIds();
 }
 

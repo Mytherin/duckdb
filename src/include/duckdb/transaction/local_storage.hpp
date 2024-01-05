@@ -12,6 +12,7 @@
 #include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/table/table_statistics.hpp"
 #include "duckdb/storage/optimistic_data_writer.hpp"
+#include "duckdb/common/column_index.hpp"
 
 namespace duckdb {
 class AttachedDatabase;
@@ -27,7 +28,7 @@ public:
 	explicit LocalTableStorage(DataTable &table);
 	// Create a LocalTableStorage from an ALTER TYPE
 	LocalTableStorage(ClientContext &context, DataTable &table, LocalTableStorage &parent, idx_t changed_idx,
-	                  const LogicalType &target_type, const vector<column_t> &bound_columns, Expression &cast_expr);
+	                  const LogicalType &target_type, const vector<ColumnIndex> &bound_columns, Expression &cast_expr);
 	// Create a LocalTableStorage from a DROP COLUMN
 	LocalTableStorage(DataTable &table, LocalTableStorage &parent, idx_t drop_idx);
 	// Create a LocalTableStorage from an ADD COLUMN
@@ -108,7 +109,7 @@ public:
 	//! Initialize a scan of the local storage
 	void InitializeScan(DataTable &table, CollectionScanState &state, optional_ptr<TableFilterSet> table_filters);
 	//! Scan
-	void Scan(CollectionScanState &state, const vector<storage_t> &column_ids, DataChunk &result);
+	void Scan(CollectionScanState &state, const vector<ColumnIndex> &column_ids, DataChunk &result);
 
 	void InitializeParallelScan(DataTable &table, ParallelCollectionScanState &state);
 	bool NextParallelScan(ClientContext &context, DataTable &table, ParallelCollectionScanState &state,
@@ -146,10 +147,10 @@ public:
 	void AddColumn(DataTable &old_dt, DataTable &new_dt, ColumnDefinition &new_column, Expression &default_value);
 	void DropColumn(DataTable &old_dt, DataTable &new_dt, idx_t removed_column);
 	void ChangeType(DataTable &old_dt, DataTable &new_dt, idx_t changed_idx, const LogicalType &target_type,
-	                const vector<column_t> &bound_columns, Expression &cast_expr);
+	                const vector<ColumnIndex> &bound_columns, Expression &cast_expr);
 
 	void MoveStorage(DataTable &old_dt, DataTable &new_dt);
-	void FetchChunk(DataTable &table, Vector &row_ids, idx_t count, const vector<column_t> &col_ids, DataChunk &chunk,
+	void FetchChunk(DataTable &table, Vector &row_ids, idx_t count, const vector<ColumnIndex> &col_ids, DataChunk &chunk,
 	                ColumnFetchState &fetch_state);
 	TableIndexList &GetIndexes(DataTable &table);
 

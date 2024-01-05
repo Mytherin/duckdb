@@ -91,7 +91,7 @@ void TableIndexList::VerifyForeignKey(const vector<PhysicalIndex> &fk_keys, Data
 	index->CheckConstraintsForChunk(chunk, conflict_manager);
 }
 
-vector<column_t> TableIndexList::GetRequiredColumns() {
+vector<ColumnIndex> TableIndexList::GetRequiredColumns() {
 	lock_guard<mutex> lock(indexes_lock);
 	set<column_t> unique_indexes;
 	for (auto &index : indexes) {
@@ -99,7 +99,7 @@ vector<column_t> TableIndexList::GetRequiredColumns() {
 			unique_indexes.insert(col_index);
 		}
 	}
-	vector<column_t> result;
+	vector<ColumnIndex> result;
 	result.reserve(unique_indexes.size());
 	for (auto column_index : unique_indexes) {
 		result.emplace_back(column_index);

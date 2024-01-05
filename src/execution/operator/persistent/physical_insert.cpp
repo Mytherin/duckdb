@@ -28,7 +28,7 @@ PhysicalInsert::PhysicalInsert(vector<LogicalType> types_p, TableCatalogEntry &t
                                bool parallel, OnConflictAction action_type,
                                unique_ptr<Expression> on_conflict_condition_p,
                                unique_ptr<Expression> do_update_condition_p, unordered_set<column_t> conflict_target_p,
-                               vector<column_t> columns_to_fetch_p)
+                               vector<ColumnIndex> columns_to_fetch_p)
     : PhysicalOperator(PhysicalOperatorType::INSERT, std::move(types_p), estimated_cardinality),
       column_index_map(std::move(column_index_map)), insert_table(&table), insert_types(table.GetTypes()),
       bound_defaults(std::move(bound_defaults)), return_chunk(return_chunk), parallel(parallel),
@@ -47,7 +47,7 @@ PhysicalInsert::PhysicalInsert(vector<LogicalType> types_p, TableCatalogEntry &t
 	// we use the 'insert_types' to figure out which types these columns have
 	types_to_fetch = vector<LogicalType>(columns_to_fetch.size(), LogicalType::SQLNULL);
 	for (idx_t i = 0; i < columns_to_fetch.size(); i++) {
-		auto &id = columns_to_fetch[i];
+		auto id = columns_to_fetch[i].GetPrimaryIndex();
 		D_ASSERT(id < insert_types.size());
 		types_to_fetch[i] = insert_types[id];
 	}

@@ -141,7 +141,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<Bound
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, const LogicalType &target_type,
-                     const vector<column_t> &bound_columns, Expression &cast_expr)
+                     const vector<ColumnIndex> &bound_columns, Expression &cast_expr)
     : info(parent.info), db(parent.db), is_root(true) {
 	// prevent any tuples from being added to the parent
 	lock_guard<mutex> lock(append_lock);
@@ -188,20 +188,20 @@ TableIOManager &TableIOManager::Get(DataTable &table) {
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
-void DataTable::InitializeScan(TableScanState &state, const vector<column_t> &column_ids,
+void DataTable::InitializeScan(TableScanState &state, const vector<ColumnIndex> &column_ids,
                                TableFilterSet *table_filters) {
 	state.Initialize(column_ids, table_filters);
 	row_groups->InitializeScan(state.table_state, column_ids, table_filters);
 }
 
-void DataTable::InitializeScan(DuckTransaction &transaction, TableScanState &state, const vector<column_t> &column_ids,
+void DataTable::InitializeScan(DuckTransaction &transaction, TableScanState &state, const vector<ColumnIndex> &column_ids,
                                TableFilterSet *table_filters) {
 	InitializeScan(state, column_ids, table_filters);
 	auto &local_storage = LocalStorage::Get(transaction);
 	local_storage.InitializeScan(*this, state.local_state, table_filters);
 }
 
-void DataTable::InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids, idx_t start_row,
+void DataTable::InitializeScanWithOffset(TableScanState &state, const vector<ColumnIndex> &column_ids, idx_t start_row,
                                          idx_t end_row) {
 	state.Initialize(column_ids);
 	row_groups->InitializeScanWithOffset(state.table_state, column_ids, start_row, end_row);
@@ -260,7 +260,7 @@ bool DataTable::IndexNameIsUnique(const string &name) {
 //===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//
-void DataTable::Fetch(DuckTransaction &transaction, DataChunk &result, const vector<column_t> &column_ids,
+void DataTable::Fetch(DuckTransaction &transaction, DataChunk &result, const vector<ColumnIndex> &column_ids,
                       const Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state) {
 	row_groups->Fetch(transaction, result, column_ids, row_identifiers, fetch_count, state);
 }
@@ -758,11 +758,11 @@ void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::functi
 	}
 	idx_t end = row_start + count;
 
-	vector<column_t> column_ids;
+	vector<ColumnIndex> column_ids;
 	vector<LogicalType> types;
 	for (idx_t i = 0; i < this->column_definitions.size(); i++) {
 		auto &col = this->column_definitions[i];
-		column_ids.push_back(i);
+		column_ids.emplace_back(i);
 		types.push_back(col.Type());
 	}
 	DataChunk chunk;
@@ -999,13 +999,13 @@ idx_t DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector
 	auto ids = FlatVector::GetData<row_t>(row_identifiers);
 
 	DataChunk verify_chunk;
-	vector<column_t> col_ids;
+	vector<ColumnIndex> col_ids;
 	vector<LogicalType> types;
 	ColumnFetchState fetch_state;
 	if (has_delete_constraints) {
 		// initialize the chunk if there are any constraints to verify
 		for (idx_t i = 0; i < column_definitions.size(); i++) {
-			col_ids.push_back(column_definitions[i].StorageOid());
+			col_ids.emplace_back(column_definitions[i].StorageOid());
 			types.emplace_back(column_definitions[i].Type());
 		}
 		verify_chunk.Initialize(Allocator::Get(context), types);

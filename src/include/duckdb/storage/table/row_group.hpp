@@ -91,7 +91,7 @@ public:
 	bool InitializeScanWithOffset(CollectionScanState &state, idx_t vector_offset);
 	//! Checks the given set of table filters against the row-group statistics. Returns false if the entire row group
 	//! can be skipped.
-	bool CheckZonemap(TableFilterSet &filters, const vector<column_t> &column_ids);
+	bool CheckZonemap(TableFilterSet &filters, const vector<ColumnIndex> &column_ids);
 	//! Checks the given set of table filters against the per-segment statistics. Returns false if any segments were
 	//! skipped.
 	bool CheckZonemapSegments(CollectionScanState &state);
@@ -105,7 +105,7 @@ public:
 	//! For a specific row, returns true if it should be used for the transaction and false otherwise.
 	bool Fetch(TransactionData transaction, idx_t row);
 	//! Fetch a specific row from the row_group and insert it into the result at the specified index
-	void FetchRow(TransactionData transaction, ColumnFetchState &state, const vector<column_t> &column_ids,
+	void FetchRow(TransactionData transaction, ColumnFetchState &state, const vector<ColumnIndex> &column_ids,
 	              row_t row_id, DataChunk &result, idx_t result_idx);
 
 	//! Append count rows to the version info

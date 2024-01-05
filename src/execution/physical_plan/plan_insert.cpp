@@ -89,11 +89,15 @@ unique_ptr<PhysicalOperator> DuckCatalog::PlanInsert(ClientContext &context, Log
 		insert = make_uniq<PhysicalBatchInsert>(op.types, op.table, op.column_index_map, std::move(op.bound_defaults),
 		                                        op.estimated_cardinality);
 	} else {
+		vector<ColumnIndex> columns_to_fetch;
+		for(auto &col_id : op.columns_to_fetch) {
+			columns_to_fetch.emplace_back(col_id);
+		}
 		insert = make_uniq<PhysicalInsert>(
 		    op.types, op.table, op.column_index_map, std::move(op.bound_defaults), std::move(op.expressions),
 		    std::move(op.set_columns), std::move(op.set_types), op.estimated_cardinality, op.return_chunk,
 		    parallel_streaming_insert && num_threads > 1, op.action_type, std::move(op.on_conflict_condition),
-		    std::move(op.do_update_condition), std::move(op.on_conflict_filter), std::move(op.columns_to_fetch));
+		    std::move(op.do_update_condition), std::move(op.on_conflict_filter), std::move(columns_to_fetch));
 	}
 	D_ASSERT(plan);
 	insert->children.push_back(std::move(plan));

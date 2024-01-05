@@ -30,7 +30,7 @@ public:
 	               vector<PhysicalIndex> set_columns, vector<LogicalType> set_types, idx_t estimated_cardinality,
 	               bool return_chunk, bool parallel, OnConflictAction action_type,
 	               unique_ptr<Expression> on_conflict_condition, unique_ptr<Expression> do_update_condition,
-	               unordered_set<column_t> on_conflict_filter, vector<column_t> columns_to_fetch);
+	               unordered_set<column_t> on_conflict_filter, vector<ColumnIndex> columns_to_fetch);
 	//! CREATE TABLE AS
 	PhysicalInsert(LogicalOperator &op, SchemaCatalogEntry &schema, unique_ptr<BoundCreateTableInfo> info,
 	               idx_t estimated_cardinality, bool parallel);
@@ -70,7 +70,7 @@ public:
 	unordered_set<column_t> conflict_target;
 
 	// Column ids from the original table to fetch
-	vector<column_t> columns_to_fetch;
+	vector<ColumnIndex> columns_to_fetch;
 	// Matching types to the column ids to fetch
 	vector<LogicalType> types_to_fetch;
 
