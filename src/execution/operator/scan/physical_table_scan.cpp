@@ -11,7 +11,7 @@ namespace duckdb {
 
 PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction function_p,
                                      unique_ptr<FunctionData> bind_data_p, vector<LogicalType> returned_types_p,
-                                     vector<column_t> column_ids_p, vector<idx_t> projection_ids_p,
+                                     vector<ColumnIndex> column_ids_p, vector<idx_t> projection_ids_p,
                                      vector<string> names_p, unique_ptr<TableFilterSet> table_filters_p,
                                      idx_t estimated_cardinality, ExtraOperatorInfo extra_info)
     : PhysicalOperator(PhysicalOperatorType::TABLE_SCAN, std::move(types), estimated_cardinality),
@@ -108,7 +108,7 @@ string PhysicalTableScan::ParamsToString() const {
 	if (function.projection_pushdown) {
 		if (function.filter_prune) {
 			for (idx_t i = 0; i < projection_ids.size(); i++) {
-				const auto &column_id = column_ids[projection_ids[i]];
+				const auto &column_id = column_ids[projection_ids[i]].GetPrimaryIndex();
 				if (column_id < names.size()) {
 					if (i > 0) {
 						result += "\n";
@@ -118,7 +118,7 @@ string PhysicalTableScan::ParamsToString() const {
 			}
 		} else {
 			for (idx_t i = 0; i < column_ids.size(); i++) {
-				const auto &column_id = column_ids[i];
+				const auto &column_id = column_ids[i].GetPrimaryIndex();
 				if (column_id < names.size()) {
 					if (i > 0) {
 						result += "\n";
@@ -135,7 +135,8 @@ string PhysicalTableScan::ParamsToString() const {
 			auto &column_index = f.first;
 			auto &filter = f.second;
 			if (column_index < names.size()) {
-				result += filter->ToString(names[column_ids[column_index]]);
+				auto column_id = column_ids[column_index].GetPrimaryIndex();
+				result += filter->ToString(names[column_id]);
 				result += "\n";
 			}
 		}
