@@ -12,6 +12,7 @@
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
+#include "duckdb/common/physical_index.hpp"
 
 namespace duckdb {
 

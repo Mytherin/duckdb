@@ -118,7 +118,7 @@ void StandardColumnData::Update(TransactionData transaction, idx_t column_index,
 	validity.Update(transaction, column_index, update_vector, row_ids, update_count);
 }
 
-void StandardColumnData::UpdateColumn(TransactionData transaction, const ColumnIndex &update_index,
+void StandardColumnData::UpdateColumn(TransactionData transaction, const PhysicalIndex &update_index,
                                       Vector &update_vector, row_t *row_ids, idx_t update_count) {
 	if (!update_index.HasChildren()) {
 		// update this column

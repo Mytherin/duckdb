@@ -79,26 +79,6 @@ struct LogicalIndex {
 	}
 };
 
-struct PhysicalIndex {
-	explicit PhysicalIndex(idx_t index) : index(index) {
-	}
-
-	idx_t index;
-
-	inline bool operator==(const PhysicalIndex &rhs) const {
-		return index == rhs.index;
-	};
-	inline bool operator!=(const PhysicalIndex &rhs) const {
-		return index != rhs.index;
-	};
-	inline bool operator<(const PhysicalIndex &rhs) const {
-		return index < rhs.index;
-	};
-	bool IsValid() {
-		return index != DConstants::INVALID_INDEX;
-	}
-};
-
 DUCKDB_API bool IsPowerOfTwo(uint64_t v);
 DUCKDB_API uint64_t NextPowerOfTwo(uint64_t v);
 DUCKDB_API uint64_t PreviousPowerOfTwo(uint64_t v);

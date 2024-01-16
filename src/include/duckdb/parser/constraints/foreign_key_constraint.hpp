@@ -35,7 +35,10 @@ public:
 	DUCKDB_API static unique_ptr<Constraint> Deserialize(Deserializer &deserializer);
 
 private:
-	ForeignKeyConstraint();
+	ForeignKeyConstraint(vector<idx_t> pk_keys, vector<idx_t> fk_keys);
+
+	vector<idx_t> GetPrimaryKeys() const;
+	vector<idx_t> GetForeignKeys() const;
 };
 
 } // namespace duckdb

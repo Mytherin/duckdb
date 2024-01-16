@@ -374,7 +374,7 @@ void ColumnData::Update(TransactionData transaction, idx_t column_index, Vector 
 	updates->Update(transaction, column_index, update_vector, row_ids, update_count, base_vector);
 }
 
-void ColumnData::UpdateColumn(TransactionData transaction, const ColumnIndex &update_index, Vector &update_vector,
+void ColumnData::UpdateColumn(TransactionData transaction, const PhysicalIndex &update_index, Vector &update_vector,
                               row_t *row_ids, idx_t update_count) {
 	// this method should only be called at the end of the path in the base column case
 	D_ASSERT(update_index.ChildIndexCount() == 0);

@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/physical_index.hpp"
 
 namespace duckdb {
 

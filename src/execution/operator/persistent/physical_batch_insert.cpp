@@ -62,7 +62,7 @@ public:
 			DataChunk scan_chunk;
 			scan_chunk.Initialize(context, types);
 
-			vector<ColumnIndex> column_ids;
+			vector<PhysicalIndex> column_ids;
 			for (idx_t i = 0; i < types.size(); i++) {
 				column_ids.emplace_back(i);
 			}

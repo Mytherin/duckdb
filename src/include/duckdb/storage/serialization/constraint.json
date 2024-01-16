@@ -75,16 +75,19 @@
       {
         "id": 205,
         "name": "pk_keys",
-        "type": "vector<PhysicalIndex>",
-        "property":  "info.pk_keys"
+        "type": "vector<idx_t>",
+        "property":  "pk_keys",
+        "serialize_property": "GetPrimaryKeys()"
       },
       {
         "id": 206,
         "name": "fk_keys",
-        "type": "vector<PhysicalIndex>",
-        "property":  "info.fk_keys"
+        "type": "vector<idx_t>",
+        "property":  "fk_keys",
+        "serialize_property": "GetForeignKeys()"
       }
-    ]
+    ],
+    "constructor": ["pk_keys", "fk_keys"]
   },
   {
     "class": "UniqueConstraint",

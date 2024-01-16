@@ -342,7 +342,7 @@ void RowGroup::NextVector(CollectionScanState &state) {
 	}
 }
 
-bool RowGroup::CheckZonemap(TableFilterSet &filters, const vector<ColumnIndex> &column_ids) {
+bool RowGroup::CheckZonemap(TableFilterSet &filters, const vector<PhysicalIndex> &column_ids) {
 	for (auto &entry : filters.filters) {
 		auto column_index = entry.first;
 		auto &filter = entry.second;
@@ -611,7 +611,7 @@ bool RowGroup::Fetch(TransactionData transaction, idx_t row) {
 	return vinfo->Fetch(transaction, row);
 }
 
-void RowGroup::FetchRow(TransactionData transaction, ColumnFetchState &state, const vector<ColumnIndex> &column_ids,
+void RowGroup::FetchRow(TransactionData transaction, ColumnFetchState &state, const vector<PhysicalIndex> &column_ids,
                         row_t row_id, DataChunk &result, idx_t result_idx) {
 	for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
 		auto column = column_ids[col_idx].GetPrimaryIndex();
@@ -701,7 +701,7 @@ void RowGroup::Update(TransactionData transaction, DataChunk &update_chunk, row_
 }
 
 void RowGroup::UpdateColumn(TransactionData transaction, DataChunk &updates, Vector &row_ids,
-                            const ColumnIndex &column_index) {
+                            const PhysicalIndex &column_index) {
 	D_ASSERT(updates.ColumnCount() == 1);
 	auto ids = FlatVector::GetData<row_t>(row_ids);
 

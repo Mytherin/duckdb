@@ -700,10 +700,10 @@ void WriteAheadLogDeserializer::ReplayUpdate() {
 	chunk.data.pop_back();
 
 	// construct the ColumnIndex from the column path
-	ColumnIndex index(column_path[0]);
-	reference<ColumnIndex> current_index = index;
+	PhysicalIndex index(column_path[0]);
+	reference<PhysicalIndex> current_index = index;
 	for (idx_t i = 1; i < column_path.size(); i++) {
-		ColumnIndex new_index(column_path[i]);
+		PhysicalIndex new_index(column_path[i]);
 		current_index.get().AddChildIndex(std::move(new_index));
 		current_index = current_index.get().GetChildIndex(0);
 	}

@@ -51,21 +51,21 @@ public:
 	RowGroup *GetRowGroup(int64_t index);
 	void Verify();
 
-	void InitializeScan(CollectionScanState &state, const vector<ColumnIndex> &column_ids,
+	void InitializeScan(CollectionScanState &state, const vector<PhysicalIndex> &column_ids,
 	                    TableFilterSet *table_filters);
 	void InitializeCreateIndexScan(CreateIndexScanState &state);
-	void InitializeScanWithOffset(CollectionScanState &state, const vector<ColumnIndex> &column_ids, idx_t start_row,
+	void InitializeScanWithOffset(CollectionScanState &state, const vector<PhysicalIndex> &column_ids, idx_t start_row,
 	                              idx_t end_row);
 	static bool InitializeScanInRowGroup(CollectionScanState &state, RowGroupCollection &collection,
 	                                     RowGroup &row_group, idx_t vector_index, idx_t max_row);
 	void InitializeParallelScan(ParallelCollectionScanState &state);
 	bool NextParallelScan(ClientContext &context, ParallelCollectionScanState &state, CollectionScanState &scan_state);
 
-	bool Scan(DuckTransaction &transaction, const vector<ColumnIndex> &column_ids,
+	bool Scan(DuckTransaction &transaction, const vector<PhysicalIndex> &column_ids,
 	          const std::function<bool(DataChunk &chunk)> &fun);
 	bool Scan(DuckTransaction &transaction, const std::function<bool(DataChunk &chunk)> &fun);
 
-	void Fetch(TransactionData transaction, DataChunk &result, const vector<ColumnIndex> &column_ids,
+	void Fetch(TransactionData transaction, DataChunk &result, const vector<PhysicalIndex> &column_ids,
 	           const Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state);
 
 	//! Initialize an append of a variable number of rows. FinalizeAppend must be called after appending is done.
@@ -85,7 +85,7 @@ public:
 
 	idx_t Delete(TransactionData transaction, DataTable &table, row_t *ids, idx_t count);
 	void Update(TransactionData transaction, row_t *ids, const vector<PhysicalIndex> &column_ids, DataChunk &updates);
-	void UpdateColumn(TransactionData transaction, Vector &row_ids, const ColumnIndex &update_index,
+	void UpdateColumn(TransactionData transaction, Vector &row_ids, const PhysicalIndex &update_index,
 	                  DataChunk &updates);
 
 	void Checkpoint(TableDataWriter &writer, TableStatistics &global_stats);
@@ -104,7 +104,7 @@ public:
 	                                         Expression &default_value);
 	shared_ptr<RowGroupCollection> RemoveColumn(idx_t col_idx);
 	shared_ptr<RowGroupCollection> AlterType(ClientContext &context, idx_t changed_idx, const LogicalType &target_type,
-	                                         const vector<ColumnIndex> &bound_columns, Expression &cast_expr);
+	                                         const vector<PhysicalIndex> &bound_columns, Expression &cast_expr);
 	void VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint);
 
 	void CopyStats(TableStatistics &stats);

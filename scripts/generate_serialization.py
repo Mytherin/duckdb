@@ -211,9 +211,9 @@ def get_deserialize_element(
     )
 
 
-def get_deserialize_assignment(property_name, property_type, pointer_type):
+def get_deserialize_assignment(temp_variable, property_name, property_type, pointer_type):
     assignment = '.' if pointer_type == 'none' else '->'
-    property = property_name
+    property = temp_variable
     if requires_move(property_type):
         property = f'std::move({property})'
     return f'\tresult{assignment}{property_name} = {property};\n'
@@ -302,6 +302,9 @@ class MemberVariable:
                 print(
                     f"Unsupported key \"{key}\" in member variable, key should be in set {str(supported_member_entries)}"
                 )
+        self.temp_variable = self.deserialize_property
+        if '.' in self.temp_variable:
+            self.temp_variable = self.temp_variable.replace('.', '_')
 
 
 supported_serialize_entries = [
@@ -554,7 +557,7 @@ def generate_class_code(class_entry):
         entry = class_entry.members[entry_idx]
         type_name = replace_pointer(entry.type)
         class_deserialize += get_deserialize_element(
-            entry.deserialize_property,
+            entry.temp_variable,
             entry.name,
             entry.id,
             type_name,
@@ -606,7 +609,7 @@ def generate_class_code(class_entry):
             )
         elif entry.name not in constructor_entries:
             class_deserialize += get_deserialize_assignment(
-                entry.deserialize_property, entry.type, class_entry.pointer_type
+                entry.temp_variable, entry.deserialize_property, entry.type, class_entry.pointer_type
             )
         if entry.name in class_entry.set_parameter_names:
             class_deserialize += set_deserialize_parameter.replace('${PROPERTY_TYPE}', entry.type).replace(

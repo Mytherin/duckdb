@@ -56,7 +56,7 @@ public:
 	DataTable(ClientContext &context, DataTable &parent, idx_t removed_column);
 	//! Constructs a DataTable as a delta on an existing data table but with one column changed type
 	DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, const LogicalType &target_type,
-	          const vector<ColumnIndex> &bound_columns, Expression &cast_expr);
+	          const vector<PhysicalIndex> &bound_columns, Expression &cast_expr);
 	//! Constructs a DataTable as a delta on an existing data table but with one column added new constraint
 	explicit DataTable(ClientContext &context, DataTable &parent, unique_ptr<BoundConstraint> constraint);
 
@@ -71,9 +71,9 @@ public:
 	//! Returns a list of types of the table
 	vector<LogicalType> GetTypes();
 
-	void InitializeScan(TableScanState &state, const vector<ColumnIndex> &column_ids,
+	void InitializeScan(TableScanState &state, const vector<PhysicalIndex> &column_ids,
 	                    TableFilterSet *table_filter = nullptr);
-	void InitializeScan(DuckTransaction &transaction, TableScanState &state, const vector<ColumnIndex> &column_ids,
+	void InitializeScan(DuckTransaction &transaction, TableScanState &state, const vector<PhysicalIndex> &column_ids,
 	                    TableFilterSet *table_filters = nullptr);
 
 	//! Returns the maximum amount of threads that should be assigned to scan this data table
@@ -88,7 +88,7 @@ public:
 	void Scan(DuckTransaction &transaction, DataChunk &result, TableScanState &state);
 
 	//! Fetch data from the specific row identifiers from the base table
-	void Fetch(DuckTransaction &transaction, DataChunk &result, const vector<ColumnIndex> &column_ids,
+	void Fetch(DuckTransaction &transaction, DataChunk &result, const vector<PhysicalIndex> &column_ids,
 	           const Vector &row_ids, idx_t fetch_count, ColumnFetchState &state);
 
 	//! Initializes an append to transaction-local storage
@@ -123,7 +123,7 @@ public:
 	//! -> 0 (first subcolumn of INT)
 	//! This method should only be used from the WAL replay. It does not verify update constraints.
 	void UpdateColumn(TableCatalogEntry &table, ClientContext &context, Vector &row_ids,
-	                  const ColumnIndex &update_index, DataChunk &updates);
+	                  const PhysicalIndex &update_index, DataChunk &updates);
 
 	//! Fetches an append lock
 	void AppendLock(TableAppendState &state);
@@ -201,7 +201,7 @@ private:
 	//! Verify constraints with a chunk from the Delete containing all columns of the table
 	void VerifyDeleteConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk);
 
-	void InitializeScanWithOffset(TableScanState &state, const vector<ColumnIndex> &column_ids, idx_t start_row,
+	void InitializeScanWithOffset(TableScanState &state, const vector<PhysicalIndex> &column_ids, idx_t start_row,
 	                              idx_t end_row);
 
 	void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, ClientContext &context, DataChunk &chunk,

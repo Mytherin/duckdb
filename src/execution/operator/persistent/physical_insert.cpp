@@ -28,7 +28,7 @@ PhysicalInsert::PhysicalInsert(vector<LogicalType> types_p, TableCatalogEntry &t
                                bool parallel, OnConflictAction action_type,
                                unique_ptr<Expression> on_conflict_condition_p,
                                unique_ptr<Expression> do_update_condition_p, unordered_set<column_t> conflict_target_p,
-                               vector<ColumnIndex> columns_to_fetch_p)
+                               vector<PhysicalIndex> columns_to_fetch_p)
     : PhysicalOperator(PhysicalOperatorType::INSERT, std::move(types_p), estimated_cardinality),
       column_index_map(std::move(column_index_map)), insert_table(&table), insert_types(table.GetTypes()),
       bound_defaults(std::move(bound_defaults)), return_chunk(return_chunk), parallel(parallel),

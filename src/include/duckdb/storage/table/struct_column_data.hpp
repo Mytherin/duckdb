@@ -46,7 +46,7 @@ public:
 	              idx_t result_idx) override;
 	void Update(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
 	            idx_t update_count) override;
-	void UpdateColumn(TransactionData transaction, const ColumnIndex &update_index, Vector &update_vector,
+	void UpdateColumn(TransactionData transaction, const PhysicalIndex &update_index, Vector &update_vector,
 	                  row_t *row_ids, idx_t update_count) override;
 	unique_ptr<BaseStatistics> GetUpdateStatistics() override;
 

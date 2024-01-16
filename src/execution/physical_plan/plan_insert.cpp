@@ -89,7 +89,7 @@ unique_ptr<PhysicalOperator> DuckCatalog::PlanInsert(ClientContext &context, Log
 		insert = make_uniq<PhysicalBatchInsert>(op.types, op.table, op.column_index_map, std::move(op.bound_defaults),
 		                                        op.estimated_cardinality);
 	} else {
-		vector<ColumnIndex> columns_to_fetch;
+		vector<PhysicalIndex> columns_to_fetch;
 		for (auto &col_id : op.columns_to_fetch) {
 			columns_to_fetch.emplace_back(col_id);
 		}

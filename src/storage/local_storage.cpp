@@ -45,7 +45,7 @@ LocalTableStorage::LocalTableStorage(DataTable &table)
 
 LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, LocalTableStorage &parent,
                                      idx_t changed_idx, const LogicalType &target_type,
-                                     const vector<ColumnIndex> &bound_columns, Expression &cast_expr)
+                                     const vector<PhysicalIndex> &bound_columns, Expression &cast_expr)
     : table_ref(new_dt), allocator(Allocator::Get(new_dt.db)), deleted_rows(parent.deleted_rows),
       optimistic_writer(new_dt, parent.optimistic_writer), optimistic_writers(std::move(parent.optimistic_writers)),
       merged_storage(parent.merged_storage) {
@@ -330,7 +330,7 @@ void LocalStorage::InitializeScan(DataTable &table, CollectionScanState &state,
 	storage->InitializeScan(state, table_filters);
 }
 
-void LocalStorage::Scan(CollectionScanState &state, const vector<ColumnIndex> &column_ids, DataChunk &result) {
+void LocalStorage::Scan(CollectionScanState &state, const vector<PhysicalIndex> &column_ids, DataChunk &result) {
 	state.Scan(transaction, result);
 }
 
@@ -550,7 +550,7 @@ void LocalStorage::DropColumn(DataTable &old_dt, DataTable &new_dt, idx_t remove
 }
 
 void LocalStorage::ChangeType(DataTable &old_dt, DataTable &new_dt, idx_t changed_idx, const LogicalType &target_type,
-                              const vector<ColumnIndex> &bound_columns, Expression &cast_expr) {
+                              const vector<PhysicalIndex> &bound_columns, Expression &cast_expr) {
 	// check if there are any pending appends for the old version of the table
 	auto storage = table_manager.MoveEntry(old_dt);
 	if (!storage) {
@@ -561,7 +561,7 @@ void LocalStorage::ChangeType(DataTable &old_dt, DataTable &new_dt, idx_t change
 	table_manager.InsertEntry(new_dt, std::move(new_storage));
 }
 
-void LocalStorage::FetchChunk(DataTable &table, Vector &row_ids, idx_t count, const vector<ColumnIndex> &col_ids,
+void LocalStorage::FetchChunk(DataTable &table, Vector &row_ids, idx_t count, const vector<PhysicalIndex> &col_ids,
                               DataChunk &chunk, ColumnFetchState &fetch_state) {
 	auto storage = table_manager.GetStorage(table);
 	if (!storage) {

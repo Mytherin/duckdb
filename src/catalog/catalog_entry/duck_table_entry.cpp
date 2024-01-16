@@ -634,9 +634,9 @@ unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context
 	auto expression = info.expression->Copy();
 	auto bound_expression = expr_binder.Bind(expression);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema);
-	vector<ColumnIndex> storage_oids;
+	vector<PhysicalIndex> storage_oids;
 	for (idx_t i = 0; i < bound_columns.size(); i++) {
-		storage_oids.emplace_back(columns.LogicalToPhysical(bound_columns[i]).index);
+		storage_oids.emplace_back(columns.LogicalToPhysical(bound_columns[i]));
 	}
 	if (storage_oids.empty()) {
 		storage_oids.emplace_back(COLUMN_IDENTIFIER_ROW_ID);

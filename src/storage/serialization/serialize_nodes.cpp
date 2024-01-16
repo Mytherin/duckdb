@@ -30,6 +30,7 @@
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/physical_index.hpp"
 
 namespace duckdb {
 
@@ -338,6 +339,18 @@ OrderByNode OrderByNode::Deserialize(Deserializer &deserializer) {
 	auto null_order = deserializer.ReadProperty<OrderByNullType>(101, "null_order");
 	auto expression = deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(102, "expression");
 	OrderByNode result(type, null_order, std::move(expression));
+	return result;
+}
+
+void PhysicalIndex::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<idx_t>(1, "index", index);
+	serializer.WritePropertyWithDefault<vector<PhysicalIndex>>(2, "child_indexes", child_indexes);
+}
+
+PhysicalIndex PhysicalIndex::Deserialize(Deserializer &deserializer) {
+	auto index = deserializer.ReadPropertyWithDefault<idx_t>(1, "index");
+	auto child_indexes = deserializer.ReadPropertyWithDefault<vector<PhysicalIndex>>(2, "child_indexes");
+	PhysicalIndex result(index, std::move(child_indexes));
 	return result;
 }
 

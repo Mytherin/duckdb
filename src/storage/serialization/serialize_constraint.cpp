@@ -53,19 +53,24 @@ void ForeignKeyConstraint::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<ForeignKeyType>(202, "fk_type", info.type);
 	serializer.WritePropertyWithDefault<string>(203, "schema", info.schema);
 	serializer.WritePropertyWithDefault<string>(204, "table", info.table);
-	serializer.WritePropertyWithDefault<vector<PhysicalIndex>>(205, "pk_keys", info.pk_keys);
-	serializer.WritePropertyWithDefault<vector<PhysicalIndex>>(206, "fk_keys", info.fk_keys);
+	serializer.WritePropertyWithDefault<vector<idx_t>>(205, "pk_keys", GetPrimaryKeys());
+	serializer.WritePropertyWithDefault<vector<idx_t>>(206, "fk_keys", GetForeignKeys());
 }
 
 unique_ptr<Constraint> ForeignKeyConstraint::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<ForeignKeyConstraint>(new ForeignKeyConstraint());
-	deserializer.ReadPropertyWithDefault<vector<string>>(200, "pk_columns", result->pk_columns);
-	deserializer.ReadPropertyWithDefault<vector<string>>(201, "fk_columns", result->fk_columns);
-	deserializer.ReadProperty<ForeignKeyType>(202, "fk_type", result->info.type);
-	deserializer.ReadPropertyWithDefault<string>(203, "schema", result->info.schema);
-	deserializer.ReadPropertyWithDefault<string>(204, "table", result->info.table);
-	deserializer.ReadPropertyWithDefault<vector<PhysicalIndex>>(205, "pk_keys", result->info.pk_keys);
-	deserializer.ReadPropertyWithDefault<vector<PhysicalIndex>>(206, "fk_keys", result->info.fk_keys);
+	auto pk_columns = deserializer.ReadPropertyWithDefault<vector<string>>(200, "pk_columns");
+	auto fk_columns = deserializer.ReadPropertyWithDefault<vector<string>>(201, "fk_columns");
+	auto info_type = deserializer.ReadProperty<ForeignKeyType>(202, "fk_type");
+	auto info_schema = deserializer.ReadPropertyWithDefault<string>(203, "schema");
+	auto info_table = deserializer.ReadPropertyWithDefault<string>(204, "table");
+	auto pk_keys = deserializer.ReadPropertyWithDefault<vector<idx_t>>(205, "pk_keys");
+	auto fk_keys = deserializer.ReadPropertyWithDefault<vector<idx_t>>(206, "fk_keys");
+	auto result = duckdb::unique_ptr<ForeignKeyConstraint>(new ForeignKeyConstraint(std::move(pk_keys), std::move(fk_keys)));
+	result->pk_columns = std::move(pk_columns);
+	result->fk_columns = std::move(fk_columns);
+	result->info.type = info_type;
+	result->info.schema = std::move(info_schema);
+	result->info.table = std::move(info_table);
 	return std::move(result);
 }
 

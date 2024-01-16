@@ -50,7 +50,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	if (op.function.dependency) {
 		op.function.dependency(dependencies, op.bind_data.get());
 	}
-	vector<ColumnIndex> column_indexes;
+	vector<PhysicalIndex> column_indexes;
 	for (auto &column_id : op.column_ids) {
 		column_indexes.emplace_back(column_id);
 	}

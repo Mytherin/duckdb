@@ -436,12 +436,6 @@ private:
 		return LogicalIndex(ReadUnsignedInt64());
 	}
 
-	// Deserialize a PhysicalIndex
-	template <typename T = void>
-	inline typename std::enable_if<std::is_same<T, PhysicalIndex>::value, T>::type Read() {
-		return PhysicalIndex(ReadUnsignedInt64());
-	}
-
 protected:
 	// Hooks for subclasses to override to implement custom behavior
 	virtual void OnPropertyBegin(const field_id_t field_id, const char *tag) = 0;

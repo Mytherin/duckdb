@@ -67,7 +67,7 @@ static unique_ptr<LocalTableFunctionState> TableScanInitLocal(ExecutionContext &
                                                               GlobalTableFunctionState *gstate) {
 	auto result = make_uniq<TableScanLocalState>();
 	auto &bind_data = input.bind_data->Cast<TableScanBindData>();
-	vector<ColumnIndex> column_ids;
+	vector<PhysicalIndex> column_ids;
 	for (auto &col : input.column_indexes) {
 		auto storage_idx = GetStorageIndex(bind_data.table, col.GetPrimaryIndex());
 		column_ids.emplace_back(storage_idx, col.GetChildIndexes());
@@ -210,7 +210,7 @@ struct IndexScanGlobalState : public GlobalTableFunctionState {
 	Vector row_ids;
 	ColumnFetchState fetch_state;
 	TableScanState local_storage_state;
-	vector<ColumnIndex> column_ids;
+	vector<PhysicalIndex> column_ids;
 	bool finished;
 };
 

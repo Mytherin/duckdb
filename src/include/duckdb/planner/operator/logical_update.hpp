@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/common/physical_index.hpp"
 
 namespace duckdb {
 class TableCatalogEntry;

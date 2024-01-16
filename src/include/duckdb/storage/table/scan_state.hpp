@@ -14,7 +14,7 @@
 #include "duckdb/common/enums/scan_options.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
 #include "duckdb/storage/table/segment_lock.hpp"
-#include "duckdb/common/column_index.hpp"
+#include "duckdb/common/physical_index.hpp"
 
 namespace duckdb {
 class ColumnSegment;
@@ -132,7 +132,7 @@ public:
 
 public:
 	void Initialize(const vector<LogicalType> &types);
-	const vector<ColumnIndex> &GetColumnIds();
+	const vector<PhysicalIndex> &GetColumnIds();
 	TableFilterSet *GetFilters();
 	AdaptiveFilter *GetAdaptiveFilter();
 	bool Scan(DuckTransaction &transaction, DataChunk &result);
@@ -153,15 +153,15 @@ public:
 	CollectionScanState local_state;
 
 public:
-	void Initialize(vector<ColumnIndex> column_ids, TableFilterSet *table_filters = nullptr);
+	void Initialize(vector<PhysicalIndex> column_ids, TableFilterSet *table_filters = nullptr);
 
-	const vector<ColumnIndex> &GetColumnIds();
+	const vector<PhysicalIndex> &GetColumnIds();
 	TableFilterSet *GetFilters();
 	AdaptiveFilter *GetAdaptiveFilter();
 
 private:
 	//! The column identifiers of the scan
-	vector<ColumnIndex> column_ids;
+	vector<PhysicalIndex> column_ids;
 	//! The table filters (if any)
 	TableFilterSet *table_filters;
 	//! Adaptive filter info (if any)

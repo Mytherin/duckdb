@@ -121,7 +121,7 @@ void RowGroupCollection::Verify() {
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
-void RowGroupCollection::InitializeScan(CollectionScanState &state, const vector<ColumnIndex> &column_ids,
+void RowGroupCollection::InitializeScan(CollectionScanState &state, const vector<PhysicalIndex> &column_ids,
                                         TableFilterSet *table_filters) {
 	auto row_group = row_groups->GetRootSegment();
 	D_ASSERT(row_group);
@@ -137,7 +137,7 @@ void RowGroupCollection::InitializeCreateIndexScan(CreateIndexScanState &state) 
 	state.segment_lock = row_groups->Lock();
 }
 
-void RowGroupCollection::InitializeScanWithOffset(CollectionScanState &state, const vector<ColumnIndex> &column_ids,
+void RowGroupCollection::InitializeScanWithOffset(CollectionScanState &state, const vector<PhysicalIndex> &column_ids,
                                                   idx_t start_row, idx_t end_row) {
 	auto row_group = row_groups->GetSegment(start_row);
 	D_ASSERT(row_group);
@@ -220,7 +220,7 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 	return false;
 }
 
-bool RowGroupCollection::Scan(DuckTransaction &transaction, const vector<ColumnIndex> &column_ids,
+bool RowGroupCollection::Scan(DuckTransaction &transaction, const vector<PhysicalIndex> &column_ids,
                               const std::function<bool(DataChunk &chunk)> &fun) {
 	vector<LogicalType> scan_types;
 	for (idx_t i = 0; i < column_ids.size(); i++) {
@@ -247,7 +247,7 @@ bool RowGroupCollection::Scan(DuckTransaction &transaction, const vector<ColumnI
 }
 
 bool RowGroupCollection::Scan(DuckTransaction &transaction, const std::function<bool(DataChunk &chunk)> &fun) {
-	vector<ColumnIndex> column_ids;
+	vector<PhysicalIndex> column_ids;
 	column_ids.reserve(types.size());
 	for (idx_t i = 0; i < types.size(); i++) {
 		column_ids.emplace_back(i);
@@ -258,7 +258,7 @@ bool RowGroupCollection::Scan(DuckTransaction &transaction, const std::function<
 //===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//
-void RowGroupCollection::Fetch(TransactionData transaction, DataChunk &result, const vector<ColumnIndex> &column_ids,
+void RowGroupCollection::Fetch(TransactionData transaction, DataChunk &result, const vector<PhysicalIndex> &column_ids,
                                const Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state) {
 	// figure out which row_group to fetch from
 	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
@@ -528,7 +528,7 @@ void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_
 	// initialize the fetch state
 	// FIXME: we do not need to fetch all columns, only the columns required by the indices!
 	TableScanState state;
-	vector<ColumnIndex> column_ids;
+	vector<PhysicalIndex> column_ids;
 	column_ids.reserve(types.size());
 	for (idx_t i = 0; i < types.size(); i++) {
 		column_ids.emplace_back(i);
@@ -580,7 +580,7 @@ void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_
 	}
 }
 
-void RowGroupCollection::UpdateColumn(TransactionData transaction, Vector &row_ids, const ColumnIndex &update_index,
+void RowGroupCollection::UpdateColumn(TransactionData transaction, Vector &row_ids, const PhysicalIndex &update_index,
                                       DataChunk &updates) {
 	auto first_id = FlatVector::GetValue<row_t>(row_ids, 0);
 	if (first_id >= MAX_ROW_ID) {
@@ -738,7 +738,7 @@ public:
 		DataChunk scan_chunk;
 		scan_chunk.Initialize(Allocator::DefaultAllocator(), types);
 
-		vector<ColumnIndex> column_ids;
+		vector<PhysicalIndex> column_ids;
 		for (idx_t c = 0; c < types.size(); c++) {
 			column_ids.emplace_back(c);
 		}
@@ -1043,7 +1043,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::RemoveColumn(idx_t col_idx) {
 
 shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &context, idx_t changed_idx,
                                                              const LogicalType &target_type,
-                                                             const vector<ColumnIndex> &bound_columns,
+                                                             const vector<PhysicalIndex> &bound_columns,
                                                              Expression &cast_expr) {
 	D_ASSERT(changed_idx < types.size());
 	auto new_types = types;
@@ -1098,7 +1098,7 @@ void RowGroupCollection::VerifyNewConstraint(DataTable &parent, const BoundConst
 	scan_chunk.Initialize(GetAllocator(), scan_types);
 
 	CreateIndexScanState state;
-	vector<ColumnIndex> cids;
+	vector<PhysicalIndex> cids;
 	cids.emplace_back(physical_index);
 	// Use ScanCommitted to scan the latest committed data
 	state.Initialize(cids, nullptr);

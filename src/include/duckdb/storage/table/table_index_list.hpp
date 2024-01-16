@@ -53,7 +53,7 @@ public:
 	//! Serialize all indexes of this table
 	vector<IndexStorageInfo> GetStorageInfos();
 
-	vector<ColumnIndex> GetRequiredColumns();
+	vector<PhysicalIndex> GetRequiredColumns();
 
 private:
 	//! Indexes associated with the current table

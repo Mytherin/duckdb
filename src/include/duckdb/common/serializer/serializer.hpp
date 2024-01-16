@@ -287,9 +287,6 @@ protected:
 	void WriteValue(LogicalIndex value) {
 		WriteValue(value.index);
 	}
-	void WriteValue(PhysicalIndex value) {
-		WriteValue(value.index);
-	}
 };
 
 // We need to special case vector<bool> because elements of vector<bool> cannot be referenced
