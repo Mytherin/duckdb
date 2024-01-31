@@ -497,6 +497,7 @@ void CheckpointWriter::WriteType(TypeCatalogEntry &type, Serializer &serializer)
 void CheckpointReader::ReadType(ClientContext &context, Deserializer &deserializer) {
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "type");
 	auto &type_info = info->Cast<CreateTypeInfo>();
+	type_info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	catalog.CreateType(context, type_info);
 }
 
@@ -510,6 +511,7 @@ void CheckpointWriter::WriteMacro(ScalarMacroCatalogEntry &macro, Serializer &se
 void CheckpointReader::ReadMacro(ClientContext &context, Deserializer &deserializer) {
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "macro");
 	auto &macro_info = info->Cast<CreateMacroInfo>();
+	macro_info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	catalog.CreateFunction(context, macro_info);
 }
 
@@ -520,6 +522,7 @@ void CheckpointWriter::WriteTableMacro(TableMacroCatalogEntry &macro, Serializer
 void CheckpointReader::ReadTableMacro(ClientContext &context, Deserializer &deserializer) {
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "table_macro");
 	auto &macro_info = info->Cast<CreateMacroInfo>();
+	macro_info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	catalog.CreateFunction(context, macro_info);
 }
 
