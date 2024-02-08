@@ -6,11 +6,8 @@
 #include "duckdb/main/client_context.hpp"
 namespace duckdb {
 
-BaseQueryResult::BaseQueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties_p,
-                                 vector<LogicalType> types_p, vector<string> names_p)
-    : type(type), statement_type(statement_type), properties(std::move(properties_p)), types(std::move(types_p)),
-      names(std::move(names_p)), success(true) {
-	D_ASSERT(types.size() == names.size());
+BaseQueryResult::BaseQueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties_p)
+    : type(type), statement_type(statement_type), properties(std::move(properties_p)), success(true) {
 }
 
 BaseQueryResult::BaseQueryResult(QueryResultType type, ErrorData error)
@@ -50,14 +47,10 @@ ErrorData &BaseQueryResult::GetErrorObject() {
 	return error;
 }
 
-idx_t BaseQueryResult::ColumnCount() {
-	return types.size();
-}
-
 QueryResult::QueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties,
                          vector<LogicalType> types_p, vector<string> names_p, ClientProperties client_properties_p)
-    : BaseQueryResult(type, statement_type, std::move(properties), std::move(types_p), std::move(names_p)),
-      client_properties(std::move(client_properties_p)) {
+    : BaseQueryResult(type, statement_type, std::move(properties)), client_properties(std::move(client_properties_p)),
+      types(std::move(types_p)), names(std::move(names_p)) {
 }
 
 QueryResult::QueryResult(QueryResultType type, ErrorData error)
@@ -70,6 +63,10 @@ QueryResult::~QueryResult() {
 const string &QueryResult::ColumnName(idx_t index) const {
 	D_ASSERT(index < names.size());
 	return names[index];
+}
+
+idx_t QueryResult::ColumnCount() {
+	return types.size();
 }
 
 string QueryResult::ToBox(ClientContext &context, const BoxRendererConfig &config) {

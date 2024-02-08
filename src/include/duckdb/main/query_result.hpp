@@ -22,8 +22,7 @@ enum class QueryResultType : uint8_t { MATERIALIZED_RESULT, STREAM_RESULT, PENDI
 class BaseQueryResult {
 public:
 	//! Creates a successful query result with the specified names and types
-	DUCKDB_API BaseQueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties,
-	                           vector<LogicalType> types, vector<string> names);
+	DUCKDB_API BaseQueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties);
 	//! Creates an unsuccessful query result with error condition
 	DUCKDB_API BaseQueryResult(QueryResultType type, ErrorData error);
 	DUCKDB_API virtual ~BaseQueryResult();
@@ -34,10 +33,6 @@ public:
 	StatementType statement_type;
 	//! Properties of the statement
 	StatementProperties properties;
-	//! The SQL types of the result
-	vector<LogicalType> types;
-	//! The names of the result
-	vector<string> names;
 
 public:
 	[[noreturn]] DUCKDB_API void ThrowError(const string &prepended_message = "") const;
@@ -46,7 +41,6 @@ public:
 	DUCKDB_API const ExceptionType &GetErrorType() const;
 	DUCKDB_API const std::string &GetError();
 	DUCKDB_API ErrorData &GetErrorObject();
-	DUCKDB_API idx_t ColumnCount();
 
 protected:
 	//! Whether or not execution was successful
@@ -71,6 +65,10 @@ public:
 	ClientProperties client_properties;
 	//! The next result (if any)
 	unique_ptr<QueryResult> next;
+	//! The SQL types of the result
+	vector<LogicalType> types;
+	//! The names of the result
+	vector<string> names;
 
 public:
 	template <class TARGET>
@@ -107,6 +105,8 @@ public:
 	//! Returns true if the two results are identical; false otherwise. Note that this method is destructive; it calls
 	//! Fetch() until both results are exhausted. The data in the results will be lost.
 	DUCKDB_API bool Equals(QueryResult &other);
+	//! Number of columns in the result
+	DUCKDB_API idx_t ColumnCount();
 
 	bool TryFetch(unique_ptr<DataChunk> &result, ErrorData &error) {
 		try {

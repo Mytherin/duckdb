@@ -384,8 +384,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 	D_ASSERT(types == statement.types);
 	D_ASSERT(!active_query->HasOpenResult());
 
-	auto pending_result =
-	    make_uniq<PendingQueryResult>(shared_from_this(), *statement_p, std::move(types), stream_result);
+	auto pending_result = make_uniq<PendingQueryResult>(shared_from_this(), *statement_p, stream_result);
 	active_query->prepared = std::move(statement_p);
 	active_query->SetOpenResult(*pending_result);
 	return pending_result;
@@ -414,7 +413,7 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 				invalidate_transaction = true;
 			} else {
 				// Interrupted by an exception caused in a worker thread
-				auto error = executor.GetError();
+				error = executor.GetError();
 				invalidate_transaction = Exception::InvalidatesTransaction(error.Type());
 				result.SetError(error);
 			}

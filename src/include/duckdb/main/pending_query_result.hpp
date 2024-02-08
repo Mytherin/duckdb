@@ -25,7 +25,7 @@ public:
 
 public:
 	DUCKDB_API PendingQueryResult(shared_ptr<ClientContext> context, PreparedStatementData &statement,
-	                              vector<LogicalType> types, bool allow_stream_result);
+	                              bool allow_stream_result);
 	DUCKDB_API explicit PendingQueryResult(ErrorData error_message);
 	DUCKDB_API ~PendingQueryResult() override;
 	DUCKDB_API bool AllowStreamResult() const;
