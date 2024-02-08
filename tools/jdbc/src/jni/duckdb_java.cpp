@@ -692,19 +692,6 @@ jobject _duckdb_jdbc_query_result_meta(JNIEnv *env, jclass, jobject res_ref_buf)
 	return build_meta(env, result->ColumnCount(), n_param, result->names, result->types, result->properties);
 }
 
-jobject _duckdb_jdbc_prepared_statement_meta(JNIEnv *env, jclass, jobject stmt_ref_buf) {
-
-	auto stmt_ref = (StatementHolder *)env->GetDirectBufferAddress(stmt_ref_buf);
-	if (!stmt_ref || !stmt_ref->stmt || stmt_ref->stmt->HasError()) {
-		throw InvalidInputException("Invalid statement");
-	}
-
-	auto &stmt = stmt_ref->stmt;
-
-	return build_meta(env, stmt->ColumnCount(), stmt->n_param, stmt->GetNames(), stmt->GetTypes(),
-	                  stmt->GetStatementProperties());
-}
-
 jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_count);
 
 jobjectArray _duckdb_jdbc_fetch(JNIEnv *env, jclass, jobject res_ref_buf, jobject conn_ref_buf) {
