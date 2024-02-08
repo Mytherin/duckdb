@@ -284,6 +284,24 @@ char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_wid
 	return sqlite3_strdup(result_rendering.c_str());
 }
 
+int EnsureResult(sqlite3_stmt *pStmt) {
+	if (pStmt->result) {
+		return SQLITE_OK;
+	}
+	if (!pStmt->prepared) {
+		return SQLITE_ERROR;
+	}
+	// no result yet! call Execute()
+	pStmt->result = pStmt->prepared->Execute(pStmt->bound_values, true);
+	if (pStmt->result->HasError()) {
+		// error in execute: clear prepared statement
+		pStmt->db->last_error = pStmt->result->GetErrorObject();
+		pStmt->prepared = nullptr;
+		return SQLITE_ERROR;
+	}
+	return SQLITE_OK;
+}
+
 /* Prepare the next result to be retrieved */
 int sqlite3_step(sqlite3_stmt *pStmt) {
 	if (!pStmt) {
@@ -295,14 +313,12 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 	}
 	pStmt->current_text = nullptr;
 	if (!pStmt->result) {
-		// no result yet! call Execute()
-		pStmt->result = pStmt->prepared->Execute(pStmt->bound_values, true);
-		if (pStmt->result->HasError()) {
-			// error in execute: clear prepared statement
-			pStmt->db->last_error = pStmt->result->GetErrorObject();
-			pStmt->prepared = nullptr;
-			return SQLITE_ERROR;
+		int rc = EnsureResult(pStmt);
+		if (rc != SQLITE_OK) {
+			return rc;
 		}
+	}
+	if (!pStmt->current_chunk) {
 		// fetch a chunk
 		if (!pStmt->result->TryFetch(pStmt->current_chunk, pStmt->db->last_error)) {
 			pStmt->prepared = nullptr;
@@ -313,7 +329,7 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 
 		auto properties = pStmt->prepared->GetStatementProperties();
 		if (properties.return_type == StatementReturnType::CHANGED_ROWS && pStmt->current_chunk &&
-		    pStmt->current_chunk->size() > 0) {
+			pStmt->current_chunk->size() > 0) {
 			// update total changes
 			auto row_changes = pStmt->current_chunk->GetValue(0, 0);
 			if (!row_changes.IsNull() && row_changes.DefaultTryCastAs(LogicalType::BIGINT)) {
@@ -365,7 +381,7 @@ int sqlite3_exec(sqlite3 *db,                /* The database on which the SQL ex
 	}
 
 	while (rc == SQLITE_OK && zSql[0]) {
-		int nCol;
+		int nCol = 0;
 
 		pStmt = nullptr;
 		rc = sqlite3_prepare_v2(db, zSql, -1, &pStmt, &zLeftover);
@@ -458,8 +474,14 @@ const char *sqlite3_sql(sqlite3_stmt *pStmt) {
 }
 
 int sqlite3_column_count(sqlite3_stmt *pStmt) {
-	if (!pStmt || !pStmt->result) {
+	if (!pStmt) {
 		return 0;
+	}
+	if (!pStmt->result) {
+		int rc = EnsureResult(pStmt);
+		if (rc != SQLITE_OK) {
+			return 0;
+		}
 	}
 	return (int)pStmt->result->ColumnCount();
 }
@@ -507,8 +529,14 @@ int sqlite3_column_type(sqlite3_stmt *pStmt, int iCol) {
 }
 
 const char *sqlite3_column_name(sqlite3_stmt *pStmt, int N) {
-	if (!pStmt || !pStmt->result) {
+	if (!pStmt) {
 		return nullptr;
+	}
+	if (!pStmt->result) {
+		int rc = EnsureResult(pStmt);
+		if (rc != SQLITE_OK) {
+			return nullptr;
+		}
 	}
 	return pStmt->result->names[N].c_str();
 }
