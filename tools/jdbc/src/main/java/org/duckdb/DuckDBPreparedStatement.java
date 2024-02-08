@@ -51,6 +51,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     private boolean returnsResultSet = false;
     boolean closeOnCompletion = false;
     private Object[] params = new Object[0];
+    private DuckDBResultSetMetaData meta = null;
     private final List<Object[]> batchedParams = new ArrayList<>();
     private final List<String> batchedStatements = new ArrayList<>();
     private Boolean isBatch = false;
@@ -102,6 +103,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             stmt_ref = null;
         }
 
+        meta = null;
         params = null;
 
         if (select_result != null) {
@@ -112,6 +114,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
         try {
             stmt_ref = DuckDBNative.duckdb_jdbc_prepare(conn.conn_ref, sql.getBytes(StandardCharsets.UTF_8));
+            meta = DuckDBNative.duckdb_jdbc_prepared_statement_meta(stmt_ref);
             params = new Object[0];
         } catch (SQLException e) {
             // Delete stmt_ref as it might already be allocated
@@ -208,8 +211,13 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public ResultSetMetaData getMetaData() throws SQLException {
-        ResultSet currentResult = getResultSet();
-        return currentResult != null ? currentResult.getMetaData() : null;
+        if (isClosed()) {
+            throw new SQLException("Statement was closed");
+        }
+        if (meta == null) {
+            throw new SQLException("Prepare something first");
+        }
+        return meta;
     }
 
     @Override
