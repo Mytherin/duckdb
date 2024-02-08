@@ -118,6 +118,16 @@ public:
 	}
 	void FillIRD();
 
+	idx_t ColumnCount() {
+		return GetTypes().size();
+	}
+	const vector<LogicalType> &GetTypes() {
+		return res->types;
+	}
+	const vector<string> &GetNames() {
+		return res->names;
+	}
+
 public:
 	OdbcHandleDbc *dbc;
 	duckdb::unique_ptr<PreparedStatement> stmt;

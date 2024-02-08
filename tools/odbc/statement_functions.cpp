@@ -71,7 +71,7 @@ SQLRETURN duckdb::PrepareStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text
 
 	hstmt->param_desc->ResetParams(hstmt->stmt->n_param);
 
-	hstmt->bound_cols.resize(hstmt->stmt->ColumnCount());
+	hstmt->bound_cols.resize(hstmt->ColumnCount());
 
 	hstmt->FillIRD();
 

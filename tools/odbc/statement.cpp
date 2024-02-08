@@ -526,7 +526,7 @@ static SQLRETURN GetColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_
 
 	// TODO: SQL_DESC_TYPE and SQL_DESC_OCTET_LENGTH should return values if column_number is 0, otherwise they should
 	// return undefined values
-	if (column_number < 1 || column_number > hstmt->stmt->GetTypes().size()) {
+	if (column_number < 1 || column_number > hstmt->ColumnCount()) {
 		return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "SQLColAttribute(s)", "Invalid descriptor index",
 		                                   SQLStateType::ST_07009, hstmt->dbc->GetDataSourceName());
 	}

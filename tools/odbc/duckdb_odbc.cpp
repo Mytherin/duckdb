@@ -144,13 +144,13 @@ void OdbcHandleStmt::FillIRD() {
 	auto ird = row_desc->GetIRD();
 	ird->Reset();
 	ird->header.sql_desc_count = 0;
-	auto num_cols = stmt->ColumnCount();
+	auto num_cols = ColumnCount();
 	for (duckdb::idx_t col_idx = 0; col_idx < num_cols; ++col_idx) {
 		duckdb::DescRecord new_record;
-		auto col_type = stmt->GetTypes()[col_idx];
+		auto col_type = GetTypes()[col_idx];
 
 		// TODO: Make more specific?
-		auto name = stmt->GetNames()[col_idx];
+		auto name = GetNames()[col_idx];
 		new_record.sql_desc_base_column_name = name;
 		new_record.sql_desc_name = name;
 		new_record.sql_desc_label = name;
