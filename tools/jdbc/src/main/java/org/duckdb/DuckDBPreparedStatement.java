@@ -211,8 +211,13 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public ResultSetMetaData getMetaData() throws SQLException {
-        ResultSet currentResult = getResultSet();
-        return currentResult != null ? currentResult.getMetaData() : null;
+        if (isClosed()) {
+            throw new SQLException("Statement was closed");
+        }
+        if (meta == null) {
+            throw new SQLException("Prepare something first");
+        }
+        return meta;
     }
 
     @Override
