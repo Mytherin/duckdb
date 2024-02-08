@@ -329,7 +329,7 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 
 		auto properties = pStmt->prepared->GetStatementProperties();
 		if (properties.return_type == StatementReturnType::CHANGED_ROWS && pStmt->current_chunk &&
-			pStmt->current_chunk->size() > 0) {
+		    pStmt->current_chunk->size() > 0) {
 			// update total changes
 			auto row_changes = pStmt->current_chunk->GetValue(0, 0);
 			if (!row_changes.IsNull() && row_changes.DefaultTryCastAs(LogicalType::BIGINT)) {
