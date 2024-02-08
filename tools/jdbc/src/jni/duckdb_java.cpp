@@ -700,9 +700,10 @@ jobject _duckdb_jdbc_prepared_statement_meta(JNIEnv *env, jclass, jobject stmt_r
 	}
 
 	auto &stmt = stmt_ref->stmt;
+	duckdb::vector<string> names;
+	duckdb::vector<LogicalType> types;
 
-	return build_meta(env, stmt->ColumnCount(), stmt->n_param, stmt->GetNames(), stmt->GetTypes(),
-	                  stmt->GetStatementProperties());
+	return build_meta(env, 0, stmt->n_param, names, types, stmt->GetStatementProperties());
 }
 
 jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_count);
