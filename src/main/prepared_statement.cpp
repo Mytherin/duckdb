@@ -31,11 +31,6 @@ bool PreparedStatement::HasError() const {
 	return !success;
 }
 
-idx_t PreparedStatement::ColumnCount() {
-	D_ASSERT(data);
-	return data->types.size();
-}
-
 StatementType PreparedStatement::GetStatementType() {
 	D_ASSERT(data);
 	return data->statement_type;
@@ -44,16 +39,6 @@ StatementType PreparedStatement::GetStatementType() {
 StatementProperties PreparedStatement::GetStatementProperties() {
 	D_ASSERT(data);
 	return data->properties;
-}
-
-const vector<LogicalType> &PreparedStatement::GetTypes() {
-	D_ASSERT(data);
-	return data->types;
-}
-
-const vector<string> &PreparedStatement::GetNames() {
-	D_ASSERT(data);
-	return data->names;
 }
 
 case_insensitive_map_t<LogicalType> PreparedStatement::GetExpectedParameterTypes() const {

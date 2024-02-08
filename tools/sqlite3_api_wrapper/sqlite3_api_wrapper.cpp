@@ -458,10 +458,10 @@ const char *sqlite3_sql(sqlite3_stmt *pStmt) {
 }
 
 int sqlite3_column_count(sqlite3_stmt *pStmt) {
-	if (!pStmt || !pStmt->prepared) {
+	if (!pStmt || !pStmt->result) {
 		return 0;
 	}
-	return (int)pStmt->prepared->ColumnCount();
+	return (int)pStmt->result->ColumnCount();
 }
 
 ////////////////////////////
@@ -507,10 +507,10 @@ int sqlite3_column_type(sqlite3_stmt *pStmt, int iCol) {
 }
 
 const char *sqlite3_column_name(sqlite3_stmt *pStmt, int N) {
-	if (!pStmt || !pStmt->prepared) {
+	if (!pStmt || !pStmt->result) {
 		return nullptr;
 	}
-	return pStmt->prepared->GetNames()[N].c_str();
+	return pStmt->result->names[N].c_str();
 }
 
 static bool sqlite3_column_has_value(sqlite3_stmt *pStmt, int iCol, LogicalType target_type, Value &val) {
@@ -1122,11 +1122,11 @@ int sqlite3_table_column_metadata(sqlite3 *db,             /* Connection handle 
 }
 
 const char *sqlite3_column_table_name(sqlite3_stmt *pStmt, int iCol) {
-	if (!pStmt || !pStmt->prepared) {
+	if (!pStmt || !pStmt->result) {
 		return nullptr;
 	}
 
-	auto &&names = pStmt->prepared->GetNames();
+	auto &names = pStmt->result->names;
 	if (iCol < 0 || names.size() <= static_cast<size_t>(iCol)) {
 		return nullptr;
 	}
@@ -1135,11 +1135,11 @@ const char *sqlite3_column_table_name(sqlite3_stmt *pStmt, int iCol) {
 }
 
 const char *sqlite3_column_decltype(sqlite3_stmt *pStmt, int iCol) {
-	if (!pStmt || !pStmt->prepared) {
+	if (!pStmt || !pStmt->result) {
 		return nullptr;
 	}
 
-	auto &&types = pStmt->prepared->GetTypes();
+	auto &&types = pStmt->result->types;
 	if (iCol < 0 || types.size() <= static_cast<size_t>(iCol)) {
 		return nullptr;
 	}

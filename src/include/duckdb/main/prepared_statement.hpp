@@ -52,16 +52,10 @@ public:
 	DUCKDB_API ErrorData &GetErrorObject();
 	//! Returns whether or not an error occurred
 	DUCKDB_API bool HasError() const;
-	//! Returns the number of columns in the result
-	DUCKDB_API idx_t ColumnCount();
 	//! Returns the statement type of the underlying prepared statement object
 	DUCKDB_API StatementType GetStatementType();
 	//! Returns the underlying statement properties
 	DUCKDB_API StatementProperties GetStatementProperties();
-	//! Returns the result SQL types of the prepared statement
-	DUCKDB_API const vector<LogicalType> &GetTypes();
-	//! Returns the result names of the prepared statement
-	DUCKDB_API const vector<string> &GetNames();
 	//! Returns the map of parameter index to the expected type of parameter
 	DUCKDB_API case_insensitive_map_t<LogicalType> GetExpectedParameterTypes() const;
 
