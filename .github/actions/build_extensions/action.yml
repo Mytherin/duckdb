@@ -81,10 +81,20 @@ inputs:
   unittest_script:
     description: 'Script/program to execute the unittests'
     default: 'python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest'
+  msvc_toolset:
+    description: 'MSVC Toolset override'
+    default: ''
 
 runs:
   using: "composite"
   steps:
+    - name: Setup MSVC toolset (VS 2022)
+      if: inputs.msvc_toolset != ''
+      uses: TheMrMilchmann/setup-msvc-dev@v3
+      with:
+        arch: x64
+        toolset: ${{ inputs.msvc_toolset }}
+
     - name: Setup DuckDB extension build config
       shell: bash
       run: |
@@ -104,7 +114,7 @@ runs:
       run: |
         echo "VCPKG_TOOLCHAIN_PATH=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" >> $GITHUB_ENV
         echo "VCPKG_TARGET_TRIPLET=${{ inputs.vcpkg_target_triplet }}" >> $GITHUB_ENV
-        
+
     - name: workaround for https://github.com/duckdb/duckdb/issues/8360
       if: inputs.vcpkg_target_triplet == 'x64-windows-static-md'
       shell: bash

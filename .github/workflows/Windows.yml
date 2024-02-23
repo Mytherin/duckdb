@@ -248,11 +248,6 @@ jobs:
    runs-on: windows-latest
    needs: win-release-64
    steps:
-     - name: Setup MSVC toolset (VS 2022)
-       uses: TheMrMilchmann/setup-msvc-dev@v3
-       with:
-         arch: x64
-         toolset: 14.39
      - name: Keep \n line endings
        shell: bash
        run: |
@@ -278,3 +273,4 @@ jobs:
          run_tests: ${{ startsWith(github.ref, 'refs/tags/v') && 0 || 1 }}
          run_autoload_tests: ${{ startsWith(github.ref, 'refs/tags/v') && 0 || 1 }}
          unittest_script: python3 scripts/run_tests_one_by_one.py ./build/release/test/Release/unittest.exe
+         msvc_toolset: 14.39
