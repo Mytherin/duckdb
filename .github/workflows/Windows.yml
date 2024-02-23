@@ -250,7 +250,6 @@ jobs:
    steps:
      - name: Setup MSVC toolset (VS 2022)
        uses: TheMrMilchmann/setup-msvc-dev@v3
-       if: matrix.os == 'windows-2022'
        with:
          arch: x64
          toolset: 14.39
