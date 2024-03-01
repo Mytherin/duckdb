@@ -52,11 +52,12 @@ private:
 
 	unique_ptr<SelectStatement> GenerateSelect();
 	unique_ptr<CreateStatement> GenerateCreate();
+	unique_ptr<InsertStatement> GenerateInsert();
 	unique_ptr<QueryNode> GenerateQueryNode();
 
 	unique_ptr<CreateInfo> GenerateCreateInfo();
 
-	void GenerateCTEs(QueryNode &node);
+	void GenerateCTEs(CommonTableExpressionMap &cte_map);
 	unique_ptr<TableRef> GenerateTableRef();
 	unique_ptr<ParsedExpression> GenerateExpression();
 
@@ -85,6 +86,9 @@ private:
 	unique_ptr<OrderModifier> GenerateOrderBy();
 
 	LogicalType GenerateLogicalType();
+
+	unique_ptr<UpdateSetInfo> GenerateUpdateSetInfo(TableCatalogEntry &table);
+	vector<string> GenerateRandomColumns(const ColumnList &columns, idx_t column_count);
 
 	void GenerateAllScalar(ScalarFunctionCatalogEntry &scalar_function, vector<string> &result);
 	void GenerateAllAggregate(AggregateFunctionCatalogEntry &aggregate_function, vector<string> &result);
@@ -142,6 +146,23 @@ private:
 			throw InternalException("Attempting to choose from an empty vector");
 		}
 		return entries[RandomValue(entries.size())];
+	}
+
+	template <class T>
+	vector<T> ChooseN(const vector<T> &entries, idx_t n) {
+		if (n > entries.size()) {
+			throw InternalException("Choosing more values than are present in the list of entries");
+		}
+		vector<idx_t> indexes;
+		for(idx_t i = 0; i < entries.size(); i++) {
+			indexes.emplace_back(i);
+		}
+		std::random_shuffle(indexes.begin(), indexes.end());
+		vector<T> result;
+		for(auto idx : indexes) {
+			result.emplace_back(entries[idx]);
+		}
+		return result;
 	}
 };
 

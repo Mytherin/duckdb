@@ -77,6 +77,7 @@ shared_ptr<GeneratorContext> StatementGenerator::GetDatabaseState(ClientContext 
 }
 
 unique_ptr<SQLStatement> StatementGenerator::GenerateStatement() {
+	return GenerateInsert();
 	if (RandomPercentage(80)) {
 		return GenerateStatement(StatementType::SELECT_STATEMENT);
 	}
@@ -89,6 +90,8 @@ unique_ptr<SQLStatement> StatementGenerator::GenerateStatement(StatementType typ
 		return GenerateSelect();
 	case StatementType::CREATE_STATEMENT:
 		return GenerateCreate();
+	case StatementType::INSERT_STATEMENT:
+		return GenerateInsert();
 	default:
 		throw InternalException("Unsupported type");
 	}
@@ -103,19 +106,18 @@ unique_ptr<SelectStatement> StatementGenerator::GenerateSelect() {
 	return select;
 }
 
+
+//===--------------------------------------------------------------------===//
+// Create Info Node
+//===--------------------------------------------------------------------===//
 unique_ptr<CreateStatement> StatementGenerator::GenerateCreate() {
 	auto create = make_uniq<CreateStatement>();
 	create->info = GenerateCreateInfo();
 	return create;
 }
 
-//===--------------------------------------------------------------------===//
-// Create Info Node
-//===--------------------------------------------------------------------===//
-
 unique_ptr<CreateInfo> StatementGenerator::GenerateCreateInfo() {
-	switch (RandomValue(4)) {
-	case 0: {
+	if (RandomPercentage(10)) {
 		auto info = make_uniq<CreateTypeInfo>();
 		info->name = RandomString(5);
 		idx_t num_enums = RandomValue(10);
@@ -126,46 +128,132 @@ unique_ptr<CreateInfo> StatementGenerator::GenerateCreateInfo() {
 		info->type = LogicalType::ENUM("My_enum", Enum_Vector, num_enums);
 		return std::move(info);
 	}
-	case 1: {
-		auto info = make_uniq<CreateTableInfo>();
-		info->catalog = INVALID_CATALOG;
-		info->schema = DEFAULT_SCHEMA;
-		info->table = GenerateTableIdentifier();
-		if (RandomPercentage(50)) {
-			info->query = GenerateSelect();
-		} else {
-			idx_t num_cols = RandomValue(1000);
-			for (idx_t i = 0; i < num_cols; i++) {
-				info->columns.AddColumn(ColumnDefinition(GenerateIdentifier(), GenerateLogicalType()));
-			}
-		}
-		// TODO: add constraints to the columns (primary keys etc.);
-		return std::move(info);
-	}
-	case 2: {
+	if (RandomPercentage(10)) {
 		auto info = make_uniq<CreateSchemaInfo>();
 		info->catalog = INVALID_CATALOG;
 		info->on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
 		info->schema = GenerateSchemaIdentifier();
 		return std::move(info);
 	}
-	case 3: {
+	if (RandomPercentage(40)) {
 		auto info = make_uniq<CreateViewInfo>();
 		info->view_name = GenerateViewIdentifier();
 		info->query = GenerateSelect();
 		// TODO: add support for aliases in the view.
 		return std::move(info);
 	}
+	auto info = make_uniq<CreateTableInfo>();
+	info->catalog = INVALID_CATALOG;
+	info->schema = DEFAULT_SCHEMA;
+	info->table = GenerateTableIdentifier();
+	if (RandomPercentage(90)) {
+		info->query = GenerateSelect();
+	} else {
+		idx_t num_cols = RandomValue(1000);
+		for (idx_t i = 0; i < num_cols; i++) {
+			info->columns.AddColumn(ColumnDefinition(GenerateIdentifier(), GenerateLogicalType()));
+		}
+	}
+	// TODO: add constraints to the columns (primary keys etc.);
+	return std::move(info);
+}
+
+//===--------------------------------------------------------------------===//
+// Insert
+//===--------------------------------------------------------------------===//
+void PruneExpressionsFromNode(QueryNode &node, idx_t limit) {
+	switch(node.type) {
+	case QueryNodeType::SELECT_NODE: {
+		auto &select_node = node.Cast<SelectNode>();
+		if (select_node.select_list.size() > limit) {
+			select_node.select_list.erase(select_node.select_list.begin() + limit, select_node.select_list.end());
+			D_ASSERT(select_node.select_list.size() == limit);
+		}
+		break;
+	}
+	case QueryNodeType::SET_OPERATION_NODE: {
+		auto &setop_node = node.Cast<SetOperationNode>();
+		PruneExpressionsFromNode(*setop_node.left, limit);
+		PruneExpressionsFromNode(*setop_node.right, limit);
+		break;
+	}
 	default:
 		break;
 	}
-	throw InternalException("Unsupported Create Info Type");
+}
+
+unique_ptr<InsertStatement> StatementGenerator::GenerateInsert() {
+	if (generator_context->tables_and_views.empty()) {
+		throw InternalException("Attempting to generate an insert but there are no tables in the catalog");
+	}
+	auto insert = make_uniq<InsertStatement>();
+	auto &insert_table = Choose(generator_context->tables_and_views).get().Cast<TableCatalogEntry>();
+	auto column_count = insert_table.GetColumns().PhysicalColumnCount();
+	insert->table = insert_table.name;
+	if (RandomPercentage(2)) {
+		insert->default_values = true;
+	} else {
+		auto select = GenerateSelect();
+		// check how many expressions we have
+		auto expression_count = select->node->GetSelectList().size();
+		if (expression_count > column_count) {
+			// too many columns - prune
+			PruneExpressionsFromNode(*select->node, column_count);
+			expression_count = column_count;
+		}
+		if (RandomPercentage(20)) {
+			// select random columns to insert into
+			insert->columns = GenerateRandomColumns(insert_table.GetColumns(), expression_count);
+		}
+		insert->select_statement = std::move(select);
+	}
+	if (RandomPercentage(5)) {
+		insert->returning_list = GenerateChildren(1, 10);
+	}
+	if (RandomPercentage(5)) {
+		GenerateCTEs(insert->cte_map);
+	}
+	if (RandomPercentage(5)) {
+		auto on_conflict_info = make_uniq<OnConflictInfo>();
+		on_conflict_info->action_type = Choose<OnConflictAction>({ OnConflictAction::THROW,OnConflictAction::NOTHING,OnConflictAction::UPDATE });
+
+		if (on_conflict_info->action_type == OnConflictAction::UPDATE) {
+			on_conflict_info->set_info = GenerateUpdateSetInfo(insert_table);
+		}
+		if (RandomPercentage(5)) {
+			on_conflict_info->indexed_columns = GenerateRandomColumns(insert_table.GetColumns(), RandomValue(5));
+			if (RandomPercentage(20)) {
+				on_conflict_info->condition = GenerateExpression();
+			}
+		}
+	}
+	return insert;
+}
+
+unique_ptr<UpdateSetInfo> StatementGenerator::GenerateUpdateSetInfo(TableCatalogEntry &table) {
+	auto result = make_uniq<UpdateSetInfo>();
+
+	auto column_count = RandomValue(table.GetColumns().PhysicalColumnCount());
+	result->columns = GenerateRandomColumns(table.GetColumns(), column_count);
+	result->expressions = GenerateChildren(column_count, column_count);
+	if (RandomPercentage(90)) {
+		result->condition = GenerateExpression();
+	}
+	return result;
+}
+
+vector<string> StatementGenerator::GenerateRandomColumns(const ColumnList &columns, idx_t column_count) {
+	vector<string> column_names;
+	for(auto &col : columns.Physical()) {
+		column_names.push_back(col.GetName());
+	}
+	return ChooseN(column_names, MinValue<idx_t>(column_names.size(), column_count));
 }
 
 //===--------------------------------------------------------------------===//
 // Query Node
 //===--------------------------------------------------------------------===//
-void StatementGenerator::GenerateCTEs(QueryNode &node) {
+void StatementGenerator::GenerateCTEs(CommonTableExpressionMap &cte_map) {
 	if (depth > 0) {
 		return;
 	}
@@ -175,7 +263,7 @@ void StatementGenerator::GenerateCTEs(QueryNode &node) {
 		for (idx_t i = 0; i < 1 + RandomValue(10); i++) {
 			cte->aliases.push_back(GenerateIdentifier());
 		}
-		node.cte_map.map.insert(make_pair(GenerateTableIdentifier(), std::move(cte)));
+		cte_map.map.insert(make_pair(GenerateTableIdentifier(), std::move(cte)));
 	}
 }
 unique_ptr<QueryNode> StatementGenerator::GenerateQueryNode() {
@@ -185,7 +273,7 @@ unique_ptr<QueryNode> StatementGenerator::GenerateQueryNode() {
 		// select node
 		auto select_node = make_uniq<SelectNode>();
 		// generate CTEs
-		GenerateCTEs(*select_node);
+		GenerateCTEs(select_node->cte_map);
 
 		is_distinct = RandomPercentage(30);
 		if (RandomPercentage(95)) {
@@ -226,36 +314,30 @@ unique_ptr<QueryNode> StatementGenerator::GenerateQueryNode() {
 		    RandomPercentage(10) ? AggregateHandling::FORCE_AGGREGATES : AggregateHandling::STANDARD_HANDLING;
 		if (RandomPercentage(10)) {
 			auto sample = make_uniq<SampleOptions>();
-			sample->is_percentage = RandomPercentage(50);
+			sample->method = Choose<SampleMethod>(
+			    {SampleMethod::BERNOULLI_SAMPLE, SampleMethod::RESERVOIR_SAMPLE, SampleMethod::SYSTEM_SAMPLE});
+			if (sample->method == SampleMethod::BERNOULLI_SAMPLE) {
+				// bernoulli requires a percentage
+				sample->is_percentage = true;
+			} else {
+				sample->is_percentage = RandomPercentage(50);
+			}
 			if (sample->is_percentage) {
 				sample->sample_size = Value::BIGINT(RandomValue(100));
 			} else {
 				sample->sample_size = Value::BIGINT(RandomValue(99999));
 			}
-			sample->method = Choose<SampleMethod>(
-			    {SampleMethod::BERNOULLI_SAMPLE, SampleMethod::RESERVOIR_SAMPLE, SampleMethod::SYSTEM_SAMPLE});
 			select_node->sample = std::move(sample);
 		}
 		result = std::move(select_node);
 	} else {
 		auto setop = make_uniq<SetOperationNode>();
-		GenerateCTEs(*setop);
+		GenerateCTEs(setop->cte_map);
 		setop->setop_type = Choose<SetOperationType>({SetOperationType::EXCEPT, SetOperationType::INTERSECT,
 		                                              SetOperationType::UNION, SetOperationType::UNION_BY_NAME});
+		setop->setop_all = RandomBoolean();
 		setop->left = GenerateQueryNode();
 		setop->right = GenerateQueryNode();
-		switch (setop->setop_type) {
-		case SetOperationType::EXCEPT:
-		case SetOperationType::INTERSECT:
-			is_distinct = true;
-			break;
-		case SetOperationType::UNION:
-		case SetOperationType::UNION_BY_NAME:
-			is_distinct = RandomBoolean();
-			break;
-		default:
-			throw InternalException("Unsupported set operation type");
-		}
 		result = std::move(setop);
 	}
 
