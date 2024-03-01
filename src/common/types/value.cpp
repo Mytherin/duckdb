@@ -1500,6 +1500,22 @@ string Value::ToSQLString() const {
 		ret += "]";
 		return ret;
 	}
+	case LogicalTypeId::MAP: {
+		string ret = "MAP {";
+		auto key_count = MapValue::GetCount(*this);
+		for(idx_t i = 0; i < key_count; i++) {
+			auto &key = MapValue::GetKey(*this, i);
+			auto &value = MapValue::GetValue(*this, i);
+			ret += key.ToSQLString();
+			ret += ": ";
+			ret += value.ToSQLString();
+			if (i + 1 < key_count) {
+				ret += ", ";
+			}
+		}
+		ret += "}";
+		return ret;
+	}
 	default:
 		return ToString();
 	}
@@ -1610,6 +1626,31 @@ const vector<Value> &ArrayValue::GetChildren(const Value &value) {
 	D_ASSERT(value.type().InternalType() == PhysicalType::ARRAY);
 	D_ASSERT(value.value_info_);
 	return value.value_info_->Get<NestedValueInfo>().GetValues();
+}
+
+idx_t MapValue::GetCount(const Value &value) {
+	if (value.is_null) {
+		throw InternalException("Calling MapValue::GetCount on a NULL value");
+	}
+	auto structs = ListValue::GetChildren(value);
+	return structs.size();
+}
+
+const Value &MapValue::GetKey(const Value &value, idx_t i) {
+	if (value.is_null) {
+		throw InternalException("Calling MapValue::GetKey on a NULL value");
+	}
+	auto structs = ListValue::GetChildren(value);
+	return StructValue::GetChildren(structs[i])[0];
+
+}
+
+const Value &MapValue::GetValue(const Value &value, idx_t i) {
+	if (value.is_null) {
+		throw InternalException("Calling MapValue::GetValue on a NULL value");
+	}
+	auto structs = ListValue::GetChildren(value);
+	return StructValue::GetChildren(structs[i])[1];
 }
 
 const Value &UnionValue::GetValue(const Value &value) {
