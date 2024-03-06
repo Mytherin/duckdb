@@ -304,11 +304,11 @@ idx_t BufferedJSONReader::GetLineNumber(idx_t buf_index, idx_t line_or_object_in
 					line += buffer_line_or_object_counts[b_idx];
 				}
 			}
-		}
-		if (can_throw) {
-			thrown = true;
-			// SQL uses 1-based indexing so I guess we will do that in our exception here as well
-			return line + 1;
+			if (can_throw) {
+				thrown = true;
+				// SQL uses 1-based indexing so I guess we will do that in our exception here as well
+				return line + 1;
+			}
 		}
 		TaskScheduler::YieldThread();
 	}
