@@ -90,7 +90,7 @@ private:
 
 	//! Read properties
 	idx_t read_position;
-	idx_t requested_reads;
+	atomic<idx_t> requested_reads;
 	atomic<idx_t> actual_reads;
 	bool last_read_requested;
 
