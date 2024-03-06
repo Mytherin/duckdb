@@ -331,6 +331,7 @@ void BufferedJSONReader::ThrowTransformError(idx_t buf_index, idx_t line_or_obje
 }
 
 double BufferedJSONReader::GetProgress() const {
+	lock_guard<mutex> guard(lock);
 	if (HasFileHandle()) {
 		return 100.0 - 100.0 * double(file_handle->Remaining()) / double(file_handle->FileSize());
 	} else {

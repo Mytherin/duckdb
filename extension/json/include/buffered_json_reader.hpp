@@ -161,7 +161,7 @@ private:
 	bool thrown;
 
 public:
-	mutex lock;
+	mutable mutex lock;
 	MultiFileReaderData reader_data;
 };
 
