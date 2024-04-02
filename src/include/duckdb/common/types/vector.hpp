@@ -253,6 +253,16 @@ public:
 };
 
 struct ConstantVector {
+	static inline void VerifyConstantVector(const Vector &vector) {
+#ifdef DUCKDB_DEBUG_NO_SAFETY
+		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
+#else
+		if (vector.GetVectorType() != VectorType::CONSTANT_VECTOR) {
+			throw InternalException("Operation requires a constant vector but a non-constant vector was encountered");
+		}
+#endif
+	}
+
 	static inline const_data_ptr_t GetData(const Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR ||
 		         vector.GetVectorType() == VectorType::FLAT_VECTOR);
@@ -272,12 +282,12 @@ struct ConstantVector {
 		return (T *)ConstantVector::GetData(vector);
 	}
 	static inline bool IsNull(const Vector &vector) {
-		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
+		VerifyConstantVector(vector);
 		return !vector.validity.RowIsValid(0);
 	}
 	DUCKDB_API static void SetNull(Vector &vector, bool is_null);
 	static inline ValidityMask &Validity(Vector &vector) {
-		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
+		VerifyConstantVector(vector);
 		return vector.validity;
 	}
 	DUCKDB_API static const SelectionVector *ZeroSelectionVector(idx_t count, SelectionVector &owned_sel);
@@ -289,26 +299,36 @@ struct ConstantVector {
 };
 
 struct DictionaryVector {
-	static inline const SelectionVector &SelVector(const Vector &vector) {
+	static inline void VerifyDictionaryVector(const Vector &vector) {
+#ifdef DUCKDB_DEBUG_NO_SAFETY
 		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
+#else
+		if (vector.GetVectorType() != VectorType::DICTIONARY_VECTOR) {
+			throw InternalException("Operation requires a dictionary vector but a non-dictionary vector was encountered");
+		}
+#endif
+	}
+
+	static inline const SelectionVector &SelVector(const Vector &vector) {
+		VerifyDictionaryVector(vector);
 		return vector.buffer->Cast<DictionaryBuffer>().GetSelVector();
 	}
 	static inline SelectionVector &SelVector(Vector &vector) {
-		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
+		VerifyDictionaryVector(vector);
 		return vector.buffer->Cast<DictionaryBuffer>().GetSelVector();
 	}
 	static inline const Vector &Child(const Vector &vector) {
-		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
+		VerifyDictionaryVector(vector);
 		return vector.auxiliary->Cast<VectorChildBuffer>().data;
 	}
 	static inline Vector &Child(Vector &vector) {
-		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
+		VerifyDictionaryVector(vector);
 		return vector.auxiliary->Cast<VectorChildBuffer>().data;
 	}
 };
 
 struct FlatVector {
-	static void VerifyFlatVector(const Vector &vector) {
+	static inline void VerifyFlatVector(const Vector &vector) {
 #ifdef DUCKDB_DEBUG_NO_SAFETY
 		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
 #else
@@ -330,12 +350,12 @@ struct FlatVector {
 		return ConstantVector::GetData<T>(vector);
 	}
 	static inline void SetData(Vector &vector, data_ptr_t data) {
-		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
+		VerifyFlatVector(vector);
 		vector.data = data;
 	}
 	template <class T>
 	static inline T GetValue(Vector &vector, idx_t idx) {
-		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
+		VerifyFlatVector(vector);
 		return FlatVector::GetData<T>(vector)[idx];
 	}
 	static inline const ValidityMask &Validity(const Vector &vector) {
@@ -352,7 +372,7 @@ struct FlatVector {
 	}
 	DUCKDB_API static void SetNull(Vector &vector, idx_t idx, bool is_null);
 	static inline bool IsNull(const Vector &vector, idx_t idx) {
-		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
+		VerifyFlatVector(vector);
 		return !vector.validity.RowIsValid(idx);
 	}
 	DUCKDB_API static const SelectionVector *IncrementalSelectionVector();
@@ -423,24 +443,34 @@ struct StringVector {
 };
 
 struct FSSTVector {
-	static inline const ValidityMask &Validity(const Vector &vector) {
+	static inline void VerifyFSSTVector(const Vector &vector) {
+#ifdef DUCKDB_DEBUG_NO_SAFETY
 		D_ASSERT(vector.GetVectorType() == VectorType::FSST_VECTOR);
+#else
+		if (vector.GetVectorType() != VectorType::FSST_VECTOR) {
+			throw InternalException("Operation requires a flat vector but a non-flat vector was encountered");
+		}
+#endif
+	}
+
+	static inline const ValidityMask &Validity(const Vector &vector) {
+		VerifyFSSTVector(vector);
 		return vector.validity;
 	}
 	static inline ValidityMask &Validity(Vector &vector) {
-		D_ASSERT(vector.GetVectorType() == VectorType::FSST_VECTOR);
+		VerifyFSSTVector(vector);
 		return vector.validity;
 	}
 	static inline void SetValidity(Vector &vector, ValidityMask &new_validity) {
-		D_ASSERT(vector.GetVectorType() == VectorType::FSST_VECTOR);
+		VerifyFSSTVector(vector);
 		vector.validity.Initialize(new_validity);
 	}
 	static inline const_data_ptr_t GetCompressedData(const Vector &vector) {
-		D_ASSERT(vector.GetVectorType() == VectorType::FSST_VECTOR);
+		VerifyFSSTVector(vector);
 		return vector.data;
 	}
 	static inline data_ptr_t GetCompressedData(Vector &vector) {
-		D_ASSERT(vector.GetVectorType() == VectorType::FSST_VECTOR);
+		VerifyFSSTVector(vector);
 		return vector.data;
 	}
 	template <class T>
