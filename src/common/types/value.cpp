@@ -1418,7 +1418,7 @@ hash_t Value::Hash() const {
 	Vector result(LogicalType::HASH);
 	VectorOperations::Hash(input, result, 1);
 
-	auto data = FlatVector::GetData<hash_t>(result);
+	auto data = ConstantVector::GetData<hash_t>(result);
 	return data[0];
 }
 

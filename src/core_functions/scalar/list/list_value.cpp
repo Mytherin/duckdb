@@ -15,15 +15,18 @@ static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &r
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	auto &child_type = ListType::GetChildType(result.GetType());
 
-	result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	auto result_type = VectorType::CONSTANT_VECTOR;
+	idx_t row_count = 1;
 	for (idx_t i = 0; i < args.ColumnCount(); i++) {
 		if (args.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
-			result.SetVectorType(VectorType::FLAT_VECTOR);
+			result_type = VectorType::FLAT_VECTOR;
+			row_count = args.size();
+			break;
 		}
 	}
 
 	auto result_data = FlatVector::GetData<list_entry_t>(result);
-	for (idx_t i = 0; i < args.size(); i++) {
+	for (idx_t i = 0; i < row_count; i++) {
 		result_data[i].offset = ListVector::GetListSize(result);
 		for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
 			auto val = args.GetValue(col_idx, i).DefaultCastAs(child_type);
@@ -31,6 +34,7 @@ static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &r
 		}
 		result_data[i].length = args.ColumnCount();
 	}
+	result.SetVectorType(result_type);
 	result.Verify(args.size());
 }
 

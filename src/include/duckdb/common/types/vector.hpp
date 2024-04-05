@@ -264,13 +264,11 @@ struct ConstantVector {
 	}
 
 	static inline const_data_ptr_t GetData(const Vector &vector) {
-		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR ||
-		         vector.GetVectorType() == VectorType::FLAT_VECTOR);
+		VerifyConstantVector(vector);
 		return vector.data;
 	}
 	static inline data_ptr_t GetData(Vector &vector) {
-		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR ||
-		         vector.GetVectorType() == VectorType::FLAT_VECTOR);
+		VerifyConstantVector(vector);
 		return vector.data;
 	}
 	template <class T>
@@ -339,15 +337,17 @@ struct FlatVector {
 	}
 
 	static inline data_ptr_t GetData(Vector &vector) {
-		return ConstantVector::GetData(vector);
+		VerifyFlatVector(vector);
+		return vector.data;
 	}
 	template <class T>
 	static inline const T *GetData(const Vector &vector) {
-		return ConstantVector::GetData<T>(vector);
+		VerifyFlatVector(vector);
+		return (const T *) vector.data;
 	}
 	template <class T>
 	static inline T *GetData(Vector &vector) {
-		return ConstantVector::GetData<T>(vector);
+		return (T *) FlatVector::GetData(vector);
 	}
 	static inline void SetData(Vector &vector, data_ptr_t data) {
 		VerifyFlatVector(vector);
