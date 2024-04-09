@@ -149,12 +149,12 @@ string BindContext::GetActualColumnName(const string &binding_name, const string
 	return binding->names[binding_index];
 }
 
-unordered_set<string> BindContext::GetMatchingBindings(const string &column_name) {
-	unordered_set<string> result;
+vector<reference<Binding>> BindContext::GetMatchingBindings(const string &column_name) {
+	vector<reference<Binding>> result;
 	for (auto &kv : bindings) {
 		auto binding = kv.second.get();
 		if (binding->HasMatchingBinding(column_name)) {
-			result.insert(kv.first);
+			result.push_back(*binding);
 		}
 	}
 	return result;

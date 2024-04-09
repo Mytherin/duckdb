@@ -49,7 +49,7 @@ public:
 	optional_ptr<Binding> GetMatchingBinding(const string &column_name);
 	//! Like GetMatchingBinding, but instead of throwing an error if multiple tables have the same binding it will
 	//! return a list of all the matching ones
-	unordered_set<string> GetMatchingBindings(const string &column_name);
+	vector<reference<Binding>> GetMatchingBindings(const string &column_name);
 	//! Like GetMatchingBindings, but returns the top 3 most similar bindings (in levenshtein distance) instead of the
 	//! matching ones
 	vector<string> GetSimilarBindings(const string &column_name);
@@ -132,8 +132,8 @@ public:
 	case_insensitive_map_t<std::shared_ptr<Binding>> GetCTEBindings() {
 		return cte_bindings;
 	}
-	void SetCTEBindings(case_insensitive_map_t<std::shared_ptr<Binding>> bindings) {
-		cte_bindings = std::move(bindings);
+	void SetCTEBindings(case_insensitive_map_t<std::shared_ptr<Binding>> cte_bindings_p) {
+		cte_bindings = std::move(cte_bindings_p);
 	}
 
 	//! Alias a set of column names for the specified table, using the original names if there are not enough aliases

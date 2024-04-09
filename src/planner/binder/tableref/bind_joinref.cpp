@@ -46,15 +46,15 @@ bool Binder::TryFindBinding(const string &using_column, const string &join_side,
 			error += "\" is ambiguous: it exists more than once on ";
 			error += join_side;
 			error += " side of join.\nCandidates:";
-			for (auto &binding : bindings) {
+			for (auto &other_binding : bindings) {
 				error += "\n\t";
-				error += binding;
+				error += other_binding.get().alias;
 				error += ".";
-				error += bind_context.GetActualColumnName(binding, using_column);
+				error += bind_context.GetActualColumnName(other_binding.get().alias, using_column);
 			}
 			throw BinderException(error);
 		} else {
-			result = binding;
+			result = binding.get().alias;
 		}
 	}
 	return true;
