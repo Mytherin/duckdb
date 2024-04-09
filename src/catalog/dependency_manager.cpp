@@ -31,9 +31,9 @@ static void AssertMangledName(const string &mangled_name, idx_t expected_null_by
 MangledEntryName::MangledEntryName(const CatalogEntryInfo &info) {
 	auto &type = info.type;
 	auto &schema = info.schema;
-	auto &name = info.name;
+	auto &info_name = info.name;
 
-	this->name = CatalogTypeToString(type) + '\0' + schema + '\0' + name;
+	this->name = CatalogTypeToString(type) + '\0' + schema + '\0' + info_name;
 	AssertMangledName(this->name, 2);
 }
 

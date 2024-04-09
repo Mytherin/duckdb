@@ -472,9 +472,9 @@ bool Binder::HasMatchingBinding(const string &catalog_name, const string &schema
 	return binding_found;
 }
 
-void Binder::SetBindingMode(BindingMode mode) {
+void Binder::SetBindingMode(BindingMode mode_p) {
 	auto &root_binder = GetRootBinder();
-	root_binder.mode = mode;
+	root_binder.mode = mode_p;
 }
 
 BindingMode Binder::GetBindingMode() {

@@ -28,7 +28,7 @@ optional_ptr<Binding> BindContext::GetMatchingBinding(const string &column_name)
 	optional_ptr<Binding> result;
 	for (auto &kv : bindings) {
 		auto binding = kv.second.get();
-		auto is_using_binding = GetUsingBinding(column_name, kv.first);
+		auto is_using_binding = GetUsingBinding(column_name, kv.first.GetAlias());
 		if (is_using_binding) {
 			continue;
 		}
@@ -36,7 +36,7 @@ optional_ptr<Binding> BindContext::GetMatchingBinding(const string &column_name)
 			if (result || is_using_binding) {
 				throw BinderException("Ambiguous reference to column name \"%s\" (use: \"%s.%s\" "
 				                      "or \"%s.%s\")",
-				                      column_name, result->alias, column_name, kv.first, column_name);
+				                      column_name, result->alias, column_name, kv.first.ToString(), column_name);
 			}
 			result = binding;
 		}
@@ -237,12 +237,13 @@ optional_ptr<Binding> BindContext::GetCTEBinding(const string &ctename) {
 }
 
 optional_ptr<Binding> BindContext::GetBinding(const string &name, ErrorData &out_error) {
-	auto match = bindings.find(name);
+	TableAlias table_alias(name);
+	auto match = bindings.find(table_alias);
 	if (match == bindings.end()) {
 		// alias not found in this BindContext
 		vector<string> candidates;
 		for (auto &kv : bindings) {
-			candidates.push_back(kv.first);
+			candidates.push_back(kv.first.ToString());
 		}
 		string candidate_str =
 		    StringUtil::CandidatesMessage(StringUtil::TopNLevenshtein(candidates, name), "Candidate tables");
@@ -436,11 +437,12 @@ void BindContext::GetTypesAndNames(vector<string> &result_names, vector<LogicalT
 }
 
 void BindContext::AddBinding(const string &alias, unique_ptr<Binding> binding) {
-	if (bindings.find(alias) != bindings.end()) {
+	TableAlias table_alias(alias);
+	if (bindings.find(table_alias) != bindings.end()) {
 		throw BinderException("Duplicate alias \"%s\" in query!", alias);
 	}
 	bindings_list.push_back(*binding);
-	bindings[alias] = std::move(binding);
+	bindings[table_alias] = std::move(binding);
 }
 
 void BindContext::AddBaseTable(idx_t index, const string &alias, const vector<string> &names,
@@ -524,7 +526,7 @@ void BindContext::AddCTEBinding(idx_t index, const string &alias, const vector<s
 void BindContext::AddContext(BindContext other) {
 	for (auto &binding : other.bindings) {
 		if (bindings.find(binding.first) != bindings.end()) {
-			throw BinderException("Duplicate alias \"%s\" in query!", binding.first);
+			throw BinderException("Duplicate alias \"%s\" in query!", binding.first.ToString());
 		}
 		bindings[binding.first] = std::move(binding.second);
 	}
@@ -555,8 +557,9 @@ void BindContext::RemoveContext(vector<reference<Binding>> &other_bindings_list)
 
 	for (auto &other_binding : other_bindings_list) {
 		auto &alias = other_binding.get().alias;
-		if (bindings.find(alias) != bindings.end()) {
-			bindings.erase(alias);
+		TableAlias table_alias(alias);
+		if (bindings.find(table_alias) != bindings.end()) {
+			bindings.erase(table_alias);
 		}
 	}
 }

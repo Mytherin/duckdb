@@ -21,6 +21,7 @@ add_library_unity(
   planner.cpp
   pragma_handler.cpp
   logical_operator_visitor.cpp
+  table_alias.cpp
   table_filter.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_planner>

@@ -18,6 +18,7 @@
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/table_binding.hpp"
+#include "duckdb/planner/table_alias.hpp"
 
 namespace duckdb {
 class Binder;
@@ -156,7 +157,7 @@ private:
 private:
 	Binder &binder;
 	//! The set of bindings
-	case_insensitive_map_t<unique_ptr<Binding>> bindings;
+	table_alias_map_t<unique_ptr<Binding>> bindings;
 	//! The list of bindings in insertion order
 	vector<reference<Binding>> bindings_list;
 	//! The set of columns used in USING join conditions
