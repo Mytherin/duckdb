@@ -24,8 +24,8 @@ namespace duckdb {
 BindContext::BindContext(Binder &binder) : binder(binder) {
 }
 
-string BindContext::GetMatchingBinding(const string &column_name) {
-	string result;
+optional_ptr<Binding> BindContext::GetMatchingBinding(const string &column_name) {
+	optional_ptr<Binding> result;
 	for (auto &kv : bindings) {
 		auto binding = kv.second.get();
 		auto is_using_binding = GetUsingBinding(column_name, kv.first);
@@ -33,12 +33,12 @@ string BindContext::GetMatchingBinding(const string &column_name) {
 			continue;
 		}
 		if (binding->HasMatchingBinding(column_name)) {
-			if (!result.empty() || is_using_binding) {
+			if (result || is_using_binding) {
 				throw BinderException("Ambiguous reference to column name \"%s\" (use: \"%s.%s\" "
 				                      "or \"%s.%s\")",
-				                      column_name, result, column_name, kv.first, column_name);
+				                      column_name, result->alias, column_name, kv.first, column_name);
 			}
-			result = kv.first;
+			result = binding;
 		}
 	}
 	return result;
@@ -106,8 +106,7 @@ optional_ptr<UsingColumnSet> BindContext::GetUsingBinding(const string &column_n
 	auto &using_bindings = entry->second;
 	for (auto &using_set_ref : using_bindings) {
 		auto &using_set = using_set_ref.get();
-		auto &bindings = using_set.bindings;
-		if (bindings.find(binding_name) != bindings.end()) {
+		if (using_set.bindings.find(binding_name) != using_set.bindings.end()) {
 			return &using_set;
 		}
 	}
@@ -119,11 +118,11 @@ void BindContext::RemoveUsingBinding(const string &column_name, UsingColumnSet &
 	if (entry == using_columns.end()) {
 		throw InternalException("Attempting to remove using binding that is not there");
 	}
-	auto &bindings = entry->second;
-	if (bindings.find(set) != bindings.end()) {
-		bindings.erase(set);
+	auto &using_bindings = entry->second;
+	if (using_bindings.find(set) != using_bindings.end()) {
+		using_bindings.erase(set);
 	}
-	if (bindings.empty()) {
+	if (using_bindings.empty()) {
 		using_columns.erase(column_name);
 	}
 }
@@ -372,11 +371,10 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 		auto binding = GetBinding(expr.relation_name, error);
 		bool is_struct_ref = false;
 		if (!binding) {
-			auto binding_name = GetMatchingBinding(expr.relation_name);
-			if (binding_name.empty()) {
+			binding = GetMatchingBinding(expr.relation_name);
+			if (!binding) {
 				error.Throw();
 			}
-			binding = bindings[binding_name].get();
 			is_struct_ref = true;
 		}
 
