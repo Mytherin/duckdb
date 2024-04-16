@@ -45,7 +45,7 @@ unique_ptr<Expression> Binder::BindOrderExpression(OrderBinder &order_binder, un
 
 BoundLimitNode Binder::BindLimitValue(OrderBinder &order_binder, unique_ptr<ParsedExpression> limit_val,
                                       bool is_percentage, bool is_offset) {
-	auto new_binder = Binder::CreateBinder(context, this, true);
+	auto new_binder = Binder::CreateBinder(context, this);
 	ExpressionBinder expr_binder(*new_binder, context);
 	auto target_type = is_percentage ? LogicalType::DOUBLE : LogicalType::BIGINT;
 	expr_binder.target_type = target_type;
@@ -398,10 +398,6 @@ void Binder::BindWhereStarExpression(unique_ptr<ParsedExpression> &expr) {
 	}
 }
 
-string Binder::GetExpressionName(ParsedExpression &expr) {
-	return expr.GetName();
-}
-
 unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_ptr<BoundTableRef> from_table) {
 	D_ASSERT(from_table);
 	D_ASSERT(!statement.from_table);
@@ -431,7 +427,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 	auto &bind_state = result->bind_state;
 	for (idx_t i = 0; i < statement.select_list.size(); i++) {
 		auto &expr = statement.select_list[i];
-		result->names.push_back(GetExpressionName(*expr));
+		result->names.push_back(expr->GetName());
 		ExpressionBinder::QualifyColumnNames(*this, expr);
 		if (!expr->alias.empty()) {
 			bind_state.alias_map[expr->alias] = i;

@@ -39,32 +39,36 @@ idx_t Binder::GetBinderDepth() const {
 	return depth;
 }
 
-shared_ptr<Binder> Binder::CreateBinder(ClientContext &context, optional_ptr<Binder> parent, bool inherit_ctes) {
+shared_ptr<Binder> Binder::CreateBinder(ClientContext &context, optional_ptr<Binder> parent, BinderType binder_type) {
 	auto depth = parent ? parent->GetBinderDepth() : 0;
 	if (depth > context.config.max_expression_depth) {
 		throw BinderException("Max expression depth limit of %lld exceeded. Use \"SET max_expression_depth TO x\" to "
 		                      "increase the maximum expression depth.",
 		                      context.config.max_expression_depth);
 	}
-	return make_shared<Binder>(true, context, parent ? parent->shared_from_this() : nullptr, inherit_ctes);
+	return make_shared<Binder>(true, context, parent ? parent->shared_from_this() : nullptr, binder_type);
 }
 
-Binder::Binder(bool, ClientContext &context, shared_ptr<Binder> parent_p, bool inherit_ctes_p)
+Binder::Binder(bool, ClientContext &context, shared_ptr<Binder> parent_p, BinderType binder_type)
     : context(context), bind_context(*this), parent(std::move(parent_p)), bound_tables(0),
-      inherit_ctes(inherit_ctes_p) {
+	  binder_type(binder_type) {
 	if (parent) {
 
 		// We have to inherit macro and lambda parameter bindings and from the parent binder, if there is a parent.
 		macro_binding = parent->macro_binding;
 		lambda_bindings = parent->lambda_bindings;
 
-		if (inherit_ctes) {
+		if (InheritsCTEs()) {
 			// We have to inherit CTE bindings from the parent bind_context, if there is a parent.
 			bind_context.SetCTEBindings(parent->bind_context.GetCTEBindings());
 			bind_context.cte_references = parent->bind_context.cte_references;
 			parameters = parent->parameters;
 		}
 	}
+}
+
+bool Binder::InheritsCTEs() const {
+	return binder_type == BinderType::STANDARD_BINDER;
 }
 
 unique_ptr<BoundCTENode> Binder::BindMaterializedCTE(CommonTableExpressionMap &cte_map) {
@@ -341,7 +345,7 @@ vector<reference<CommonTableExpressionInfo>> Binder::FindCTE(const string &name,
 			ctes.push_back(entry->second);
 		}
 	}
-	if (parent && inherit_ctes) {
+	if (parent && InheritsCTEs()) {
 		auto parent_ctes = parent->FindCTE(name, name == alias);
 		ctes.insert(ctes.end(), parent_ctes.begin(), parent_ctes.end());
 	}
@@ -352,7 +356,7 @@ bool Binder::CTEIsAlreadyBound(CommonTableExpressionInfo &cte) {
 	if (bound_ctes.find(cte) != bound_ctes.end()) {
 		return true;
 	}
-	if (parent && inherit_ctes) {
+	if (parent && InheritsCTEs()) {
 		return parent->CTEIsAlreadyBound(cte);
 	}
 	return false;

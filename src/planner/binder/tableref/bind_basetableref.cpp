@@ -231,8 +231,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		// We need to use a new binder for the view that doesn't reference any CTEs
 		// defined for this binder so there are no collisions between the CTEs defined
 		// for the view and for the current query
-		bool view_inherits_ctes = false;
-		auto view_binder = Binder::CreateBinder(context, this, view_inherits_ctes);
+		auto view_binder = Binder::CreateBinder(context, this, BinderType::VIEW_BINDER);
 		view_binder->can_contain_nulls = true;
 		SubqueryRef subquery(unique_ptr_cast<SQLStatement, SelectStatement>(view_catalog_entry.query->Copy()));
 		subquery.alias = ref.alias.empty() ? ref.table_name : ref.alias;
@@ -249,10 +248,15 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		if (!view_binder->correlated_columns.empty()) {
 			throw BinderException("Contents of view were altered - view bound correlated columns");
 		}
-
 		D_ASSERT(bound_child->type == TableReferenceType::SUBQUERY);
 		// verify that the types and names match up with the expected types and names
 		auto &bound_subquery = bound_child->Cast<BoundSubqueryRef>();
+		for(idx_t i = 0; i < MinValue<idx_t>(bound_subquery.subquery->names.size(), view_catalog_entry.names.size()); i++) {
+			if (bound_subquery.subquery->names[i].empty()) {
+				bound_subquery.subquery->names[i] = view_catalog_entry.names[i];
+			}
+		}
+
 		if (GetBindingMode() != BindingMode::EXTRACT_NAMES) {
 			if (bound_subquery.subquery->types != view_catalog_entry.types) {
 				auto actual_types = StringUtil::ToString(bound_subquery.subquery->types, ", ");
