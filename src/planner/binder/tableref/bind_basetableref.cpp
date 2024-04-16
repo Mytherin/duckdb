@@ -231,8 +231,8 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		// We need to use a new binder for the view that doesn't reference any CTEs
 		// defined for this binder so there are no collisions between the CTEs defined
 		// for the view and for the current query
-		bool inherit_ctes = false;
-		auto view_binder = Binder::CreateBinder(context, this, inherit_ctes);
+		bool view_inherits_ctes = false;
+		auto view_binder = Binder::CreateBinder(context, this, view_inherits_ctes);
 		view_binder->can_contain_nulls = true;
 		SubqueryRef subquery(unique_ptr_cast<SQLStatement, SelectStatement>(view_catalog_entry.query->Copy()));
 		subquery.alias = ref.alias.empty() ? ref.table_name : ref.alias;
@@ -258,16 +258,15 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 				auto actual_types = StringUtil::ToString(bound_subquery.subquery->types, ", ");
 				auto expected_types = StringUtil::ToString(view_catalog_entry.types, ", ");
 				throw BinderException(
-				    "Contents of view were altered: types don't match! Expected [%s], but found [%s] instead",
+				    "Contents of view were altered: types don't match! Expected [%s], but found [%s] instead.\nRecreate the view to solve this issue.",
 				    expected_types, actual_types);
 			}
-			if (bound_subquery.subquery->names.size() == view_catalog_entry.names.size() &&
-			    bound_subquery.subquery->names != view_catalog_entry.names) {
-				auto actual_names = StringUtil::Join(bound_subquery.subquery->names, ", ");
-				auto expected_names = StringUtil::Join(view_catalog_entry.names, ", ");
-				throw BinderException(
-				    "Contents of view were altered: names don't match! Expected [%s], but found [%s] instead",
-				    expected_names, actual_names);
+			for(idx_t i = 0; i < MinValue<idx_t>(bound_subquery.subquery->names.size(), view_catalog_entry.names.size()); i++) {
+				if (bound_subquery.subquery->names[i] != view_catalog_entry.names[i]) {
+					throw BinderException(
+							"Contents of view were altered: names don't match!\nMismatch in column %llu - expected name \"%s\" but found name \"%s\"\nRecreate the view to solve this issue.", i, view_catalog_entry.names[i], bound_subquery.subquery->names[i]
+					);
+				}
 			}
 		}
 		bind_context.AddView(bound_subquery.subquery->GetRootIndex(), subquery.alias, subquery,
