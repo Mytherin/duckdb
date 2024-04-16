@@ -63,10 +63,12 @@ public:
 	//! Returns true if the expression has a parameter
 	virtual bool HasParameter() const = 0;
 
-	//! Get the name of the expression
-	virtual string GetName() const;
+	//! Get the name of the expression (GetExplicitName if available, otherwise ToString)
+	string GetName() const;
 	//! Convert the Expression to a String
 	virtual string ToString() const = 0;
+	//! Gets the explicit name of the expression, or an empty string if none is given
+	virtual string GetExplicitName() const;
 	//! Print the expression to stdout
 	void Print() const;
 

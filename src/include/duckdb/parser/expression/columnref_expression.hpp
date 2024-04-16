@@ -38,7 +38,7 @@ public:
 		return false;
 	}
 
-	string GetName() const override;
+	string GetExplicitName() const override;
 	string ToString() const override;
 
 	static bool Equal(const ColumnRefExpression &a, const ColumnRefExpression &b);

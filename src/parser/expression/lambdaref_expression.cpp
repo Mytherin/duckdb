@@ -15,7 +15,7 @@ bool LambdaRefExpression::IsScalar() const {
 	throw InternalException("lambda reference expressions are transient, IsScalar should never be called");
 }
 
-string LambdaRefExpression::GetName() const {
+string LambdaRefExpression::GetExplicitName() const {
 	return column_name;
 }
 

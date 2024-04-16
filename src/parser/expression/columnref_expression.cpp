@@ -51,7 +51,7 @@ const string &ColumnRefExpression::GetTableName() const {
 	return column_names[0];
 }
 
-string ColumnRefExpression::GetName() const {
+string ColumnRefExpression::GetExplicitName() const {
 	return !alias.empty() ? alias : column_names.back();
 }
 

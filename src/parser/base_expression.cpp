@@ -10,12 +10,20 @@ void BaseExpression::Print() const {
 }
 
 string BaseExpression::GetName() const {
+	auto name = GetExplicitName();
+	if (!name.empty()) {
+		return name;
+	}
+	return ToString();
+}
+
+string BaseExpression::GetExplicitName() const {
 #ifdef DEBUG
 	if (DBConfigOptions::debug_print_bindings) {
-		return ToString();
+		return string();
 	}
 #endif
-	return !alias.empty() ? alias : ToString();
+	return alias;
 }
 
 bool BaseExpression::Equals(const BaseExpression &other) const {
