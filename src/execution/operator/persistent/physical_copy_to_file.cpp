@@ -57,10 +57,77 @@ public:
 	//! shared state for HivePartitionedColumnData
 	shared_ptr<GlobalHivePartitionState> partition_state;
 	unique_ptr<HivePartitionedColumnData> partition_collection;
+	vector<unique_ptr<HivePartitionedColumnData>> append_buffers;
+	vector<unique_ptr<PartitionedColumnDataAppendState>> append_states;
+
+	bool sink_to_disk;
+	idx_t append_count = 0;
+	//! The number of in-progress partitions (used for task division)
+	atomic<idx_t> in_progress_partitions;
+	//! Number of finished partitions
+	atomic<idx_t> finished_partitions;
+	//! Total number of partitions that need to be flushed
+	idx_t partition_count;
 
 	void InitializePartitionState(ClientContext &context, const PhysicalCopyToFile &op) {
 		partition_collection = make_uniq<HivePartitionedColumnData>(context, op.expected_types, op.partition_columns,
 																		   partition_state);
+		append_count = 0;
+		sink_to_disk = false;
+	}
+
+	void ResertPartitionState(ClientContext &context, const PhysicalCopyToFile &op) {
+		append_states.clear();
+		append_buffers.clear();
+		partition_collection.reset();
+		InitializePartitionState(context, op);
+	}
+
+	void PrepareForFlush(ClientContext &context, const PhysicalCopyToFile &op) {
+		// merge all partitions in into the main collection
+		for(idx_t buffer_idx = 0; buffer_idx < append_buffers.size(); buffer_idx++) {
+			auto &buffer = *append_buffers[buffer_idx];
+			auto &append_state = *append_states[buffer_idx];
+			// first flush the append
+			buffer.FlushAppendState(append_state);
+			// then combine into the main collection
+			partition_collection->Combine(buffer);
+		}
+		in_progress_partitions = 0;
+		finished_partitions = 0;
+		partition_count = partition_collection->GetPartitions().size();
+
+		// ensure all partition directories are created before we start writing
+		CreatePartitionDirectories(context, op);
+	}
+
+	void FlushPartitions(ExecutionContext &context, const PhysicalCopyToFile &op, CopyToFunctionGlobalState &g) {
+		auto &partitions = partition_collection->GetPartitions();
+		auto partition_key_map = partition_collection->GetReverseMap();
+		while(true) {
+			// obtain a new partition
+			auto partition_idx = in_progress_partitions++;
+			if (partition_idx >= partition_count) {
+				// we exhausted all partitions - finished
+				break;
+			}
+			// flush the partition
+			// get the partition write info for this buffer
+			auto &info = g.GetPartitionWriteInfo(context, op, partition_key_map[partition_idx]->values);
+
+			auto local_copy_state = op.function.copy_to_initialize_local(context, *op.bind_data);
+			// push the chunks into the write state
+			for (auto &chunk : partitions[partition_idx]->Chunks()) {
+				op.function.copy_to_sink(context, *op.bind_data, *info.global_state, *local_copy_state, chunk);
+			}
+			op.function.copy_to_combine(context, *op.bind_data, *info.global_state, *local_copy_state);
+			local_copy_state.reset();
+			partitions[partition_idx].reset();
+			finished_partitions++;
+		}
+		// busy loop until all flushing is completed
+		while(finished_partitions < partition_count) {
+		}
 	}
 
 	static void CreateDir(const string &dir_path, FileSystem &fs) {
@@ -87,7 +154,6 @@ public:
 
 		auto trimmed_path = op.GetTrimmedPath(context);
 
-		auto l = lock.GetExclusiveLock();
 		lock_guard<mutex> global_lock_on_partition_state(partition_state->lock);
 		const auto &global_partitions = partition_state->partitions;
 		// global_partitions have partitions added only at the back, so it's fine to only traverse the last part
@@ -174,64 +240,65 @@ public:
 	unique_ptr<LocalFunctionData> local_state;
 
 	//! Buffers the tuples in partitions before writing
-	unique_ptr<HivePartitionedColumnData> part_buffer;
-	unique_ptr<PartitionedColumnDataAppendState> part_buffer_append_state;
+	optional_ptr<HivePartitionedColumnData> part_buffer;
+	optional_ptr<PartitionedColumnDataAppendState> part_buffer_append_state;
 
-	idx_t append_count = 0;
-
-	void InitializeAppendState(ClientContext &context, const PhysicalCopyToFile &op,
-	                           CopyToFunctionGlobalState &gstate) {
-		part_buffer = unique_ptr_cast<PartitionedColumnData, HivePartitionedColumnData>(gstate.partition_collection->CreateShared());
-		part_buffer_append_state = make_uniq<PartitionedColumnDataAppendState>();
+	void InitializeAppendState(CopyToFunctionGlobalState &gstate) {
+		auto partition_buffer = unique_ptr_cast<PartitionedColumnData, HivePartitionedColumnData>(gstate.partition_collection->CreateShared());;
+		auto append_state = make_uniq<PartitionedColumnDataAppendState>();
+		part_buffer = partition_buffer.get();
+		part_buffer_append_state = append_state.get();
 		part_buffer->InitializeAppendState(*part_buffer_append_state);
-		append_count = 0;
+		gstate.append_buffers.push_back(std::move(partition_buffer));
+		gstate.append_states.push_back(std::move(append_state));
+	}
+
+	void FlushPartitions(StorageLockKey &lock, ExecutionContext &context, const PhysicalCopyToFile &op, CopyToFunctionGlobalState &g) {
+		// downgrade to a shared lock
+		lock.DowngradeLock();
+		// start flushing - this will busy spin until ALL flushing is completed
+		g.FlushPartitions(context, op, g);
+		// upgrade to an exclusive lock again
+		lock.UpgradeLock();
+		// reset the local append state
+		ResetAppendState();
+		// if we are the first to reach this - reset the global partition collections
+		// FIXME - this is not reliable since we might reach a sink_to_disk point AGAIN
+		// a better fix would be to turn `sink_to_disk` into a `flush_iteration` marker or something of the sort
+		if (g.sink_to_disk) {
+			g.ResertPartitionState(context.client, op);
+		}
 	}
 
 	void AppendToPartition(ExecutionContext &context, const PhysicalCopyToFile &op, CopyToFunctionGlobalState &g,
 	                       DataChunk &chunk) {
+		// grab an exclusive lock to begin with
+		auto lock = g.lock.GetExclusiveLock();
+		if (g.sink_to_disk) {
+			// participate in flushing to disk
+			FlushPartitions(*lock, context, op, g);
+		} else if (g.append_count >= ClientConfig::GetConfig(context.client).partitioned_write_flush_threshold) {
+			// we are past the threshold for writing to disk and we are the first thread to notice
+			// prepare for flushing
+			g.sink_to_disk = true;
+			g.PrepareForFlush(context.client, op);
+			// now start flushing
+			FlushPartitions(*lock, context, op, g);
+		}
+		g.append_count += chunk.size();
 		if (!part_buffer) {
-			// re-initialize the append
-			InitializeAppendState(context.client, op, g);
+			// re-initialize the append state
+			InitializeAppendState(g);
 		}
+
+		// downgrade to a shared lock to perform the actual append
+		lock->DowngradeLock();
 		part_buffer->Append(*part_buffer_append_state, chunk);
-		append_count += chunk.size();
-		if (append_count >= ClientConfig::GetConfig(context.client).partitioned_write_flush_threshold) {
-			// flush all cached partitions
-			FlushPartitions(context, op, g);
-		}
 	}
 
 	void ResetAppendState() {
-		part_buffer_append_state.reset();
-		part_buffer.reset();
-		append_count = 0;
-	}
-
-	void FlushPartitions(ExecutionContext &context, const PhysicalCopyToFile &op, CopyToFunctionGlobalState &g) {
-		if (!part_buffer) {
-			return;
-		}
-		part_buffer->FlushAppendState(*part_buffer_append_state);
-		auto &partitions = part_buffer->GetPartitions();
-		auto partition_key_map = part_buffer->GetReverseMap();
-
-		// ensure all partition directories are created before we start writing
-		g.CreatePartitionDirectories(context.client, op);
-
-		for (idx_t i = 0; i < partitions.size(); i++) {
-			// get the partition write info for this buffer
-			auto &info = g.GetPartitionWriteInfo(context, op, partition_key_map[i]->values);
-
-			auto local_copy_state = op.function.copy_to_initialize_local(context, *op.bind_data);
-			// push the chunks into the write state
-			for (auto &chunk : partitions[i]->Chunks()) {
-				op.function.copy_to_sink(context, *op.bind_data, *info.global_state, *local_copy_state, chunk);
-			}
-			op.function.copy_to_combine(context, *op.bind_data, *info.global_state, *local_copy_state);
-			local_copy_state.reset();
-			partitions[i].reset();
-		}
-		ResetAppendState();
+		part_buffer_append_state = nullptr;
+		part_buffer = nullptr;
 	}
 };
 
@@ -252,7 +319,6 @@ unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContex
 		auto &g = sink_state->Cast<CopyToFunctionGlobalState>();
 
 		auto state = make_uniq<CopyToFunctionLocalState>(nullptr);
-		state->InitializeAppendState(context.client, *this, g);
 		return std::move(state);
 	}
 	auto res = make_uniq<CopyToFunctionLocalState>(function.copy_to_initialize_local(context, *bind_data));
@@ -374,8 +440,9 @@ SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, Ope
 	auto &l = input.local_state.Cast<CopyToFunctionLocalState>();
 
 	if (partition_output) {
-		// flush all remaining partitions
-		l.FlushPartitions(context, *this, g);
+		// FIXME: flush all remaining partitions
+//		auto lock = g.lock.GetExclusiveLock();
+//		l.FlushPartitions(*lock, context, *this, g);
 	} else if (function.copy_to_combine) {
 		if (per_thread_output) {
 			// For PER_THREAD_OUTPUT, we can combine/finalize immediately

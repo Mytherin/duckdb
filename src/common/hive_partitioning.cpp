@@ -159,6 +159,11 @@ HivePartitionedColumnData::HivePartitionedColumnData(ClientContext &context, vec
 
 HivePartitionedColumnData::HivePartitionedColumnData(const HivePartitionedColumnData &other)
     : PartitionedColumnData(other), global_state(other.global_state), group_by_columns(other.group_by_columns), hashes_v(LogicalType::HASH) {
+	// Synchronize to ensure consistency of shared partition map
+//	if (global_state) {
+//		unique_lock<mutex> lck(global_state->lock);
+//		SynchronizeLocalMap();
+//	}
 	InitializeKeys();
 }
 

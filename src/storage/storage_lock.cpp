@@ -33,9 +33,20 @@ unique_ptr<StorageLockKey> StorageLock::GetSharedLock() {
 	return make_uniq<StorageLockKey>(*this, StorageLockType::SHARED);
 }
 
+void StorageLockKey::UpgradeLock() {
+	if (type != StorageLockType::SHARED) {
+		throw InternalException("UpgradeLock called on exclusive lock - can only upgrade shared locks");
+	}
+	lock.read_count--;
+	lock.exclusive_lock.lock();
+	while (lock.read_count != 0) {
+	}
+	type = StorageLockType::EXCLUSIVE;
+}
+
 void StorageLockKey::DowngradeLock() {
 	if (type != StorageLockType::EXCLUSIVE) {
-		throw InternalException("StorageLockKey::DowngradeLock called on a shared lock - can only downgrade exclusive locks");
+		throw InternalException("DowngradeLock called on shared lock - can only downgrade exclusive locks");
 	}
 	lock.read_count++;
 	lock.exclusive_lock.unlock();
