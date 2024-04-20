@@ -148,14 +148,17 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<str
 	files = std::move(pruned_files);
 }
 
+
+HivePartitionedColumnData::HivePartitionedColumnData(ClientContext &context, vector<LogicalType> types, vector<idx_t> partition_by_cols,
+	shared_ptr<GlobalHivePartitionState> global_state)
+	: PartitionedColumnData(PartitionedColumnDataType::HIVE, context, std::move(types)),
+	global_state(std::move(global_state)), group_by_columns(std::move(partition_by_cols)),
+	hashes_v(LogicalType::HASH) {
+	InitializeKeys();
+}
+
 HivePartitionedColumnData::HivePartitionedColumnData(const HivePartitionedColumnData &other)
-    : PartitionedColumnData(other), hashes_v(LogicalType::HASH) {
-	// Synchronize to ensure consistency of shared partition map
-	if (other.global_state) {
-		global_state = other.global_state;
-		unique_lock<mutex> lck(global_state->lock);
-		SynchronizeLocalMap();
-	}
+    : PartitionedColumnData(other), global_state(other.global_state), group_by_columns(other.group_by_columns), hashes_v(LogicalType::HASH) {
 	InitializeKeys();
 }
 
@@ -369,7 +372,7 @@ idx_t HivePartitionedColumnData::RegisterNewPartition(HivePartitionKey key, Part
 	if (global_state) {
 		idx_t partition_id;
 
-		// Synchronize Global state with our local state with the newly discoveren partition
+		// Synchronize Global state with our local state with the newly discovered partition
 		{
 			unique_lock<mutex> lck_gstate(global_state->lock);
 

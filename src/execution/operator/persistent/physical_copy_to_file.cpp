@@ -56,6 +56,7 @@ public:
 
 	//! shared state for HivePartitionedColumnData
 	shared_ptr<GlobalHivePartitionState> partition_state;
+	unique_ptr<HivePartitionedColumnData> partition_collection;
 
 	static void CreateDir(const string &dir_path, FileSystem &fs) {
 		if (!fs.DirectoryExists(dir_path)) {
@@ -162,7 +163,7 @@ string PhysicalCopyToFile::GetTrimmedPath(ClientContext &context) const {
 class CopyToFunctionLocalState : public LocalSinkState {
 public:
 	explicit CopyToFunctionLocalState(unique_ptr<LocalFunctionData> local_state)
-	    : local_state(std::move(local_state)), writer_offset(0) {
+	    : local_state(std::move(local_state)) {
 	}
 	unique_ptr<GlobalFunctionData> global_state;
 	unique_ptr<LocalFunctionData> local_state;
@@ -171,13 +172,11 @@ public:
 	unique_ptr<HivePartitionedColumnData> part_buffer;
 	unique_ptr<PartitionedColumnDataAppendState> part_buffer_append_state;
 
-	idx_t writer_offset;
 	idx_t append_count = 0;
 
 	void InitializeAppendState(ClientContext &context, const PhysicalCopyToFile &op,
 	                           CopyToFunctionGlobalState &gstate) {
-		part_buffer = make_uniq<HivePartitionedColumnData>(context, op.expected_types, op.partition_columns,
-		                                                   gstate.partition_state);
+		part_buffer = unique_ptr_cast<PartitionedColumnData, HivePartitionedColumnData>(gstate.partition_collection->CreateShared());
 		part_buffer_append_state = make_uniq<PartitionedColumnDataAppendState>();
 		part_buffer->InitializeAppendState(*part_buffer_append_state);
 		append_count = 0;
@@ -248,7 +247,6 @@ unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContex
 		auto &g = sink_state->Cast<CopyToFunctionGlobalState>();
 
 		auto state = make_uniq<CopyToFunctionLocalState>(nullptr);
-		state->writer_offset = g.last_file_offset++;
 		state->InitializeAppendState(context.client, *this, g);
 		return std::move(state);
 	}
@@ -285,6 +283,8 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 
 		if (partition_output) {
 			state->partition_state = make_shared_ptr<GlobalHivePartitionState>();
+			state->partition_collection = make_uniq<HivePartitionedColumnData>(context, expected_types, partition_columns,
+														 state->partition_state);
 		}
 
 		return std::move(state);

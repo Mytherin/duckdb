@@ -81,12 +81,7 @@ public:
 class HivePartitionedColumnData : public PartitionedColumnData {
 public:
 	HivePartitionedColumnData(ClientContext &context, vector<LogicalType> types, vector<idx_t> partition_by_cols,
-	                          shared_ptr<GlobalHivePartitionState> global_state = nullptr)
-	    : PartitionedColumnData(PartitionedColumnDataType::HIVE, context, std::move(types)),
-	      global_state(std::move(global_state)), group_by_columns(std::move(partition_by_cols)),
-	      hashes_v(LogicalType::HASH) {
-		InitializeKeys();
-	}
+	                          shared_ptr<GlobalHivePartitionState> global_state = nullptr);
 	HivePartitionedColumnData(const HivePartitionedColumnData &other);
 	void ComputePartitionIndices(PartitionedColumnDataAppendState &state, DataChunk &input) override;
 
