@@ -58,6 +58,11 @@ public:
 	shared_ptr<GlobalHivePartitionState> partition_state;
 	unique_ptr<HivePartitionedColumnData> partition_collection;
 
+	void InitializePartitionState(ClientContext &context, const PhysicalCopyToFile &op) {
+		partition_collection = make_uniq<HivePartitionedColumnData>(context, op.expected_types, op.partition_columns,
+																		   partition_state);
+	}
+
 	static void CreateDir(const string &dir_path, FileSystem &fs) {
 		if (!fs.DirectoryExists(dir_path)) {
 			fs.CreateDirectory(dir_path);
@@ -283,8 +288,7 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 
 		if (partition_output) {
 			state->partition_state = make_shared_ptr<GlobalHivePartitionState>();
-			state->partition_collection = make_uniq<HivePartitionedColumnData>(context, expected_types, partition_columns,
-														 state->partition_state);
+			state->InitializePartitionState(context, *this);
 		}
 
 		return std::move(state);

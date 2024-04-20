@@ -22,6 +22,9 @@ public:
 	StorageLockKey(StorageLock &lock, StorageLockType type);
 	~StorageLockKey();
 
+	//! Downgrade an exclusive lock to a shared lock
+	void DowngradeLock();
+
 private:
 	StorageLock &lock;
 	StorageLockType type;
