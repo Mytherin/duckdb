@@ -14,7 +14,9 @@
 namespace duckdb {
 
 struct PartitionWriteInfo {
+	unique_ptr<ColumnDataCollection> collection;
 	unique_ptr<GlobalFunctionData> global_state;
+	string full_path;
 };
 
 struct VectorOfValuesHashFunction {
@@ -61,6 +63,11 @@ public:
 	vector<unique_ptr<HivePartitionedColumnData>> append_buffers;
 	vector<unique_ptr<PartitionedColumnDataAppendState>> append_states;
 
+	// To-be-flushed copies of the above
+	unique_ptr<HivePartitionedColumnData> flush_partition_collection;
+	vector<unique_ptr<HivePartitionedColumnData>> flush_append_buffers;
+	vector<unique_ptr<PartitionedColumnDataAppendState>> flush_append_states;
+
 	idx_t append_count = 0;
 	//! The number of in-progress partitions (used for task division)
 	atomic<idx_t> in_progress_partitions { 0 };
@@ -72,18 +79,17 @@ public:
 	atomic<idx_t> appending_threads { 0 };
 	atomic<idx_t> threads_waiting_to_flush { 0 };
 	atomic<idx_t> flush_iteration { 0 };
+	atomic<idx_t> finished_flush_iteration { 0 };
 
 	void InitializePartitionState(ClientContext &context, const PhysicalCopyToFile &op) {
 		partition_collection = make_uniq<HivePartitionedColumnData>(context, op.expected_types, op.partition_columns,
 																		   partition_state);
-		append_count = 0;
 	}
 
-	void ResertPartitionState(ClientContext &context, const PhysicalCopyToFile &op) {
-		append_states.clear();
-		append_buffers.clear();
-		partition_collection.reset();
-		InitializePartitionState(context, op);
+	void ResetPartitionState(ClientContext &context, const PhysicalCopyToFile &op) {
+		flush_append_buffers.clear();
+		flush_append_states.clear();
+		flush_partition_collection.reset();
 	}
 
 	void PrepareForFlush(ClientContext &context, const PhysicalCopyToFile &op) {
@@ -101,13 +107,20 @@ public:
 		finished_partitions = 0;
 		partition_count = partition_collection->GetPartitions().size();
 
+		// keep the partition states around in a separate "flush" state
+		flush_partition_collection = std::move(partition_collection);
+		flush_append_buffers = std::move(append_buffers);
+		flush_append_states = std::move(append_states);
+		// re-initialize the partition state for the next iteration
+		InitializePartitionState(context, op);
+
 		// ensure all partition directories are created before we start writing
 		CreatePartitionDirectories(context, op);
 	}
 
 	void FlushPartitions(ExecutionContext &context, const PhysicalCopyToFile &op, CopyToFunctionGlobalState &g) {
-		auto &partitions = partition_collection->GetPartitions();
-		auto partition_key_map = partition_collection->GetReverseMap();
+		auto &partitions = flush_partition_collection->GetPartitions();
+		auto partition_key_map = flush_partition_collection->GetReverseMap();
 		while(true) {
 			// obtain a new partition
 			auto partition_idx = in_progress_partitions++;
@@ -120,28 +133,33 @@ public:
 			D_ASSERT(partition_key_map.find(partition_idx) != partition_key_map.end());
 			auto &info = g.GetPartitionWriteInfo(context, op, partition_key_map[partition_idx]->values);
 
-			auto local_copy_state = op.function.copy_to_initialize_local(context, *op.bind_data);
-			// push the chunks into the write state
-			for (auto &chunk : partitions[partition_idx]->Chunks()) {
-				op.function.copy_to_sink(context, *op.bind_data, *info.global_state, *local_copy_state, chunk);
+			// append to the column data collection
+			idx_t new_count = info.collection->Count() + partitions[partition_idx]->Count();
+			static constexpr const idx_t COLLECTION_FLUSH_THRESHOLD = 100000;
+			if (new_count >= COLLECTION_FLUSH_THRESHOLD) {
+				// the new size exceeds the flush threshold - flush directly to disk
+				FlushCollection(context, op, info, partitions[partition_idx].get());
+				// reset the collection
+				info.collection = make_uniq<ColumnDataCollection>(context.client, op.expected_types);
+			} else {
+				// the flush threshold is not exceeded - append to the intermediate collection instead
+				ColumnDataAppendState append_state;
+				info.collection->InitializeAppend(append_state);
+				for (auto &chunk : partitions[partition_idx]->Chunks()) {
+					info.collection->Append(append_state, chunk);
+				}
 			}
-			op.function.copy_to_combine(context, *op.bind_data, *info.global_state, *local_copy_state);
-			local_copy_state.reset();
 			partitions[partition_idx].reset();
 			auto finished_idx = ++finished_partitions;
 			D_ASSERT(finished_idx <= partition_count);
 			if (finished_idx == partition_count) {
 				// we are the last partition to finish
 				// reset the partition state
-				g.ResertPartitionState(context.client, op);
-				// increment the finished_partitions, this allows all threads to continue appending
-				++finished_partitions;
+				g.ResetPartitionState(context.client, op);
+				// mark this flush iteration as finished
+				++finished_flush_iteration;
 				break;
 			}
-		}
-		// we have finished, but maybe there are still other partitions remaining
-		// busy loop until all flushing is completed
-		while(finished_partitions <= partition_count) {
 		}
 	}
 
@@ -190,28 +208,47 @@ public:
 		return path;
 	}
 
-	void FinalizePartition(ClientContext &context, const PhysicalCopyToFile &op, PartitionWriteInfo &info) {
+	void FlushCollection(ExecutionContext &context, const PhysicalCopyToFile &op, PartitionWriteInfo &info, optional_ptr<ColumnDataCollection> extra_collection = nullptr) {
 		if (!info.global_state) {
-			// already finalized
-			return;
+			info.global_state = op.function.copy_to_initialize_global(context.client, *op.bind_data, info.full_path);
+		}
+		auto local_copy_state = op.function.copy_to_initialize_local(context, *op.bind_data);
+		// push the chunks into the write state
+		for (auto &chunk : info.collection->Chunks()) {
+			op.function.copy_to_sink(context, *op.bind_data, *info.global_state, *local_copy_state, chunk);
+		}
+		if (extra_collection) {
+			for (auto &chunk : extra_collection->Chunks()) {
+				op.function.copy_to_sink(context, *op.bind_data, *info.global_state, *local_copy_state, chunk);
+			}
+		}
+		op.function.copy_to_combine(context, *op.bind_data, *info.global_state, *local_copy_state);
+		local_copy_state.reset();
+		info.collection.reset();
+	}
+
+	void FinalizePartition(ExecutionContext &context, const PhysicalCopyToFile &op, PartitionWriteInfo &info) {
+		if (info.collection && info.collection->Count() > 0) {
+			// there are still some rows remaining in the collection - flush them
+			FlushCollection(context, op, info);
 		}
 		// finalize the partition
-		op.function.copy_to_finalize(context, *op.bind_data, *info.global_state);
+		op.function.copy_to_finalize(context.client, *op.bind_data, *info.global_state);
 		info.global_state.reset();
 	}
 
 	void FinalizePartitions(ClientContext &context, const PhysicalCopyToFile &op, Pipeline &pipeline) {
+		ThreadContext thread(context);
+		ExecutionContext execution_context(context, thread, &pipeline);
 		// flush any remaining partitions
+		// FIXME: we should launch threads here to do this
 		if (partition_state) {
-			// FIXME: we could launch threads here
 			PrepareForFlush(context, op);
-			ThreadContext thread(context);
-			ExecutionContext execution_context(context, thread, &pipeline);
 			FlushPartitions(execution_context, op, *this);
 		}
 		// finalize any remaining partitions
 		for (auto &entry : active_partitioned_writes) {
-			FinalizePartition(context, op, *entry.second);
+			FinalizePartition(execution_context, op, *entry.second);
 		}
 	}
 
@@ -237,7 +274,8 @@ public:
 		}
 		// initialize writes
 		auto info = make_uniq<PartitionWriteInfo>();
-		info->global_state = op.function.copy_to_initialize_global(context.client, *op.bind_data, full_path);
+		info->collection = make_uniq<ColumnDataCollection>(context.client, op.expected_types);
+		info->full_path = full_path;
 		auto &result = *info;
 		// store in active write map
 		lock_guard<mutex> l(active_partitioned_writes_lock);
@@ -309,11 +347,15 @@ public:
 					// wait until all other threads have EITHER blocked on the sink lock OR are finished appending
 					while(g.appending_threads > g.threads_waiting_to_flush) {
 					}
+					// wait for a previous flush to be finished (if there is any)
+					while(g.finished_flush_iteration > g.flush_iteration) {
+					}
 					// we can finally flush!
 					// prepare for flush
 					g.PrepareForFlush(context.client, op);
 					// move to the next flush iteration and start flushing
 					g.flush_iteration++;
+					g.append_count = 0;
 				}
 				g.threads_waiting_to_flush--;
 			}
