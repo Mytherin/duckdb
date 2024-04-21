@@ -328,7 +328,17 @@ std::map<idx_t, const HivePartitionKey *> HivePartitionedColumnData::GetReverseM
 	return ret;
 }
 
-void HivePartitionedColumnData::GrowAllocators() {
+void HivePartitionedColumnData::GrowPartitions(PartitionedColumnDataAppendState &state) {
+	// grow append state
+	idx_t current_append_state_size = state.partition_append_states.size();
+	idx_t required_append_state_size = local_partition_map.size();
+
+	for (idx_t i = current_append_state_size; i < required_append_state_size; i++) {
+		state.partition_append_states.emplace_back(make_uniq<ColumnDataAppendState>());
+		state.partition_buffers.emplace_back(CreatePartitionBuffer());
+	}
+
+	// grow the allocators
 	unique_lock<mutex> lck_gstate(allocators->lock);
 
 	idx_t current_allocator_size = allocators->allocators.size();
@@ -339,30 +349,22 @@ void HivePartitionedColumnData::GrowAllocators() {
 		CreateAllocator();
 	}
 
-	D_ASSERT(allocators->allocators.size() == local_partition_map.size());
-}
-
-void HivePartitionedColumnData::GrowAppendState(PartitionedColumnDataAppendState &state) {
-	idx_t current_append_state_size = state.partition_append_states.size();
-	idx_t required_append_state_size = local_partition_map.size();
-
-	for (idx_t i = current_append_state_size; i < required_append_state_size; i++) {
-		state.partition_append_states.emplace_back(make_uniq<ColumnDataAppendState>());
-		state.partition_buffers.emplace_back(CreatePartitionBuffer());
-	}
-}
-
-void HivePartitionedColumnData::GrowPartitions(PartitionedColumnDataAppendState &state) {
+	D_ASSERT(allocators->allocators.size() >= local_partition_map.size());
 	idx_t current_partitions = partitions.size();
 	idx_t required_partitions = local_partition_map.size();
 
-	D_ASSERT(allocators->allocators.size() == required_partitions);
+	D_ASSERT(allocators->allocators.size() >= required_partitions);
 
+	// grow the partition collections - note that we need to keep the allocator lock here
 	for (idx_t i = current_partitions; i < required_partitions; i++) {
 		partitions.emplace_back(CreatePartitionCollection(i));
-		partitions[i]->InitializeAppend(*state.partition_append_states[i]);
 	}
 	D_ASSERT(partitions.size() == local_partition_map.size());
+	lck_gstate.unlock();
+	// initialize the new appends that we just created
+	for (idx_t i = current_partitions; i < required_partitions; i++) {
+		partitions[i]->InitializeAppend(*state.partition_append_states[i]);
+	}
 }
 
 void HivePartitionedColumnData::SynchronizeLocalMap() {
@@ -392,12 +394,7 @@ idx_t HivePartitionedColumnData::RegisterNewPartition(HivePartitionKey key, Part
 			SynchronizeLocalMap();
 		}
 
-		// After synchronizing with the global state, we need to grow the shared allocators to support
-		// the number of partitions, which guarantees that there's always enough allocators available to each thread
-		GrowAllocators();
-
 		// Grow local partition data
-		GrowAppendState(state);
 		GrowPartitions(state);
 
 		return partition_id;

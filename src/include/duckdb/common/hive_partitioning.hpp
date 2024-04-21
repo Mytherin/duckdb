@@ -92,10 +92,6 @@ public:
 	//! Copy the newly added entries in the global_state.map to the local_partition_map (requires lock!)
 	void SynchronizeLocalMap();
 protected:
-	//! Create allocators for all currently registered partitions
-	void GrowAllocators();
-	//! Create append states for all currently registered partitions
-	void GrowAppendState(PartitionedColumnDataAppendState &state);
 	//! Create and initialize partitions for all currently registered partitions
 	void GrowPartitions(PartitionedColumnDataAppendState &state);
 	//! Register a newly discovered partition

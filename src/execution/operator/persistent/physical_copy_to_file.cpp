@@ -61,7 +61,6 @@ public:
 	vector<unique_ptr<HivePartitionedColumnData>> append_buffers;
 	vector<unique_ptr<PartitionedColumnDataAppendState>> append_states;
 
-	idx_t sink_iteration = 0;
 	idx_t append_count = 0;
 	//! The number of in-progress partitions (used for task division)
 	atomic<idx_t> in_progress_partitions { 0 };
@@ -69,6 +68,10 @@ public:
 	atomic<idx_t> finished_partitions { 0 };
 	//! Total number of partitions that need to be flushed
 	idx_t partition_count = 0;
+	mutex sink_lock;
+	atomic<idx_t> appending_threads { 0 };
+	atomic<idx_t> threads_waiting_to_flush { 0 };
+	atomic<idx_t> flush_iteration { 0 };
 
 	void InitializePartitionState(ClientContext &context, const PhysicalCopyToFile &op) {
 		partition_collection = make_uniq<HivePartitionedColumnData>(context, op.expected_types, op.partition_columns,
@@ -266,9 +269,10 @@ public:
 	//! Buffers the tuples in partitions before writing
 	optional_ptr<HivePartitionedColumnData> part_buffer;
 	optional_ptr<PartitionedColumnDataAppendState> part_buffer_append_state;
-	idx_t current_sink_iteration = 0;
+	idx_t current_flush_iteration = 0;
 
 	void InitializeAppendState(CopyToFunctionGlobalState &gstate) {
+		auto lock = gstate.lock.GetExclusiveLock();
 		auto partition_buffer = unique_ptr_cast<PartitionedColumnData, HivePartitionedColumnData>(gstate.partition_collection->CreateShared());;
 		auto append_state = make_uniq<PartitionedColumnDataAppendState>();
 		part_buffer = partition_buffer.get();
@@ -276,45 +280,53 @@ public:
 		part_buffer->InitializeAppendState(*part_buffer_append_state);
 		gstate.append_buffers.push_back(std::move(partition_buffer));
 		gstate.append_states.push_back(std::move(append_state));
-		current_sink_iteration = gstate.sink_iteration;
+		current_flush_iteration = gstate.flush_iteration;
 	}
 
-	void FlushPartitions(StorageLockKey &lock, ExecutionContext &context, const PhysicalCopyToFile &op, CopyToFunctionGlobalState &g) {
-		// downgrade to a shared lock
-		lock.DowngradeLock();
+	void FlushPartitions(ExecutionContext &context, const PhysicalCopyToFile &op, CopyToFunctionGlobalState &g) {
 		// start flushing - this will busy spin until ALL flushing is completed
 		g.FlushPartitions(context, op, g);
-		// upgrade to an exclusive lock again
-		lock.UpgradeLock();
 		// reset the local append state
 		ResetAppendState();
 	}
 
 	void AppendToPartition(ExecutionContext &context, const PhysicalCopyToFile &op, CopyToFunctionGlobalState &g,
 	                       DataChunk &chunk) {
-		// grab an exclusive lock to begin with
-		auto lock = g.lock.GetExclusiveLock();
-		if (g.sink_iteration != current_sink_iteration) {
-			// participate in flushing to disk
-			FlushPartitions(*lock, context, op, g);
+		g.appending_threads++;
+		if (current_flush_iteration != g.flush_iteration) {
+			// a flush has started (OR finished) since our last append
+			// either help with flushing, or just reset the append state if flushing is already done
+			FlushPartitions(context, op, g);
 		} else if (g.append_count >= ClientConfig::GetConfig(context.client).partitioned_write_flush_threshold) {
-			// we are past the threshold for writing to disk and we are the first thread to notice
-			// prepare for flushing
-			// move to the next sink iteration
-			g.sink_iteration++;
-			g.PrepareForFlush(context.client, op);
+			// we are past the threshold for writing to disk but a flush has not started yet
+			// we cannot start a flush while threads are still appending, however
+			g.threads_waiting_to_flush++;
+			{
+				// wait for the sink lock
+				lock_guard<mutex> l(g.sink_lock);
+				if (current_flush_iteration == g.flush_iteration) {
+					// we are the first thread to reach this point
+					// wait until all other threads have EITHER blocked on the sink lock OR are finished appending
+					while(g.appending_threads > g.threads_waiting_to_flush) {
+					}
+					// we can finally flush!
+					// prepare for flush
+					g.PrepareForFlush(context.client, op);
+					// move to the next flush iteration and start flushing
+					g.flush_iteration++;
+				}
+				g.threads_waiting_to_flush--;
+			}
 			// now start flushing
-			FlushPartitions(*lock, context, op, g);
+			FlushPartitions(context, op, g);
 		}
-		g.append_count += chunk.size();
 		if (!part_buffer) {
 			// re-initialize the append state
 			InitializeAppendState(g);
 		}
-
-		// downgrade to a shared lock to perform the actual append
-		lock->DowngradeLock();
 		part_buffer->Append(*part_buffer_append_state, chunk);
+		g.append_count += chunk.size();
+		g.appending_threads--;
 	}
 
 	void ResetAppendState() {
