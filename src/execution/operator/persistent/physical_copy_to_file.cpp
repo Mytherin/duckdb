@@ -8,6 +8,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
+#include "duckdb/parallel/thread_context.hpp"
 #include <algorithm>
 
 namespace duckdb {
@@ -60,20 +61,19 @@ public:
 	vector<unique_ptr<HivePartitionedColumnData>> append_buffers;
 	vector<unique_ptr<PartitionedColumnDataAppendState>> append_states;
 
-	bool sink_to_disk;
+	idx_t sink_iteration = 0;
 	idx_t append_count = 0;
 	//! The number of in-progress partitions (used for task division)
-	atomic<idx_t> in_progress_partitions;
+	atomic<idx_t> in_progress_partitions { 0 };
 	//! Number of finished partitions
-	atomic<idx_t> finished_partitions;
+	atomic<idx_t> finished_partitions { 0 };
 	//! Total number of partitions that need to be flushed
-	idx_t partition_count;
+	idx_t partition_count = 0;
 
 	void InitializePartitionState(ClientContext &context, const PhysicalCopyToFile &op) {
 		partition_collection = make_uniq<HivePartitionedColumnData>(context, op.expected_types, op.partition_columns,
 																		   partition_state);
 		append_count = 0;
-		sink_to_disk = false;
 	}
 
 	void ResertPartitionState(ClientContext &context, const PhysicalCopyToFile &op) {
@@ -93,6 +93,7 @@ public:
 			// then combine into the main collection
 			partition_collection->Combine(buffer);
 		}
+		partition_collection->SynchronizeLocalMap();
 		in_progress_partitions = 0;
 		finished_partitions = 0;
 		partition_count = partition_collection->GetPartitions().size();
@@ -113,6 +114,7 @@ public:
 			}
 			// flush the partition
 			// get the partition write info for this buffer
+			D_ASSERT(partition_key_map.find(partition_idx) != partition_key_map.end());
 			auto &info = g.GetPartitionWriteInfo(context, op, partition_key_map[partition_idx]->values);
 
 			auto local_copy_state = op.function.copy_to_initialize_local(context, *op.bind_data);
@@ -123,10 +125,20 @@ public:
 			op.function.copy_to_combine(context, *op.bind_data, *info.global_state, *local_copy_state);
 			local_copy_state.reset();
 			partitions[partition_idx].reset();
-			finished_partitions++;
+			auto finished_idx = ++finished_partitions;
+			D_ASSERT(finished_idx <= partition_count);
+			if (finished_idx == partition_count) {
+				// we are the last partition to finish
+				// reset the partition state
+				g.ResertPartitionState(context.client, op);
+				// increment the finished_partitions, this allows all threads to continue appending
+				++finished_partitions;
+				break;
+			}
 		}
+		// we have finished, but maybe there are still other partitions remaining
 		// busy loop until all flushing is completed
-		while(finished_partitions < partition_count) {
+		while(finished_partitions <= partition_count) {
 		}
 	}
 
@@ -185,7 +197,15 @@ public:
 		info.global_state.reset();
 	}
 
-	void FinalizePartitions(ClientContext &context, const PhysicalCopyToFile &op) {
+	void FinalizePartitions(ClientContext &context, const PhysicalCopyToFile &op, Pipeline &pipeline) {
+		// flush any remaining partitions
+		if (partition_state) {
+			// FIXME: we could launch threads here
+			PrepareForFlush(context, op);
+			ThreadContext thread(context);
+			ExecutionContext execution_context(context, thread, &pipeline);
+			FlushPartitions(execution_context, op, *this);
+		}
 		// finalize any remaining partitions
 		for (auto &entry : active_partitioned_writes) {
 			FinalizePartition(context, op, *entry.second);
@@ -194,12 +214,14 @@ public:
 
 	PartitionWriteInfo &GetPartitionWriteInfo(ExecutionContext &context, const PhysicalCopyToFile &op,
 	                                          const vector<Value> &values) {
-		auto l = lock.GetExclusiveLock();
 		// check if we have already started writing this partition
-		auto entry = active_partitioned_writes.find(values);
-		if (entry != active_partitioned_writes.end()) {
-			// we have - continue writing in this partition
-			return *entry->second;
+		{
+			lock_guard<mutex> l(active_partitioned_writes_lock);
+			auto entry = active_partitioned_writes.find(values);
+			if (entry != active_partitioned_writes.end()) {
+				// we have - continue writing in this partition
+				return *entry->second;
+			}
 		}
 		auto &fs = FileSystem::GetFileSystem(context.client);
 		// Create a writer for the current file
@@ -215,11 +237,13 @@ public:
 		info->global_state = op.function.copy_to_initialize_global(context.client, *op.bind_data, full_path);
 		auto &result = *info;
 		// store in active write map
+		lock_guard<mutex> l(active_partitioned_writes_lock);
 		active_partitioned_writes.insert(make_pair(values, std::move(info)));
 		return result;
 	}
 
 private:
+	mutex active_partitioned_writes_lock;
 	//! The active writes per partition (for partitioned write)
 	vector_of_value_map_t<unique_ptr<PartitionWriteInfo>> active_partitioned_writes;
 };
@@ -242,6 +266,7 @@ public:
 	//! Buffers the tuples in partitions before writing
 	optional_ptr<HivePartitionedColumnData> part_buffer;
 	optional_ptr<PartitionedColumnDataAppendState> part_buffer_append_state;
+	idx_t current_sink_iteration = 0;
 
 	void InitializeAppendState(CopyToFunctionGlobalState &gstate) {
 		auto partition_buffer = unique_ptr_cast<PartitionedColumnData, HivePartitionedColumnData>(gstate.partition_collection->CreateShared());;
@@ -251,6 +276,7 @@ public:
 		part_buffer->InitializeAppendState(*part_buffer_append_state);
 		gstate.append_buffers.push_back(std::move(partition_buffer));
 		gstate.append_states.push_back(std::move(append_state));
+		current_sink_iteration = gstate.sink_iteration;
 	}
 
 	void FlushPartitions(StorageLockKey &lock, ExecutionContext &context, const PhysicalCopyToFile &op, CopyToFunctionGlobalState &g) {
@@ -262,25 +288,20 @@ public:
 		lock.UpgradeLock();
 		// reset the local append state
 		ResetAppendState();
-		// if we are the first to reach this - reset the global partition collections
-		// FIXME - this is not reliable since we might reach a sink_to_disk point AGAIN
-		// a better fix would be to turn `sink_to_disk` into a `flush_iteration` marker or something of the sort
-		if (g.sink_to_disk) {
-			g.ResertPartitionState(context.client, op);
-		}
 	}
 
 	void AppendToPartition(ExecutionContext &context, const PhysicalCopyToFile &op, CopyToFunctionGlobalState &g,
 	                       DataChunk &chunk) {
 		// grab an exclusive lock to begin with
 		auto lock = g.lock.GetExclusiveLock();
-		if (g.sink_to_disk) {
+		if (g.sink_iteration != current_sink_iteration) {
 			// participate in flushing to disk
 			FlushPartitions(*lock, context, op, g);
 		} else if (g.append_count >= ClientConfig::GetConfig(context.client).partitioned_write_flush_threshold) {
 			// we are past the threshold for writing to disk and we are the first thread to notice
 			// prepare for flushing
-			g.sink_to_disk = true;
+			// move to the next sink iteration
+			g.sink_iteration++;
 			g.PrepareForFlush(context.client, op);
 			// now start flushing
 			FlushPartitions(*lock, context, op, g);
@@ -316,8 +337,6 @@ unique_ptr<GlobalFunctionData> PhysicalCopyToFile::CreateFileState(ClientContext
 
 unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContext &context) const {
 	if (partition_output) {
-		auto &g = sink_state->Cast<CopyToFunctionGlobalState>();
-
 		auto state = make_uniq<CopyToFunctionLocalState>(nullptr);
 		return std::move(state);
 	}
@@ -439,11 +458,7 @@ SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, Ope
 	auto &g = input.global_state.Cast<CopyToFunctionGlobalState>();
 	auto &l = input.local_state.Cast<CopyToFunctionLocalState>();
 
-	if (partition_output) {
-		// FIXME: flush all remaining partitions
-//		auto lock = g.lock.GetExclusiveLock();
-//		l.FlushPartitions(*lock, context, *this, g);
-	} else if (function.copy_to_combine) {
+	if (!partition_output && function.copy_to_combine) {
 		if (per_thread_output) {
 			// For PER_THREAD_OUTPUT, we can combine/finalize immediately
 			function.copy_to_combine(context, *bind_data, *l.global_state, *l.local_state);
@@ -464,8 +479,8 @@ SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, 
                                               OperatorSinkFinalizeInput &input) const {
 	auto &gstate = input.global_state.Cast<CopyToFunctionGlobalState>();
 	if (partition_output) {
-		// finalize any outstanding partitions
-		gstate.FinalizePartitions(context, *this);
+		// finalize all outstanding partitions
+		gstate.FinalizePartitions(context, *this, pipeline);
 		return SinkFinalizeType::READY;
 	}
 	if (per_thread_output) {

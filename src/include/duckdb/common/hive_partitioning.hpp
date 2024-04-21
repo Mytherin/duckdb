@@ -88,6 +88,9 @@ public:
 	//! Reverse lookup map to reconstruct keys from a partition id
 	std::map<idx_t, const HivePartitionKey *> GetReverseMap();
 
+public:
+	//! Copy the newly added entries in the global_state.map to the local_partition_map (requires lock!)
+	void SynchronizeLocalMap();
 protected:
 	//! Create allocators for all currently registered partitions
 	void GrowAllocators();
@@ -97,8 +100,6 @@ protected:
 	void GrowPartitions(PartitionedColumnDataAppendState &state);
 	//! Register a newly discovered partition
 	idx_t RegisterNewPartition(HivePartitionKey key, PartitionedColumnDataAppendState &state);
-	//! Copy the newly added entries in the global_state.map to the local_partition_map (requires lock!)
-	void SynchronizeLocalMap();
 
 private:
 	void InitializeKeys();

@@ -152,10 +152,13 @@ void PartitionedColumnData::Combine(PartitionedColumnData &other) {
 		// This is the first merge, we just copy them over
 		partitions = std::move(other.partitions);
 	} else {
-		D_ASSERT(partitions.size() == other.partitions.size());
-		// Combine the append state's partitions into this PartitionedColumnData
-		for (idx_t i = 0; i < other.partitions.size(); i++) {
+		// Combine any partitions that exist in both collections
+		for (idx_t i = 0; i < MinValue<idx_t>(partitions.size(), other.partitions.size()); i++) {
 			partitions[i]->Combine(*other.partitions[i]);
+		}
+		// move over any partitions that do not yet exist in the current collection
+		for(idx_t i = partitions.size(); i < other.partitions.size(); i++) {
+			partitions.push_back(std::move(other.partitions[i]));
 		}
 	}
 }
