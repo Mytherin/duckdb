@@ -338,7 +338,7 @@ idx_t HivePartitionedColumnData::RegisterNewPartition(HivePartitionKey key, Part
 	idx_t partition_id;
 	if (global_state) {
 		// Synchronize Global state with our local state with the newly discovered partition
-		unique_lock<mutex> lck_gstate(global_state->lock);
+		lock_guard<mutex> lck_gstate(global_state->lock);
 
 		// Insert into global map, or return partition if already present
 		auto res = global_state->partition_map.emplace(std::make_pair(key, global_state->partition_map.size()));
