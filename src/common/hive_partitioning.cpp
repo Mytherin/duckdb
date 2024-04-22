@@ -148,17 +148,6 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<str
 	files = std::move(pruned_files);
 }
 
-HivePartitionedColumnData::HivePartitionedColumnData(const HivePartitionedColumnData &other)
-    : PartitionedColumnData(other), hashes_v(LogicalType::HASH) {
-	// Synchronize to ensure consistency of shared partition map
-	if (other.global_state) {
-		global_state = other.global_state;
-		unique_lock<mutex> lck(global_state->lock);
-		SynchronizeLocalMap();
-	}
-	InitializeKeys();
-}
-
 void HivePartitionedColumnData::InitializeKeys() {
 	keys.resize(STANDARD_VECTOR_SIZE);
 	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
@@ -324,7 +313,7 @@ void HivePartitionedColumnData::GrowAllocators() {
 	unique_lock<mutex> lck_gstate(allocators->lock);
 
 	idx_t current_allocator_size = allocators->allocators.size();
-	idx_t required_allocators = local_partition_map.size();
+	idx_t required_allocators = 1;
 
 	allocators->allocators.reserve(current_allocator_size);
 	for (idx_t i = current_allocator_size; i < required_allocators; i++) {
@@ -344,6 +333,13 @@ void HivePartitionedColumnData::GrowAppendState(PartitionedColumnDataAppendState
 	}
 }
 
+idx_t HivePartitionedColumnData::GetAllocSize() {
+	idx_t allocation_size = 0;
+	for(auto &allocator : allocators->allocators) {
+		allocation_size += allocator->AllocationSize();
+	}
+	return allocation_size;
+}
 void HivePartitionedColumnData::GrowPartitions(PartitionedColumnDataAppendState &state) {
 	idx_t current_partitions = partitions.size();
 	idx_t required_partitions = local_partition_map.size();
@@ -351,7 +347,7 @@ void HivePartitionedColumnData::GrowPartitions(PartitionedColumnDataAppendState 
 	D_ASSERT(allocators->allocators.size() == required_partitions);
 
 	for (idx_t i = current_partitions; i < required_partitions; i++) {
-		partitions.emplace_back(CreatePartitionCollection(i));
+		partitions.emplace_back(CreatePartitionCollection(0));
 		partitions[i]->InitializeAppend(*state.partition_append_states[i]);
 	}
 	D_ASSERT(partitions.size() == local_partition_map.size());

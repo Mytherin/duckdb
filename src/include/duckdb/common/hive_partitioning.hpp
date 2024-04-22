@@ -87,11 +87,12 @@ public:
 	      hashes_v(LogicalType::HASH) {
 		InitializeKeys();
 	}
-	HivePartitionedColumnData(const HivePartitionedColumnData &other);
 	void ComputePartitionIndices(PartitionedColumnDataAppendState &state, DataChunk &input) override;
 
 	//! Reverse lookup map to reconstruct keys from a partition id
 	std::map<idx_t, const HivePartitionKey *> GetReverseMap();
+
+	idx_t GetAllocSize();
 
 protected:
 	//! Create allocators for all currently registered partitions

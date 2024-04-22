@@ -20,8 +20,6 @@ unique_ptr<PartitionedColumnData> PartitionedColumnData::CreateShared() {
 	switch (type) {
 	case PartitionedColumnDataType::RADIX:
 		return make_uniq<RadixPartitionedColumnData>(Cast<RadixPartitionedColumnData>());
-	case PartitionedColumnDataType::HIVE:
-		return make_uniq<HivePartitionedColumnData>(Cast<HivePartitionedColumnData>());
 	default:
 		throw NotImplementedException("CreateShared for this type of PartitionedColumnData");
 	}

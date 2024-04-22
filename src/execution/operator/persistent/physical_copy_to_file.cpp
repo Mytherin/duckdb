@@ -13,7 +13,10 @@
 namespace duckdb {
 
 struct PartitionWriteInfo {
+	mutex partition_lock;
 	unique_ptr<GlobalFunctionData> global_state;
+	unique_ptr<ColumnDataCollection> collection;
+	string full_path;
 };
 
 struct VectorOfValuesHashFunction {
@@ -103,20 +106,46 @@ public:
 		return path;
 	}
 
-	void FinalizePartition(ClientContext &context, const PhysicalCopyToFile &op, PartitionWriteInfo &info) {
-		if (!info.global_state) {
-			// already finalized
+	void InitializeGlobalState(ClientContext &context, const PhysicalCopyToFile &op, PartitionWriteInfo &info) {
+		if (info.global_state) {
 			return;
+		}
+		info.global_state = op.function.copy_to_initialize_global(context, *op.bind_data, info.full_path);
+	}
+
+	void FlushCollection(ExecutionContext &context, const PhysicalCopyToFile &op, PartitionWriteInfo &info, ColumnDataCollection &collection, optional_ptr<ColumnDataCollection> second_collection = nullptr) {
+		auto local_copy_state = op.function.copy_to_initialize_local(context, *op.bind_data);
+		for (auto &chunk : collection.Chunks()) {
+			op.function.copy_to_sink(context, *op.bind_data, *info.global_state, *local_copy_state, chunk);
+		}
+		if (second_collection) {
+			for (auto &chunk : second_collection->Chunks()) {
+				op.function.copy_to_sink(context, *op.bind_data, *info.global_state, *local_copy_state, chunk);
+			}
+		}
+		op.function.copy_to_combine(context, *op.bind_data, *info.global_state, *local_copy_state);
+		local_copy_state.reset();
+	}
+
+	void FinalizePartition(ClientContext &context, const PhysicalCopyToFile &op, PartitionWriteInfo &info, Pipeline &pipeline) {
+		if (info.collection && info.collection->Count() > 0) {
+			// still data remaining in the state - flush it
+			ThreadContext thread(context);
+			ExecutionContext execution_context(context, thread, &pipeline);
+			InitializeGlobalState(context, op, info);
+			FlushCollection(execution_context, op, info, *info.collection);
+			info.collection.reset();
 		}
 		// finalize the partition
 		op.function.copy_to_finalize(context, *op.bind_data, *info.global_state);
 		info.global_state.reset();
 	}
 
-	void FinalizePartitions(ClientContext &context, const PhysicalCopyToFile &op) {
+	void FinalizePartitions(ClientContext &context, const PhysicalCopyToFile &op, Pipeline &pipeline) {
+		// FIXME: parallelize using tasks here
 		// finalize any remaining partitions
 		for (auto &entry : active_partitioned_writes) {
-			FinalizePartition(context, op, *entry.second);
+			FinalizePartition(context, op, *entry.second, pipeline);
 		}
 	}
 
@@ -140,7 +169,8 @@ public:
 		}
 		// initialize writes
 		auto info = make_uniq<PartitionWriteInfo>();
-		info->global_state = op.function.copy_to_initialize_global(context.client, *op.bind_data, full_path);
+		info->collection = make_uniq<ColumnDataCollection>(context.client, op.expected_types);
+		info->full_path = full_path;
 		auto &result = *info;
 		// store in active write map
 		active_partitioned_writes.insert(make_pair(values, std::move(info)));
@@ -192,6 +222,8 @@ public:
 		part_buffer->Append(*part_buffer_append_state, chunk);
 		append_count += chunk.size();
 		if (append_count >= ClientConfig::GetConfig(context.client).partitioned_write_flush_threshold) {
+			printf("Flush at %llu appends\n", append_count);
+			printf("Memory usage of partitioned collection is %llu\n", part_buffer->GetAllocSize());
 			// flush all cached partitions
 			FlushPartitions(context, op, g);
 		}
@@ -217,14 +249,31 @@ public:
 		for (idx_t i = 0; i < partitions.size(); i++) {
 			// get the partition write info for this buffer
 			auto &info = g.GetPartitionWriteInfo(context, op, partition_key_map[i]->values);
+			// grab the partition lock
+			unique_lock<mutex> l(info.partition_lock);
+			// check if appending to the collection would exceed the flush threshold
+			static constexpr const idx_t FLUSH_THRESHOLD = 10000;
+			if (info.collection->Count() + partitions[i]->Count() >= FLUSH_THRESHOLD) {
+				// it will! we need to flush to disk
+				// steal the collection and re-initialize
+				auto current_collection = std::move(info.collection);
+				info.collection = make_uniq<ColumnDataCollection>(context.client, op.expected_types);
 
-			auto local_copy_state = op.function.copy_to_initialize_local(context, *op.bind_data);
-			// push the chunks into the write state
-			for (auto &chunk : partitions[i]->Chunks()) {
-				op.function.copy_to_sink(context, *op.bind_data, *info.global_state, *local_copy_state, chunk);
+				// set up the global state if this hasn't been done yet
+				g.InitializeGlobalState(context.client, op, info);
+				// now unlock and write to disk
+				l.unlock();
+				g.FlushCollection(context, op, info, *current_collection, partitions[i].get());
+			} else {
+				// we are not flushing to disk yet
+				// append to the collection
+				ColumnDataAppendState append_state;
+				info.collection->InitializeAppend(append_state);
+				// FIXME - this is initializing a scan chunk for every partition
+				for (auto &chunk : partitions[i]->Chunks()) {
+					info.collection->Append(chunk);
+				}
 			}
-			op.function.copy_to_combine(context, *op.bind_data, *info.global_state, *local_copy_state);
-			local_copy_state.reset();
 			partitions[i].reset();
 		}
 		ResetAppendState();
@@ -394,7 +443,7 @@ SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, 
 	auto &gstate = input.global_state.Cast<CopyToFunctionGlobalState>();
 	if (partition_output) {
 		// finalize any outstanding partitions
-		gstate.FinalizePartitions(context, *this);
+		gstate.FinalizePartitions(context, *this, pipeline);
 		return SinkFinalizeType::READY;
 	}
 	if (per_thread_output) {
