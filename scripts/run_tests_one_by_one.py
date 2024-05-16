@@ -22,6 +22,7 @@ parser.add_argument('--profile', action='store_true', help='Enable profiling')
 parser.add_argument('--no-assertions', action='store_false', help='Disable assertions')
 parser.add_argument('--time_execution', action='store_true', help='Measure and print the execution time of each test')
 parser.add_argument('--list', action='store_true', help='Print the list of tests to run')
+parser.add_argument('--valgrind', action='store_true', help='Run with valgrind')
 parser.add_argument(
     '--timeout',
     action='store',
@@ -103,9 +104,10 @@ for test_number, test_case in enumerate(test_cases):
         print(f"[{test_number}/{test_count}]: {test_case}", end="", flush=True)
     start = time.time()
     try:
-        res = subprocess.run(
-            [unittest_program, test_case], stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout
-        )
+        cmd = [unittest_program, test_case]
+        if args.valgrind:
+            cmd = ['valgrind'] + cmd
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout)
     except subprocess.TimeoutExpired as e:
         print(" (TIMED OUT)", flush=True)
         fail()

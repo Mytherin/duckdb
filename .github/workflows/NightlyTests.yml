@@ -445,6 +445,44 @@ jobs:
         shell: bash
         run: build/relassert/test/unittest
 
+  valgrind:
+    name: Valgrind
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+    env:
+      OVERRIDE_GIT_DESCRIBE: ${{needs.linux-debug.outputs.git_describe}}
+      CC: gcc-10
+      CXX: g++-10
+      DISABLE_SANITIZER: 1
+      BUILD_JEMALLOC: 1
+      GEN: ninja
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build valgrind
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+
+      - name: Build
+        shell: bash
+        run: make debug
+
+      - name: Output version info
+        shell: bash
+        run: ./build/debug/duckdb -c "PRAGMA version;"
+
+      - name: Test
+        shell: bash
+        run: python3 scripts/run_tests_one_valgrind ./build/debug/test/unittest test/sql/tpch/tpch_sf001.test_slow
+
   vector-verification:
     name: Vector Verification Tests (${{ matrix.vector_type }})
     runs-on: ubuntu-20.04
@@ -541,7 +579,9 @@ jobs:
 
       - name: Test
         shell: bash
-        run: python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest --no-exit --timeout 600
+        run: |
+          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest --valgrind --no-exit
+          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest test/sql/tpch/tpch_sf001.test_slow --valgrind --no-exit
 
   regression-test-memory-safety:
    name: Regression Tests between safe and unsafe builds
