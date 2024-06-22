@@ -3,6 +3,7 @@
 #include "duckdb/core_functions/aggregate/sort_key_helpers.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/string_map_set.hpp"
+#include "duckdb/common/printer.hpp"
 
 namespace duckdb {
 
@@ -15,10 +16,149 @@ struct ApproxTopKValue {
 	idx_t index = 0;
 	//! The string value
 	string_t str_value;
+	//! Hash of the string value
+	hash_t hash;
 	//! Allocated data
 	char *dataptr = nullptr;
 	uint32_t size = 0;
 	uint32_t capacity = 0;
+};
+
+struct ApproxTopKSlot {
+	explicit ApproxTopKSlot() : occupied(false), key(UINT32_C(0)), hash(0), value(nullptr) {}
+
+	bool occupied;
+	string_t key;
+	hash_t hash;
+	ApproxTopKValue *value;
+};
+
+class ApproxTopKHashTable {
+public:
+	explicit ApproxTopKHashTable() : capacity(0), bitmask(0), max_chain(0) {
+	}
+
+	void Initialize(idx_t capacity_p) {
+		capacity = NextPowerOfTwo(capacity_p * 2);
+		bitmask = capacity - 1;
+		hashtable.resize(capacity);
+		max_chain = 0;
+		erase_count = 0;
+	}
+
+	idx_t FindSlot(idx_t hash) const {
+		return hash & bitmask;
+	}
+
+	void NextSlot(idx_t &slot) const {
+		slot++;
+		if (slot == capacity) {
+			slot = 0;
+		}
+	}
+
+	void rebalance() {
+		erase_count = 0;
+		max_chain = 0;
+		auto old_ht = std::move(hashtable);
+		hashtable.clear();
+		hashtable.resize(capacity);
+		for(auto &element : old_ht) {
+			if (element.occupied) {
+				insert(element.key, *element.value, element.hash);
+			}
+		}
+	}
+
+	void insert(string_t key, ApproxTopKValue &value, hash_t hash) {
+		D_ASSERT(hash == Hash(key));
+		if (max_chain > 5 && erase_count > capacity) {
+			rebalance();
+		}
+
+		auto slot = FindSlot(hash);
+		idx_t chain_length = 1;
+		// linear probing - find next slot if current slot is unoccupied
+		while(hashtable[slot].occupied) {
+			if (chain_length >= capacity) {
+				throw InternalException("chain length exceeds capacity?");
+			}
+			chain_length++;
+			NextSlot(slot);
+		}
+
+		if (chain_length > max_chain) {
+			max_chain = chain_length;
+		}
+
+		auto &hash_slot = hashtable[slot];
+		hash_slot.occupied = true;
+		hash_slot.key = key;
+		hash_slot.hash = hash;
+		hash_slot.value = &value;
+	}
+
+	void erase(string_t key, hash_t hash) {
+		D_ASSERT(hash == Hash(key));
+		auto slot = FindSlot(hash);
+		erase_count++;
+		for(idx_t idx = 0; idx < max_chain; NextSlot(slot), idx++) {
+			if (!hashtable[slot].occupied) {
+				continue;
+			}
+			if (hashtable[slot].hash == hash) {
+				if (Equals::Operation(hashtable[slot].key, key)) {
+					// found it!
+					hashtable[slot].occupied = false;
+					return;
+				}
+			}
+		}
+		// not found
+		throw InternalException("ApproxTopKHT - not found");
+	}
+
+	ApproxTopKSlot* find(string_t key, hash_t hash) {
+		D_ASSERT(hash == Hash(key));
+		auto slot = FindSlot(hash);
+		for(idx_t idx = 0; idx < max_chain; NextSlot(slot), idx++) {
+			if (!hashtable[slot].occupied) {
+				continue;
+			}
+			if (hashtable[slot].hash == hash) {
+				if (Equals::Operation(hashtable[slot].key, key)) {
+					// found it!
+					return &hashtable[slot];
+				}
+			}
+		}
+		// did not find it
+		return nullptr;
+	}
+	const ApproxTopKSlot* find(string_t key, hash_t hash) const {
+		D_ASSERT(hash == Hash(key));
+		auto slot = FindSlot(hash);
+		for(idx_t idx = 0; idx < max_chain; NextSlot(slot), idx++) {
+			if (!hashtable[slot].occupied) {
+				continue;
+			}
+			if (hashtable[slot].hash == hash) {
+				if (Equals::Operation(hashtable[slot].key, key)) {
+					// found it!
+					return &hashtable[slot];
+				}
+			}
+		}
+		// did not find it
+		return nullptr;
+	}
+
+private:
+	unsafe_vector<ApproxTopKSlot> hashtable;
+	idx_t capacity;
+	idx_t bitmask;
+	idx_t max_chain;
+	idx_t erase_count;
 };
 
 struct ApproxTopKState {
@@ -27,12 +167,11 @@ struct ApproxTopKState {
 	// a lookup map: string_t -> idx in "values" array
 	unsafe_unique_array<ApproxTopKValue> stored_values;
 	unsafe_vector<reference<ApproxTopKValue>> values;
-	string_map_t<reference<ApproxTopKValue>> lookup_map;
+	ApproxTopKHashTable lookup_map;
 	idx_t k = 0;
 
 	void Initialize(idx_t kval) {
 		D_ASSERT(values.empty());
-		D_ASSERT(lookup_map.empty());
 		k = kval;
 		idx_t capacity = kval * 3;
 		stored_values = make_unsafe_uniq_array<ApproxTopKValue>(capacity);
@@ -42,6 +181,7 @@ struct ApproxTopKState {
 			val.index = i;
 			values.push_back(val);
 		}
+		lookup_map.Initialize(capacity);
 	}
 
 	static void CopyValue(ApproxTopKValue &value, const string_t &input, AggregateInputData &input_data) {
@@ -61,15 +201,16 @@ struct ApproxTopKState {
 		value.str_value = string_t(value.dataptr, value.size);
 	}
 
-	void InsertOrReplaceEntry(const string_t &input, AggregateInputData &aggr_input, idx_t increment = 1) {
+	void InsertOrReplaceEntry(const string_t &input, AggregateInputData &aggr_input, hash_t hash, idx_t increment = 1) {
 		Verify();
 		auto &value = values[0].get();
 		if (value.count > 0) {
 			// there is an existing entry - we need to erase it from the map
-			lookup_map.erase(value.str_value);
+			lookup_map.erase(value.str_value, value.hash);
 		}
 		CopyValue(value, input, aggr_input);
-		lookup_map.insert(make_pair(value.str_value, reference<ApproxTopKValue>(value)));
+		value.hash = hash;
+		lookup_map.insert(value.str_value, value, hash);
 		IncrementCount(value, increment);
 		Verify();
 	}
@@ -90,7 +231,6 @@ struct ApproxTopKState {
 	void Verify() {
 #ifdef DEBUG
 		if (values.empty()) {
-			D_ASSERT(lookup_map.empty());
 			return;
 		}
 		D_ASSERT(values.size() >= k);
@@ -100,8 +240,12 @@ struct ApproxTopKState {
 			if (val.count > 0) {
 				non_zero_entries++;
 				// verify map exists
-				auto entry = lookup_map.find(val.str_value);
-				D_ASSERT(entry != lookup_map.end());
+				auto entry = lookup_map.find(val.str_value, val.hash);
+				if (!entry) {
+					entry = lookup_map.find(val.str_value, val.hash);
+					throw InternalException("eek");
+				}
+				D_ASSERT(entry);
 				// verify the index is correct
 				D_ASSERT(val.index == k);
 			}
@@ -110,8 +254,6 @@ struct ApproxTopKState {
 				D_ASSERT(val.count >= values[k - 1].get().count);
 			}
 		}
-		// verify lookup map does not contain extra entries
-		D_ASSERT(lookup_map.size() == non_zero_entries);
 #endif
 	}
 };
@@ -141,19 +283,20 @@ struct ApproxTopKOperation {
 			}
 			state.Initialize(UnsafeNumericCast<idx_t>(kval));
 		}
-		auto entry = state.lookup_map.find(input);
-		if (entry != state.lookup_map.end()) {
+		auto hash = Hash(input);
+		auto entry = state.lookup_map.find(input, hash);
+		if (entry) {
 			// the input is monitored - increment the count
-			state.IncrementCount(entry->second.get());
+			state.IncrementCount(*entry->value);
 		} else {
 			// the input is not monitored - replace the first entry with the current entry and increment
-			state.InsertOrReplaceEntry(input, aggr_input);
+			state.InsertOrReplaceEntry(input, aggr_input, hash);
 		}
 	}
 
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &aggr_input) {
-		if (source.lookup_map.empty()) {
+		if (source.values.empty()) {
 			// source is empty
 			return;
 		}
@@ -179,10 +322,10 @@ struct ApproxTopKOperation {
 			if (val.count == 0) {
 				continue;
 			}
-			auto source_entry = source.lookup_map.find(val.str_value);
+			auto source_entry = source.lookup_map.find(val.str_value, val.hash);
 			idx_t increment = min_source;
-			if (source_entry != source.lookup_map.end()) {
-				increment = source_entry->second.get().count;
+			if (source_entry) {
+				increment = source_entry->value->count;
 			}
 			if (increment == 0) {
 				continue;
@@ -192,8 +335,8 @@ struct ApproxTopKOperation {
 		// now for each entry in source, if it is not tracked by the target, at the target minimum
 		for(auto &source_entry : source.values) {
 			auto &source_val = source_entry.get();
-			auto target_entry = target.lookup_map.find(source_val.str_value);
-			if (target_entry != target.lookup_map.end()) {
+			auto target_entry = target.lookup_map.find(source_val.str_value, source_val.hash);
+			if (target_entry) {
 				// already tracked - no need to add anything
 				continue;
 			}
@@ -205,7 +348,7 @@ struct ApproxTopKOperation {
 			}
 			// otherwise we should add it to the target
 			idx_t diff =  new_count - target.values[0].get().count;
-			target.InsertOrReplaceEntry(source_val.str_value, aggr_input, diff);
+			target.InsertOrReplaceEntry(source_val.str_value, aggr_input, source_val.hash, diff);
 		}
 		target.Verify();
 	}
