@@ -905,6 +905,58 @@ void Linenoise::RefreshMultiLine() {
 	Linenoise::Log("clear");
 	append_buffer.Append("\r\x1b[0K");
 
+	if (search) {
+		// if we are searching - write the search matches around the current match
+		// write a total of 5 search matches (if possible)
+		idx_t start_search = search_index;
+		for(idx_t k = 0; k < 2; k++) {
+			if (start_search == 0) {
+				start_search = search_matches.size() - 1;
+			} else {
+				start_search--;
+			}
+		}
+		for(idx_t index = 0; index < MinValue<idx_t>(search_matches.size(), 5); index++) {
+			// render the search match at this position
+			auto &search_match = search_matches[start_search];
+			auto history_entry = History::GetEntry(search_match.history_index);
+			string history_without_newlines;
+			for(auto c = history_entry; *c; c++) {
+				if (*c == '\t' || *c == ' ' || *c == '\r' || *c == '\n') {
+					if (history_without_newlines.empty() || history_without_newlines.back() != ' ') {
+						history_without_newlines += ' ';
+					}
+				} else {
+					history_without_newlines += *c;
+				}
+			}
+			string history_render_buffer;
+			char *history_ptr = (char *) history_without_newlines.c_str();
+			size_t history_render_len = history_without_newlines.size();
+			renderText(search_match.match_start, history_ptr, history_render_len, pos, ws.ws_col, 2, history_render_buffer, Highlighting::IsEnabled());
+			if (start_search == search_index) {
+				append_buffer.Append("> ", 2);
+			} else {
+				append_buffer.Append("  ", 2);
+			}
+			append_buffer.Append(history_ptr, history_render_len);
+			append_buffer.Append("\n");
+			append_buffer.Append("\r");
+			rows++;
+			new_cursor_row++;
+
+
+
+			start_search++;
+			if (start_search >= search_matches.size()) {
+				start_search = 0;
+			}
+		}
+		if (rows > (int)maxrows) {
+			maxrows = rows;
+		}
+	}
+
 	/* Write the prompt and the current buffer content */
 	if (y_scroll == 0) {
 		append_buffer.Append(prompt);

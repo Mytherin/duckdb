@@ -222,10 +222,12 @@ string Highlighting::HighlightText(char *buf, size_t len, size_t start_pos, size
 			continue;
 		}
 		if (prev_pos > start) {
-#ifdef DEBUG
-			throw InternalException("ERROR - Rendering at position %llu after rendering at position %llu\n", start,
-			                        prev_pos);
-#endif
+			// FIXME this breaks when reverse searching l_returnflag with this query in history:
+			// select histogram_exact(l_returnflag, ['N']) from lineitem;
+// #ifdef DEBUG
+// 			throw InternalException("ERROR - Rendering at position %llu after rendering at position %llu\n", start,
+// 			                        prev_pos);
+// #endif
 			Linenoise::Log("ERROR - Rendering at position %llu after rendering at position %llu\n", start, prev_pos);
 			continue;
 		}
