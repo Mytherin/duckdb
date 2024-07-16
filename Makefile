@@ -16,6 +16,7 @@ FORCE_WARN_UNUSED_FLAG ?=
 DISABLE_UNITY_FLAG ?=
 DISABLE_SANITIZER_FLAG ?=
 FORCE_32_BIT_FLAG ?=
+PARALLEL_FLAG=--parallel
 
 MKFILE_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
 PROJ_DIR := $(dir $(MKFILE_PATH))
@@ -26,6 +27,9 @@ ifeq ($(GEN),ninja)
 endif
 ifeq (${TREAT_WARNINGS_AS_ERRORS}, 1)
 	WARNINGS_AS_ERRORS=-DTREAT_WARNINGS_AS_ERRORS=1
+endif
+ifeq (${DISABLE_PARALLEL_BUILD}, 1)
+	PARALLEL_FLAG=
 endif
 ifeq (${FORCE_32_BIT}, 1)
 	FORCE_32_BIT_FLAG=-DFORCE_32_BIT=1
@@ -277,13 +281,13 @@ debug: ${EXTENSION_CONFIG_STEP}
 	cd build/debug && \
 	echo ${DUCKDB_EXTENSION_SUBSTRAIT_PATH} && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DDEBUG_MOVE=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
-	cmake --build . --config Debug
+	cmake --build . --config Debug ${PARALLEL_FLAG}
 
 release: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/release && \
 	cd build/release && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DCMAKE_BUILD_TYPE=Release ../.. && \
-	cmake --build . --config Release
+	cmake --build . --config Release ${PARALLEL_FLAG}
 
 wasm_mvp: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/wasm_mvp && \
@@ -304,13 +308,13 @@ cldebug: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/cldebug && \
 	cd build/cldebug && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DBUILD_PYTHON=1 -DENABLE_SANITIZER=0 -DENABLE_UBSAN=0 -DCMAKE_BUILD_TYPE=Debug ../.. && \
-	cmake --build . --config Debug
+	cmake --build . --config Debug ${PARALLEL_FLAG}
 
 clreldebug:
 	mkdir -p ./build/clreldebug && \
 	cd build/clreldebug && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} -DBUILD_PYTHON=1 -DBUILD_FTS_EXTENSION=1 -DENABLE_SANITIZER=0 -DENABLE_UBSAN=0 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
-	cmake --build . --config RelWithDebInfo
+	cmake --build . --config RelWithDebInfo ${PARALLEL_FLAG}
 
 extension_configuration: build/extension_configuration/vcpkg.json
 
@@ -321,7 +325,7 @@ build/extension_configuration/vcpkg.json: extension/extension_config_local.cmake
 	mkdir -p ./build/extension_configuration && \
 	cd build/extension_configuration && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${CMAKE_VARS} -DEXTENSION_CONFIG_BUILD=TRUE -DVCPKG_BUILD=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
-	cmake --build . --config RelWithDebInfo
+	cmake --build . --config RelWithDebInfo ${PARALLEL_FLAG}
 
 unittest: debug
 	build/debug/test/unittest
@@ -349,26 +353,26 @@ reldebug: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/reldebug && \
 	cd build/reldebug && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
-	cmake --build . --config RelWithDebInfo
+	cmake --build . --config RelWithDebInfo ${PARALLEL_FLAG}
 
 relassert: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/relassert && \
 	cd build/relassert && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DFORCE_ASSERT=1 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
-	cmake --build . --config RelWithDebInfo
+	cmake --build . --config RelWithDebInfo ${PARALLEL_FLAG}
 
 benchmark:
 	mkdir -p ./build/release && \
 	cd build/release && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} -DBUILD_BENCHMARKS=1 -DCMAKE_BUILD_TYPE=Release ../.. && \
-	cmake --build . --config Release
+	cmake --build . --config Release ${PARALLEL_FLAG}
 
 amaldebug:
 	mkdir -p ./build/amaldebug && \
 	python3 scripts/amalgamation.py && \
 	cd build/amaldebug && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${STATIC_LIBCPP} ${CMAKE_VARS} ${FORCE_32_BIT_FLAG} -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
-	cmake --build . --config Debug
+	cmake --build . --config Debug ${PARALLEL_FLAG}
 
 tidy-check:
 	mkdir -p ./build/tidy && \
