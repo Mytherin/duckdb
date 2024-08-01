@@ -932,12 +932,7 @@ static bool TransformFunctionInternal(Vector &input, const idx_t count, Vector &
 		}
 	}
 
-	auto success = JSONTransform::Transform(vals, alc, result, count, options);
-	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-
-	return success;
+	return JSONTransform::Transform(vals, alc, result, count, options);
 }
 
 template <bool strict>

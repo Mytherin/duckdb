@@ -55,10 +55,6 @@ static void ListInnerProduct(DataChunk &args, ExpressionState &, Vector &result)
 
 		    return distance;
 	    });
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 ScalarFunctionSet ListInnerProductFun::GetFunctions() {

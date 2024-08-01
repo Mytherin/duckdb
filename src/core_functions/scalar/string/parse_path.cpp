@@ -284,10 +284,6 @@ static void ParsePathFunction(DataChunk &args, ExpressionState &state, Vector &r
 	}
 	ListVector::SetListSize(result, total_splits);
 	D_ASSERT(ListVector::GetListSize(result) == total_splits);
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 ScalarFunctionSet ParseDirnameFun::GetFunctions() {

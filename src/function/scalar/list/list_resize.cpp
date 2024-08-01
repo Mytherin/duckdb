@@ -44,7 +44,6 @@ void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	ListVector::Reserve(result, new_child_vector_size);
 	ListVector::SetListSize(result, new_child_vector_size);
 
-	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_entries = FlatVector::GetData<list_entry_t>(result);
 	auto &result_validity = FlatVector::Validity(result);
 	auto &result_child_vector = ListVector::GetEntry(result);
@@ -112,10 +111,6 @@ void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &result) {
 				offset++;
 			}
 		}
-	}
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
 

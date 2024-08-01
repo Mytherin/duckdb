@@ -37,9 +37,6 @@ static void MapKeyValueFunction(DataChunk &args, ExpressionState &state, Vector 
 	if (map.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		result.Slice(*map_data.sel, count);
 	}
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 	result.Verify(count);
 }
 

@@ -178,10 +178,6 @@ static inline void ArrayGenericBinaryExecute(Vector &left, Vector &right, Vector
 
 		OP::template Operation<TYPE>(left_data, left_idx, right_data, right_idx, result_data, i, size);
 	}
-
-	if (count == 1) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 template <class OP>

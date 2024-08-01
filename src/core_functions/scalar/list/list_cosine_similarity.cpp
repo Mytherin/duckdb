@@ -67,10 +67,6 @@ static void ListCosineSimilarity(DataChunk &args, ExpressionState &, Vector &res
 		    // clamp to [-1, 1] to avoid floating point errors
 		    return std::max(static_cast<NUMERIC_TYPE>(-1), std::min(similarity, static_cast<NUMERIC_TYPE>(1)));
 	    });
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 ScalarFunctionSet ListCosineSimilarityFun::GetFunctions() {

@@ -75,10 +75,6 @@ static void TemplatedContainsOrPosition(DataChunk &args, Vector &result, bool is
 			}
 		}
 	}
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 template <class T, class OP, class LIST_ACCESSOR>

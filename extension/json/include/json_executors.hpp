@@ -103,9 +103,6 @@ public:
 				    }
 			    });
 		}
-		if (args.AllConstant()) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		}
 	}
 
 	//! JSON read function with list of path queries, i.e. json_type('[1, 2, 3]', ['$[0]', '$[1]'])
@@ -160,10 +157,6 @@ public:
 			offset += num_paths;
 		}
 		ListVector::SetListSize(result, offset);
-
-		if (args.AllConstant()) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		}
 	}
 };
 

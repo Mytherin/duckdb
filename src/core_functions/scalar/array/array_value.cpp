@@ -12,14 +12,6 @@ static void ArrayValueFunction(DataChunk &args, ExpressionState &state, Vector &
 	D_ASSERT(args.ColumnCount() == ArrayType::GetSize(array_type));
 
 	auto &child_type = ArrayType::GetChildType(array_type);
-
-	result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	for (idx_t i = 0; i < args.ColumnCount(); i++) {
-		if (args.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
-			result.SetVectorType(VectorType::FLAT_VECTOR);
-		}
-	}
-
 	auto num_rows = args.size();
 	auto num_columns = args.ColumnCount();
 

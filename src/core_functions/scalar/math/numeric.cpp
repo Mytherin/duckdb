@@ -578,8 +578,7 @@ static void DecimalRoundNegativePrecisionFunction(DataChunk &input, ExpressionSt
 	auto width = DecimalType::GetWidth(func_expr.children[0]->return_type);
 	if (info.target_scale <= -int32_t(width - source_scale)) {
 		// scale too big for width
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		result.SetValue(0, Value::INTEGER(0));
+		result.Reference(Value::INTEGER(0));
 		return;
 	}
 	T divide_power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[-info.target_scale + source_scale]);

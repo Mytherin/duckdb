@@ -75,9 +75,6 @@ static void ListLengthFunction(DataChunk &args, ExpressionState &state, Vector &
 	D_ASSERT(input.GetType().id() == LogicalTypeId::LIST);
 	UnaryExecutor::Execute<list_entry_t, int64_t>(
 	    input, result, args.size(), [](list_entry_t input) { return UnsafeNumericCast<int64_t>(input.length); });
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 static void ArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -103,9 +100,6 @@ static void ArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector 
 		if (!format.validity.RowIsValid(idx)) {
 			result_validity.SetInvalid(r);
 		}
-	}
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
 

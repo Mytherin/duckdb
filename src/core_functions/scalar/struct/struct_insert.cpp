@@ -29,10 +29,6 @@ static void StructInsertFunction(DataChunk &args, ExpressionState &state, Vector
 	}
 
 	result.Verify(args.size());
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 static unique_ptr<FunctionData> StructInsertBind(ClientContext &context, ScalarFunction &bound_function,

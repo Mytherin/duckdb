@@ -221,10 +221,6 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 		auto &string = UnifiedVectorFormat::GetData<string_t>(strings_data)[string_idx];
 		ExtractSingleTuple(string, re, group_index, groups, result, row);
 	}
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 unique_ptr<FunctionData> RegexpExtractAll::Bind(ClientContext &context, ScalarFunction &bound_function,

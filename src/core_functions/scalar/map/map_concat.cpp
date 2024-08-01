@@ -38,9 +38,8 @@ vector<Value> GetListEntries(vector<Value> keys, vector<Value> values) {
 static void MapConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	if (result.GetType().id() == LogicalTypeId::SQLNULL) {
 		// All inputs are NULL, just return NULL
-		auto &validity = FlatVector::Validity(result);
-		validity.SetInvalid(0);
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(result, true);
 		return;
 	}
 	D_ASSERT(result.GetType().id() == LogicalTypeId::MAP);
@@ -117,10 +116,6 @@ static void MapConcatFunction(DataChunk &args, ExpressionState &state, Vector &r
 		for (auto &list_entry : list_entries) {
 			ListVector::PushBack(result, list_entry);
 		}
-	}
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 	result.Verify(count);
 }

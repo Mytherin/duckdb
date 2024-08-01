@@ -115,11 +115,6 @@ static void MapExtractFunction(DataChunk &args, ExpressionState &state, Vector &
 	ListContainsOrPosition<int32_t, PositionFunctor, MapKeyArgFunctor>(list_position_chunk, position_vector);
 
 	FillResult(map, position_vector, result, tuple_count);
-
-	if (tuple_count == 1) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-
 	result.Verify(tuple_count);
 }
 

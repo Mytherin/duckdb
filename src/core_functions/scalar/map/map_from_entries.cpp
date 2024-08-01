@@ -13,10 +13,6 @@ static void MapFromEntriesFunction(DataChunk &args, ExpressionState &state, Vect
 	MapUtil::ReinterpretMap(result, args.data[0], count);
 	MapVector::MapConversionVerify(result, count);
 	result.Verify(count);
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 static unique_ptr<FunctionData> MapFromEntriesBind(ClientContext &context, ScalarFunction &bound_function,

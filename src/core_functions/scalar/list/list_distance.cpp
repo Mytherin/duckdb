@@ -57,10 +57,6 @@ static void ListDistance(DataChunk &args, ExpressionState &, Vector &result) {
 
 		    return std::sqrt(distance);
 	    });
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 ScalarFunctionSet ListDistanceFun::GetFunctions() {

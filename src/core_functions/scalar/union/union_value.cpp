@@ -28,11 +28,6 @@ static void UnionValueFunction(DataChunk &args, ExpressionState &state, Vector &
 	auto &tag_vector = UnionVector::GetTags(result);
 	tag_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
 	ConstantVector::GetData<union_tag_t>(tag_vector)[0] = 0;
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-
 	result.Verify(args.size());
 }
 

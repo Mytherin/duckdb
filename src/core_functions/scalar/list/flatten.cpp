@@ -46,9 +46,6 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &state, Vector &result
 			result_entries[row_cnt].offset = 0;
 			result_entries[row_cnt].length = 0;
 		}
-		if (args.AllConstant()) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		}
 		return;
 	}
 
@@ -104,10 +101,6 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &state, Vector &result
 	auto &result_child_vector = ListVector::GetEntry(result);
 	result_child_vector.Slice(elem_vector, sel, sel_idx);
 	result_child_vector.Flatten(sel_idx);
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 static unique_ptr<FunctionData> ListFlattenBind(ClientContext &context, ScalarFunction &bound_function,

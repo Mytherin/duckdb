@@ -20,10 +20,6 @@ static void CardinalityFunction(DataChunk &args, ExpressionState &state, Vector 
 		result_data[row] = list_entry.length;
 		result_validity.Set(row, map_data.validity.RowIsValid(map_data.sel->get_index(row)));
 	}
-
-	if (args.size() == 1) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 static unique_ptr<FunctionData> CardinalityBind(ClientContext &context, ScalarFunction &bound_function,

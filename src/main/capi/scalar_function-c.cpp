@@ -55,7 +55,6 @@ void CAPIScalarFunction(DataChunk &input, ExpressionState &state, Vector &result
 	auto &bind_info = state.expr.Cast<BoundFunctionExpression>().bind_info;
 	auto &c_bind_info = bind_info->Cast<CScalarFunctionBindData>();
 
-	auto all_const = input.AllConstant();
 	input.Flatten();
 	auto c_input = reinterpret_cast<duckdb_data_chunk>(&input);
 	auto c_result = reinterpret_cast<duckdb_vector>(&result);
@@ -63,9 +62,6 @@ void CAPIScalarFunction(DataChunk &input, ExpressionState &state, Vector &result
 	c_bind_info.info.function(c_function_info, c_input, c_result);
 	if (!c_bind_info.info.success) {
 		throw InvalidInputException(c_bind_info.info.error);
-	}
-	if (all_const) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
 

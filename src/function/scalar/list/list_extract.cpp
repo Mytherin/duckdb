@@ -80,9 +80,6 @@ void ListExtractTemplate(idx_t count, UnifiedVectorFormat &list_data, UnifiedVec
 			result_mask.SetInvalid(i);
 		}
 	}
-	if (count == 1) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 static void ExecuteListExtractInternal(const idx_t count, UnifiedVectorFormat &list, UnifiedVectorFormat &offsets,
                                        Vector &child_vector, idx_t list_size, Vector &result) {
@@ -179,13 +176,6 @@ static void ExecuteStringExtract(Vector &result, Vector &input_vector, Vector &s
 static void ListExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 2);
 	auto count = args.size();
-
-	result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	for (idx_t i = 0; i < args.ColumnCount(); i++) {
-		if (args.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
-			result.SetVectorType(VectorType::FLAT_VECTOR);
-		}
-	}
 
 	Vector &base = args.data[0];
 	Vector &subscript = args.data[1];

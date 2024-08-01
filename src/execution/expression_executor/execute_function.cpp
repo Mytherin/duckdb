@@ -60,6 +60,11 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
                                  const SelectionVector *sel, idx_t count, Vector &result) {
 	state->intermediate_chunk.Reset();
 	auto &arguments = state->intermediate_chunk;
+	bool all_constant = true;
+	if (expr.function.stability == FunctionStability::VOLATILE) {
+		// we cannot optimize away constant vectors for volatile functions
+		all_constant = false;
+	}
 	if (!state->types.empty()) {
 		for (idx_t i = 0; i < expr.children.size(); i++) {
 			D_ASSERT(state->types[i] == expr.children[i]->return_type);
@@ -69,13 +74,19 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 				arguments.data[i].UTFVerify(count);
 			}
 #endif
+			if (arguments.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
+				all_constant = false;
+			}
 		}
 	}
-	arguments.SetCardinality(count);
+	arguments.SetCardinality(all_constant ? 1 : count);
 	arguments.Verify();
 
 	D_ASSERT(expr.function.function);
 	expr.function.function(arguments, *state, result);
+	if (all_constant) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
 
 	VerifyNullHandling(expr, arguments, result);
 	D_ASSERT(result.GetType() == expr.return_type);

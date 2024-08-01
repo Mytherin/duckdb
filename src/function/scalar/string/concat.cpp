@@ -39,7 +39,6 @@ unique_ptr<FunctionData> ConcatFunctionData::Copy() const {
 }
 
 static void StringConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	// iterate over the vectors to count how large the final string will be
 	idx_t constant_lengths = 0;
 	vector<idx_t> result_lengths(args.size(), 0);
@@ -54,8 +53,6 @@ static void StringConcatFunction(DataChunk &args, ExpressionState &state, Vector
 			auto input_data = ConstantVector::GetData<string_t>(input);
 			constant_lengths += input_data->GetSize();
 		} else {
-			// non-constant vector: set the result type to a flat vector
-			result.SetVectorType(VectorType::FLAT_VECTOR);
 			// now get the lengths of each of the input elements
 			UnifiedVectorFormat vdata;
 			input.ToUnifiedFormat(args.size(), vdata);

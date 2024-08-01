@@ -587,10 +587,6 @@ static void ObjectFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	for (idx_t i = 0; i < count; i++) {
 		objects[i] = JSONCommon::WriteVal<yyjson_mut_val>(objs[i], alc);
 	}
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 static void ArrayFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -620,10 +616,6 @@ static void ArrayFunction(DataChunk &args, ExpressionState &state, Vector &resul
 	for (idx_t i = 0; i < count; i++) {
 		objects[i] = JSONCommon::WriteVal<yyjson_mut_val>(arrs[i], alc);
 	}
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 static void ToJSONFunctionInternal(const StructNames &names, Vector &input, const idx_t count, Vector &result,
@@ -645,10 +637,6 @@ static void ToJSONFunctionInternal(const StructNames &names, Vector &input, cons
 		} else {
 			result_validity.SetInvalid(i);
 		}
-	}
-
-	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
 

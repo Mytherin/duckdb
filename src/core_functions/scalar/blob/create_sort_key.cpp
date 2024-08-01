@@ -738,10 +738,6 @@ static void CreateSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 		sort_key_data.push_back(make_uniq<SortKeyVectorData>(args.data[c], args.size(), bind_data.modifiers[c / 2]));
 	}
 	CreateSortKeyInternal(sort_key_data, bind_data.modifiers, result, args.size());
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 //===--------------------------------------------------------------------===//
