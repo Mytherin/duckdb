@@ -9,7 +9,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/common/string_util.hpp"
-
+#include "duckdb/common/brace_expansion.hpp"
 #include <algorithm>
 
 namespace duckdb {
@@ -59,10 +59,10 @@ vector<string> MultiFileReader::ParsePaths(const Value &input) {
 		throw ParserException("%s cannot take NULL list as parameter", function_name);
 	}
 
+	vector<string> paths;
 	if (input.type().id() == LogicalTypeId::VARCHAR) {
-		return {StringValue::Get(input)};
+		paths.push_back(StringValue::Get(input));
 	} else if (input.type().id() == LogicalTypeId::LIST) {
-		vector<string> paths;
 		for (auto &val : ListValue::GetChildren(input)) {
 			if (val.IsNull()) {
 				throw ParserException("%s reader cannot take NULL input as parameter", function_name);
@@ -72,10 +72,16 @@ vector<string> MultiFileReader::ParsePaths(const Value &input) {
 			}
 			paths.push_back(StringValue::Get(val));
 		}
-		return paths;
 	} else {
 		throw InternalException("Unsupported type for MultiFileReader::ParsePaths called with: '%s'");
 	}
+
+	// perform brace expansion
+	vector<string> result;
+	for(auto &path : paths) {
+		BraceExpansion::ExpandBraces(path, result);
+	}
+	return result;
 }
 
 unique_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const vector<string> &paths,

@@ -31,6 +31,7 @@ add_library_unity(
   allocator.cpp
   assert.cpp
   bind_helpers.cpp
+  brace_expansion.cpp
   box_renderer.cpp
   cgroups.cpp
   compressed_file_system.cpp
