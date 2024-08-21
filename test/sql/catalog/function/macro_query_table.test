@@ -27,3 +27,9 @@ statement error
 SELECT min_from_tbl(integers2, i)
 ----
 Table with name integers2 does not exist
+
+# using a non-scalar parameter is not supported
+statement error
+SELECT min_from_tbl(tbl_name, i) from (values ('integers')) t(tbl_name);
+----
+tbl_name

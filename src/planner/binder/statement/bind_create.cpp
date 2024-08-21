@@ -241,7 +241,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 			error = ErrorData(ex);
 		}
 		// if we cannot resolve parameters we postpone binding until the macro function is used
-		if (error.Type() != ExceptionType::PARAMETER_NOT_RESOLVED) {
+		if (error.HasError() && error.Type() != ExceptionType::PARAMETER_NOT_RESOLVED) {
 			error.Throw();
 		}
 	}
