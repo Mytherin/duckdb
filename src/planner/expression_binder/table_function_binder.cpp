@@ -20,9 +20,13 @@ BindResult TableFunctionBinder::BindColumnReference(unique_ptr<ParsedExpression>
 	// try binding as a lambda parameter
 	auto &col_ref = expr_ptr->Cast<ColumnRefExpression>();
 	if (!col_ref.IsQualified()) {
-		auto lambda_ref = LambdaRefExpression::FindMatchingBinding(lambda_bindings, col_ref.GetName());
+		auto column_name = col_ref.GetName();
+		auto lambda_ref = LambdaRefExpression::FindMatchingBinding(lambda_bindings, column_name);
 		if (lambda_ref) {
 			return BindLambdaReference(lambda_ref->Cast<LambdaRefExpression>(), depth);
+		}
+		if (binder.macro_binding && binder.macro_binding->HasMatchingBinding(column_name)) {
+			throw ParameterNotResolvedException();
 		}
 	}
 	auto column_names = col_ref.column_names;
