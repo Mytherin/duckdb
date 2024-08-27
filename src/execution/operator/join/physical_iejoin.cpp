@@ -11,8 +11,7 @@
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
-
-#include <thread>
+#include "duckdb/common/thread.hpp"
 
 namespace duckdb {
 
@@ -912,6 +911,10 @@ public:
 	}
 
 	double GetProgress() const {
+		lock_guard<mutex> initializing(lock);
+		if (!initialized) {
+			return 0;
+		}
 		auto &left_table = *gsink.tables[0];
 		auto &right_table = *gsink.tables[1];
 
@@ -931,12 +934,12 @@ public:
 	const PhysicalIEJoin &op;
 	IEJoinGlobalState &gsink;
 
-	mutex lock;
+	mutable mutex lock;
 	bool initialized;
 
 	// Join queue state
-	std::atomic<size_t> next_pair;
-	std::atomic<size_t> completed;
+	atomic<size_t> next_pair;
+	atomic<size_t> completed;
 
 	// Block base row number
 	vector<idx_t> left_bases;
@@ -944,10 +947,10 @@ public:
 
 	// Outer joins
 	idx_t left_outers;
-	std::atomic<idx_t> next_left;
+	atomic<idx_t> next_left;
 
 	idx_t right_outers;
-	std::atomic<idx_t> next_right;
+	atomic<idx_t> next_right;
 };
 
 unique_ptr<GlobalSourceState> PhysicalIEJoin::GetGlobalSourceState(ClientContext &context) const {
