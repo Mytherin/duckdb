@@ -71,7 +71,7 @@ drop table integers;
 statement error
 select my_macro2(5);
 ----
-Catalog Error: Table with name integers does not exist!
+Table with name integers does not exist
 
 statement ok
 Create table t1 (a int, b int);
