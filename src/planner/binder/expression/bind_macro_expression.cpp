@@ -105,7 +105,6 @@ BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacro
 	vector<unique_ptr<ParsedExpression>> positionals;
 	unordered_map<string, unique_ptr<ParsedExpression>> defaults;
 
-	auto macro_location = function.query_location;
 	auto bind_result =
 	    MacroFunction::BindMacroFunction(macro_func.macros, macro_func.name, function, positionals, defaults);
 	if (!bind_result.error.empty()) {
@@ -146,19 +145,7 @@ BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacro
 	ReplaceMacroParameters(expr, lambda_params);
 
 	// bind the unfolded macro
-	BindResult result;
-	try {
-		result = BindExpression(expr, depth);
-	} catch (std::exception &ex) {
-		result = BindResult(ErrorData(ex));
-	}
-	if (result.HasError()) {
-		// if there is an error while binding inside the macro we prepend the name of the macro function as well
-		auto prepended_msg = StringUtil::Format("Error while binding macro \"%s\": ", macro_func.name);
-		result.error.PrependError(prepended_msg);
-		result.error.AddQueryLocation(macro_location);
-	}
-	return result;
+	return BindExpression(expr, depth);
 }
 
 } // namespace duckdb

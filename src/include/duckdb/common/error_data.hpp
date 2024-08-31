@@ -27,8 +27,6 @@ public:
 	DUCKDB_API explicit ErrorData(const string &raw_message);
 
 public:
-	//! Create an exception from the error (with optional prepended message)
-	DUCKDB_API Exception CreateException(const string &prepended_message = "") const;
 	//! Throw the error
 	[[noreturn]] DUCKDB_API void Throw(const string &prepended_message = "") const;
 	//! Get the internal exception type of the error
@@ -41,9 +39,6 @@ public:
 		return raw_message;
 	}
 	DUCKDB_API bool operator==(const ErrorData &other) const;
-
-	//! Prepend an error message
-	DUCKDB_API void PrependError(const string &error);
 
 	inline bool HasError() const {
 		return initialized;

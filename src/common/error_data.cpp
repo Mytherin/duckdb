@@ -68,18 +68,14 @@ string ErrorData::ConstructFinalMessage() const {
 	return error;
 }
 
-Exception ErrorData::CreateException(const string &prepended_message) const {
+void ErrorData::Throw(const string &prepended_message) const {
 	D_ASSERT(initialized);
 	if (!prepended_message.empty()) {
 		string new_message = prepended_message + raw_message;
-		return Exception(type, new_message, extra_info);
+		throw Exception(type, new_message, extra_info);
 	} else {
-		return Exception(type, raw_message, extra_info);
+		throw Exception(type, raw_message, extra_info);
 	}
-}
-
-void ErrorData::Throw(const string &prepended_message) const {
-	throw CreateException(prepended_message);
 }
 
 const ExceptionType &ErrorData::Type() const {
@@ -95,11 +91,6 @@ bool ErrorData::operator==(const ErrorData &other) const {
 		return false;
 	}
 	return raw_message == other.raw_message;
-}
-
-void ErrorData::PrependError(const string &prepended_message) {
-	raw_message = prepended_message + raw_message;
-	final_message = ConstructFinalMessage();
 }
 
 void ErrorData::ConvertErrorToJSON() {

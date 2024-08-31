@@ -344,10 +344,3 @@ where function_name like 'zz%'
 and macro_definition like '%macro_parameters%';
 ----
 
-statement ok
-CREATE MACRO custom_div(a, b) AS a / b;
-
-statement error
-SELECT custom_div(date '1992-01-01', 3)
-----
-Error while binding macro "custom_div"
