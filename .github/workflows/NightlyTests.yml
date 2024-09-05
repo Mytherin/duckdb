@@ -1023,3 +1023,36 @@ jobs:
         python3 scripts/get_test_list.py --file-contains 'require httpfs' --list '"*"' > test.list
         python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest '-f test.list'
         python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest '[secret]'
+
+  linux-debug:
+    name: Chunk Verification
+    runs-on: ubuntu-20.04
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      TREAT_WARNINGS_AS_ERRORS: 1
+      CHUNK_VERIFY: 1
+      GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+
+    - name: Build
+      shell: bash
+      run:  make debug
+
+    - name: Test
+      shell: bash
+      run: make unittestci

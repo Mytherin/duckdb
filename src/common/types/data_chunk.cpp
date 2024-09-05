@@ -350,7 +350,7 @@ void DataChunk::Hash(vector<idx_t> &column_ids, Vector &result) {
 }
 
 void DataChunk::Verify() {
-#ifdef DEBUG
+#ifdef DUCKDB_CHUNK_VERIFY
 	D_ASSERT(size() <= capacity);
 
 	// verify that all vectors in this chunk have the chunk selection vector
