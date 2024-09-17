@@ -470,6 +470,53 @@ void RowGroupCollection::RevertAppendInternal(idx_t start_row) {
 	segment.RevertAppend(start_row);
 }
 
+void RowGroupCollection::CompactFinalRowGroup(TransactionData transaction_data) {
+	auto l = row_groups->Lock();
+	auto segment_count = static_cast<int64_t>(row_groups->GetSegmentCount(l));
+	if (segment_count < 2) {
+		throw InternalException("CompactFinalRowGroup requires at least two row groups");
+	}
+	auto target_row_group = row_groups->GetSegmentByIndex(l, segment_count - 2);
+	auto last_row_group = row_groups->GetSegmentByIndex(l, segment_count - 1);
+	{
+		if (last_row_group->count > Storage::ROW_GROUP_SIZE / 2) {
+			throw InternalException("Attempting to compact a row group with size %d (> half row group size)", last_row_group->count.load());
+		}
+		// scan the last row group and append it to the second-to-last row group
+		DataChunk scan_chunk;
+		scan_chunk.Initialize(Allocator::DefaultAllocator(), types);
+		vector<column_t> column_ids;
+		column_ids.reserve(types.size());
+		for (idx_t i = 0; i < types.size(); i++) {
+			column_ids.push_back(i);
+		}
+		TableScanState scan_state;
+		scan_state.Initialize(column_ids);
+		CollectionScanState state(scan_state);
+		state.Initialize(GetTypes());
+		state.max_row = last_row_group->start + last_row_group->count;
+
+		TableAppendState table_append_state;
+		RowGroupAppendState append_state(table_append_state);
+
+		target_row_group->InitializeAppend(append_state);
+
+		last_row_group->InitializeScan(state);
+		while(true) {
+			last_row_group->Scan(transaction_data, state, scan_chunk);
+			if (scan_chunk.size() == 0) {
+				break;
+			}
+			target_row_group->Append(append_state, scan_chunk, scan_chunk.size());
+			scan_chunk.Reset();
+		}
+		target_row_group->AppendVersionInfo(transaction_data, last_row_group->count);
+	}
+
+	// finally remove the last row group
+	row_groups->EraseSegments(l, static_cast<idx_t>(segment_count - 2));
+}
+
 void RowGroupCollection::CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count) {
 	auto row_group = row_groups->GetSegment(start);
 	D_ASSERT(row_group);

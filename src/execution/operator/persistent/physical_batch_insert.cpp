@@ -149,7 +149,7 @@ public:
 	                                                vector<RowGroupBatchEntry> merge_collections,
 	                                                OptimisticDataWriter &writer);
 	void AddCollection(ClientContext &context, idx_t batch_index, idx_t min_batch_index,
-	                   unique_ptr<RowGroupCollection> current_collection,
+	                   unique_ptr<RowGroupCollection> current_collection, bool has_unflushed_row_group = false,
 	                   optional_ptr<OptimisticDataWriter> writer = nullptr);
 
 	idx_t MaxThreads(idx_t source_max_threads) override {
@@ -175,6 +175,8 @@ public:
 	unique_ptr<RowGroupCollection> current_collection;
 	optional_ptr<OptimisticDataWriter> writer;
 	unique_ptr<ConstraintState> constraint_state;
+	idx_t collection_count = 0;
+	bool has_unflushed_row_group = false;
 
 	void CreateNewCollection(DuckTableEntry &table, const vector<LogicalType> &insert_types) {
 		auto table_info = table.GetStorage().GetDataTableInfo();
@@ -183,6 +185,8 @@ public:
 		                                                   NumericCast<idx_t>(MAX_ROW_ID));
 		current_collection->InitializeEmpty();
 		current_collection->InitializeAppend(current_append_state);
+		collection_count = 0;
+		has_unflushed_row_group = false;
 	}
 };
 
@@ -339,11 +343,14 @@ unique_ptr<RowGroupCollection> BatchInsertGlobalState::MergeCollections(ClientCo
 }
 
 void BatchInsertGlobalState::AddCollection(ClientContext &context, idx_t batch_index, idx_t min_batch_index,
-                                           unique_ptr<RowGroupCollection> current_collection,
+                                           unique_ptr<RowGroupCollection> current_collection, bool has_unflushed_row_group,
                                            optional_ptr<OptimisticDataWriter> writer) {
 	if (batch_index < min_batch_index) {
 		throw InternalException("Batch index of the added collection (%llu) is smaller than the min batch index (%llu)",
 		                        batch_index, min_batch_index);
+	}
+	if (has_unflushed_row_group) {
+		current_collection->CompactFinalRowGroup(TransactionData(0, 0));
 	}
 	auto new_count = current_collection->GetTotalRows();
 	auto batch_type = new_count < Storage::ROW_GROUP_SIZE ? RowGroupBatchType::NOT_FLUSHED : RowGroupBatchType::FLUSHED;
@@ -437,7 +444,7 @@ SinkNextBatchType PhysicalBatchInsert::NextBatch(ExecutionContext &context, Oper
 		TransactionData tdata(0, 0);
 		lstate.current_collection->FinalizeAppend(tdata, lstate.current_append_state);
 		gstate.AddCollection(context.client, lstate.current_index, lstate.partition_info.min_batch_index.GetIndex(),
-		                     std::move(lstate.current_collection), lstate.writer);
+		                     std::move(lstate.current_collection), lstate.has_unflushed_row_group, lstate.writer);
 
 		bool any_unblocked;
 		{
@@ -507,10 +514,16 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, DataChunk &c
 	}
 	table.GetStorage().VerifyAppendConstraints(*lstate.constraint_state, context.client, lstate.insert_chunk);
 
-	auto new_row_group = lstate.current_collection->Append(lstate.insert_chunk, lstate.current_append_state);
+	lstate.collection_count += lstate.insert_chunk.size();
+	bool new_row_group = lstate.current_collection->Append(lstate.insert_chunk, lstate.current_append_state);
 	if (new_row_group) {
-		// we have already written to disk - flush the next row group as well
+		lstate.has_unflushed_row_group = true;
+	}
+	if (lstate.has_unflushed_row_group && lstate.collection_count % Storage::ROW_GROUP_SIZE >= Storage::ROW_GROUP_SIZE / 2) {
+		// we have an unflushed row group, and we have written more than half a row group since writing that row group
+		// flush the unflushed row group
 		lstate.writer->WriteNewRowGroup(*lstate.current_collection);
+		lstate.has_unflushed_row_group = false;
 	}
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -533,7 +546,7 @@ SinkCombineResultType PhysicalBatchInsert::Combine(ExecutionContext &context, Op
 		lstate.current_collection->FinalizeAppend(tdata, lstate.current_append_state);
 		if (lstate.current_collection->GetTotalRows() > 0) {
 			gstate.AddCollection(context.client, lstate.current_index, lstate.partition_info.min_batch_index.GetIndex(),
-			                     std::move(lstate.current_collection));
+			                     std::move(lstate.current_collection), lstate.has_unflushed_row_group);
 		}
 	}
 	if (lstate.writer) {

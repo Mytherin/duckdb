@@ -1,0 +1,38 @@
+# name: test/sql/storage/optimistic_write/unaligned_optimistic_write.test_slow
+# description: Test optimistic write with poorly aligned row groups
+# group: [optimistic_write]
+
+require parquet
+
+# load the DB from disk
+load __TEST_DIR__/optimistic_write_unaligned.db
+
+# disable vacuuming
+statement ok
+SET max_vacuum_tasks=0
+
+# DuckDB's row group size = 122880
+# write row groups that are *slightly* larger than that
+statement ok
+COPY (FROM range(1000000) t(i)) TO '__TEST_DIR__/unaligned.parquet' (ROW_GROUP_SIZE 122980)
+
+statement ok
+CREATE TABLE test (a INTEGER);
+
+statement ok
+INSERT INTO test FROM '__TEST_DIR__/unaligned.parquet'
+
+mode output_result
+
+query I
+FROM pragma_storage_info('test')
+----
+
+
+query I
+SELECT avg(max_count) FROM (SELECT MAX(count) AS max_count FROM pragma_storage_info('test') GROUP BY row_group_id)
+----
+
+query IIII
+SELECT MIN(i), MAX(i), AVG(i), COUNT(*) FROM test
+----

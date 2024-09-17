@@ -83,6 +83,7 @@ public:
 	void CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count);
 	void RevertAppendInternal(idx_t start_row);
 	void CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count);
+	void CompactFinalRowGroup(TransactionData transaction_data);
 
 	void MergeStorage(RowGroupCollection &data, optional_ptr<DataTable> table,
 	                  optional_ptr<StorageCommitState> commit_state);
