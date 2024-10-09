@@ -6,9 +6,82 @@
 
 #include <chrono>
 #include <thread>
+#include <iostream>
 
 using namespace duckdb;
 using namespace std;
+
+TEST_CASE("duckdb_repro", "") {
+	auto config = duckdb::make_uniq<duckdb::DBConfig>();
+	config->options.checkpoint_wal_size = 1 << 20;
+	config->options.checkpoint_on_shutdown = false;
+	config->options.debug_skip_checkpoint_on_commit = true;
+	config->options.trim_free_blocks = true;
+
+	std::string path = "/tmp/duckdb3.db";
+	DeleteDatabase(path);
+	{
+		// duckdb::DuckDB db = duckdb::DuckDB(path, config.get());
+		// duckdb::Connection con(db);
+		duckdb::DuckDB db = duckdb::DuckDB("", config.get());
+		duckdb::Connection con(db);
+		REQUIRE_NO_FAIL(con.Query("ATTACH '" + path + "' AS main_db"));
+		REQUIRE_NO_FAIL(con.Query("use main_db"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE IF NOT EXISTS t(i INTEGER)"));
+	}
+
+	{
+		// duckdb::DuckDB db = duckdb::DuckDB(path, config.get());
+		// duckdb::Connection con(db);
+		duckdb::DuckDB db = duckdb::DuckDB("", config.get());
+		duckdb::Connection con(db);
+		REQUIRE_NO_FAIL(con.Query("ATTACH '" + path + "' AS main_db"));
+		REQUIRE_NO_FAIL(con.Query("use main_db"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE IF NOT EXISTS t(i INTEGER)"));
+
+		auto r = con.Query("SELECT bit_xor(hash(i)) FROM t");
+		std::cout << "Checksum A=" << r->GetValue(0, 0).ToString() << std::endl;
+
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t SELECT * FROM RANGE(0, 1000 * 1000)"));
+
+		r = con.Query("SELECT bit_xor(hash(i)) FROM t");
+		std::cout << "Checksum B=" << r->GetValue(0, 0).ToString() << std::endl;
+	}
+
+	{
+		// duckdb::DuckDB db = duckdb::DuckDB(path, config.get());
+		// duckdb::Connection con(db);
+		duckdb::DuckDB db = duckdb::DuckDB("", config.get());
+		duckdb::Connection con(db);
+		REQUIRE_NO_FAIL(con.Query("ATTACH '" + path + "' AS main_db"));
+		REQUIRE_NO_FAIL(con.Query("use main_db"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE IF NOT EXISTS t(i INTEGER)"));
+
+		auto r = con.Query("SELECT bit_xor(hash(i)) FROM t");
+		std::cout << "Checksum C=" << r->GetValue(0, 0).ToString() << std::endl;
+
+		REQUIRE_NO_FAIL(con.Query("DELETE FROM t WHERE i > 500 * 1000 AND i < 1000 * 1000"));
+
+		r = con.Query("SELECT bit_xor(hash(i)) FROM t");
+		std::cout << "Checksum D=" << r->GetValue(0, 0).ToString() << std::endl;
+	}
+
+	{
+		config->options.debug_skip_checkpoint_on_commit = false;
+
+		// duckdb::DuckDB db = duckdb::DuckDB(path, config.get());
+		// duckdb::Connection con(db);
+		duckdb::DuckDB db = duckdb::DuckDB("", config.get());
+		duckdb::Connection con(db);
+		REQUIRE_NO_FAIL(con.Query("ATTACH '" + path + "' AS main_db"));
+		REQUIRE_NO_FAIL(con.Query("use main_db"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE IF NOT EXISTS t(i INTEGER)"));
+
+                 // Am seeing a SIGSEV/SIGBUS here
+		auto r = con.Query("SELECT bit_xor(hash(i)) FROM t");
+		std::cout << "Checksum E="<< r->GetValue(0, 0).ToString() << std::endl;
+	}
+}
 
 TEST_CASE("Test comment in CPP API", "[api]") {
 	DuckDB db(nullptr);
