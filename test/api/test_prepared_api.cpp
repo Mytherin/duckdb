@@ -496,3 +496,39 @@ TEST_CASE("Test prepared statements with SET", "[api]") {
 	// this works
 	REQUIRE_NO_FAIL(prepare->Execute("NULLS FIRST"));
 }
+
+TEST_CASE("Test log prepared statements", "[api]") {
+	duckdb::unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto query_log = TestCreatePath("test_log_prepared.txt");
+	con.Query("SET log_query_path='" + query_log + "'");
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE a (i INTEGER, j VARCHAR)"));
+
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO a VALUES (42, 'xx')"));
+	auto prep = con.Prepare("INSERT INTO a VALUES (?, ?)");
+	result = prep->Execute(84, "yyy");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	prep = con.Prepare("SELECT * FROM a WHERE i=$1");
+	result = prep->Execute(84);
+	REQUIRE(CHECK_COLUMN(result, 0, {84}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"yyy"}));
+
+	prep = con.Prepare("UPDATE a SET i=i+$1");
+	result = prep->Execute(1);
+	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+
+	prep = con.Prepare("DELETE FROM a WHERE i=?");
+	result = prep->Execute(85);
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	result = con.Query("SELECT * FROM read_csv('" + query_log + "')");
+	for(auto &row : *result) {
+		auto logged_query = row.GetValue<string>(0);
+		if (StringUtil::Contains(logged_query, "?")) {
+			FAIL("Fail in logging prepared statement parameter - line \"" + logged_query + "\" still contains a prepared statement parameter");
+		}
+	}
+}

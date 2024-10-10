@@ -42,6 +42,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 
 namespace duckdb {
 
@@ -179,7 +180,8 @@ unique_ptr<T> ClientContext::ErrorResult(ErrorData error, const string &query) {
 	return make_uniq<T>(std::move(error));
 }
 
-void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &query) {
+void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &query,
+                                       optional_ptr<SQLStatement> statement, const PendingQueryParameters &parameters) {
 	// check if we are on AutoCommit. In this case we should start a transaction
 	D_ASSERT(!active_query);
 	auto &db_inst = DatabaseInstance::GetDatabase(*this);
@@ -191,7 +193,7 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 		transaction.BeginTransaction();
 	}
 	transaction.SetActiveQuery(db->GetDatabaseManager().GetNewQueryNumber());
-	LogQueryInternal(lock, query);
+	LogQueryInternal(lock, query, statement, parameters);
 	active_query->query = query;
 
 	query_progress.Initialize();
@@ -306,7 +308,7 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 	return result;
 }
 
-static bool IsExplainAnalyze(SQLStatement *statement) {
+static bool IsExplainAnalyze(optional_ptr<SQLStatement> statement) {
 	if (!statement) {
 		return false;
 	}
@@ -832,8 +834,9 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
     shared_ptr<PreparedStatementData> &prepared, const PendingQueryParameters &parameters) {
 	unique_ptr<PendingQueryResult> pending;
 
+	auto sql_statement = statement ? statement.get() : prepared->unbound_statement.get();
 	try {
-		BeginQueryInternal(lock, query);
+		BeginQueryInternal(lock, query, sql_statement, parameters);
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		if (Exception::InvalidatesDatabase(error.Type())) {
@@ -845,7 +848,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 	}
 	// start the profiler
 	auto &profiler = QueryProfiler::Get(*this);
-	profiler.StartQuery(query, IsExplainAnalyze(statement ? statement.get() : prepared->unbound_statement.get()));
+	profiler.StartQuery(query, IsExplainAnalyze(sql_statement));
 
 	bool invalidate_query = true;
 	try {
@@ -878,7 +881,38 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 	return pending;
 }
 
-void ClientContext::LogQueryInternal(ClientContextLock &, const string &query) {
+bool ReplaceParameters(SQLStatement &statement, const PendingQueryParameters &parameters) {
+	bool success = true;
+	ParsedExpressionIterator::EnumerateAllExpressions(statement, [&](unique_ptr<ParsedExpression> &child) {
+		if (child->type != ExpressionType::VALUE_PARAMETER) {
+			return;
+		}
+		auto &parameter = child->Cast<ParameterExpression>();
+		auto entry = parameters.parameters->find(parameter.identifier);
+		if (entry == parameters.parameters->end()) {
+			success = false;
+			return;
+		}
+		child = make_uniq<ConstantExpression>(entry->second.GetValue());
+	});
+	return success;
+}
+
+bool TryReplaceParameters(optional_ptr<SQLStatement> statement, const PendingQueryParameters &parameters,
+                          string &result) {
+	if (!statement || !parameters.parameters || parameters.parameters->empty()) {
+		return false;
+	}
+	auto copied_stmt = statement->Copy();
+	if (!ReplaceParameters(*copied_stmt, parameters)) {
+		return false;
+	}
+	result = copied_stmt->ToString() + ";";
+	return true;
+}
+
+void ClientContext::LogQueryInternal(ClientContextLock &, const string &query, optional_ptr<SQLStatement> statement,
+                                     const PendingQueryParameters &parameters) {
 	if (!client_data->log_query_writer) {
 #ifdef DUCKDB_FORCE_QUERY_LOG
 		try {
@@ -893,9 +927,17 @@ void ClientContext::LogQueryInternal(ClientContextLock &, const string &query) {
 		return;
 #endif
 	}
-	// log query path is set: log the query
-	client_data->log_query_writer->WriteData(const_data_ptr_cast(query.c_str()), query.size());
+	string new_query;
+	// try to replace parameters within the query
+	if (TryReplaceParameters(statement, parameters, new_query)) {
+		// write the new query
+		client_data->log_query_writer->WriteData(const_data_ptr_cast(new_query.c_str()), new_query.size());
+	} else {
+		// no parameters - log the query directly
+		client_data->log_query_writer->WriteData(const_data_ptr_cast(query.c_str()), query.size());
+	}
 	client_data->log_query_writer->WriteData(const_data_ptr_cast("\n"), 1);
+	// log query path is set: log the query
 	client_data->log_query_writer->Flush();
 	client_data->log_query_writer->Sync();
 }

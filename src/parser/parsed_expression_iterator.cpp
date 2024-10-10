@@ -7,6 +7,7 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/query_node/set_operation_node.hpp"
 #include "duckdb/parser/tableref/list.hpp"
+#include "duckdb/parser/statement/list.hpp"
 
 namespace duckdb {
 
@@ -307,6 +308,66 @@ void ParsedExpressionIterator::EnumerateQueryNodeChildren(
 
 	for (auto &kv : node.cte_map.map) {
 		EnumerateQueryNodeChildren(*kv.second->query->node, expr_callback, ref_callback);
+	}
+}
+
+void ParsedExpressionIterator::EnumerateAllExpressions(
+    unique_ptr<ParsedExpression> &expr, const std::function<void(unique_ptr<ParsedExpression> &child)> &expr_callback) {
+	expr_callback(expr);
+	if (expr->type == ExpressionType::SUBQUERY) {
+		auto &subquery = expr->Cast<SubqueryExpression>();
+		EnumerateAllExpressions(*subquery.subquery->node, expr_callback);
+	}
+	EnumerateChildren(*expr,
+	                  [&](unique_ptr<ParsedExpression> &child) { EnumerateAllExpressions(child, expr_callback); });
+}
+void ParsedExpressionIterator::EnumerateAllExpressions(
+    QueryNode &node, const std::function<void(unique_ptr<ParsedExpression> &child)> &expr_callback) {
+	EnumerateQueryNodeChildren(
+	    node, [&](unique_ptr<ParsedExpression> &child) { EnumerateAllExpressions(child, expr_callback); });
+}
+
+void ParsedExpressionIterator::EnumerateAllExpressions(
+    SQLStatement &stmt, const std::function<void(unique_ptr<ParsedExpression> &child)> &expr_callback) {
+	switch (stmt.type) {
+	case StatementType::SELECT_STATEMENT: {
+		auto &select = stmt.Cast<SelectStatement>();
+		EnumerateAllExpressions(*select.node, expr_callback);
+		break;
+	}
+	case StatementType::INSERT_STATEMENT: {
+		auto &insert = stmt.Cast<InsertStatement>();
+		EnumerateAllExpressions(*insert.select_statement, expr_callback);
+		for (auto &cte : insert.cte_map.map) {
+			EnumerateAllExpressions(*cte.second->query, expr_callback);
+		}
+		break;
+	}
+	case StatementType::DELETE_STATEMENT: {
+		auto &delete_stmt = stmt.Cast<DeleteStatement>();
+		if (delete_stmt.condition) {
+			EnumerateAllExpressions(delete_stmt.condition, expr_callback);
+		}
+		for (auto &cte : delete_stmt.cte_map.map) {
+			EnumerateAllExpressions(*cte.second->query, expr_callback);
+		}
+		break;
+	}
+	case StatementType::UPDATE_STATEMENT: {
+		auto &update = stmt.Cast<UpdateStatement>();
+		if (update.set_info->condition) {
+			EnumerateAllExpressions(update.set_info->condition, expr_callback);
+		}
+		for (auto &set_expr : update.set_info->expressions) {
+			EnumerateAllExpressions(set_expr, expr_callback);
+		}
+		for (auto &cte : update.cte_map.map) {
+			EnumerateAllExpressions(*cte.second->query, expr_callback);
+		}
+		break;
+	}
+	default:
+		break;
 	}
 }
 

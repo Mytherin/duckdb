@@ -241,13 +241,15 @@ private:
 	                                             unique_ptr<SQLStatement> statement, bool allow_stream_result,
 	                                             bool verify = true);
 	unique_ptr<PreparedStatement> PrepareInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement);
-	void LogQueryInternal(ClientContextLock &lock, const string &query);
+	void LogQueryInternal(ClientContextLock &lock, const string &query, optional_ptr<SQLStatement> statement,
+	                      const PendingQueryParameters &parameters);
 
 	unique_ptr<QueryResult> FetchResultInternal(ClientContextLock &lock, PendingQueryResult &pending);
 
 	unique_ptr<ClientContextLock> LockContext();
 
-	void BeginQueryInternal(ClientContextLock &lock, const string &query);
+	void BeginQueryInternal(ClientContextLock &lock, const string &query, optional_ptr<SQLStatement> statement,
+	                        const PendingQueryParameters &parameters);
 	ErrorData EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction,
 	                           optional_ptr<ErrorData> previous_error);
 

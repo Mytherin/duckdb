@@ -35,6 +35,15 @@ public:
 	EnumerateQueryNodeModifiers(QueryNode &node,
 	                            const std::function<void(unique_ptr<ParsedExpression> &child)> &expr_callback);
 
+	//! Recursively enumerate ALL child expressions
+	static void EnumerateAllExpressions(QueryNode &node,
+	                                    const std::function<void(unique_ptr<ParsedExpression> &child)> &expr_callback);
+	//! Recursively enumerate ALL child expressions
+	static void EnumerateAllExpressions(unique_ptr<ParsedExpression> &child,
+	                                    const std::function<void(unique_ptr<ParsedExpression> &child)> &expr_callback);
+	static void EnumerateAllExpressions(SQLStatement &stmt,
+	                                    const std::function<void(unique_ptr<ParsedExpression> &child)> &expr_callback);
+
 private:
 	static void DefaultRefCallback(TableRef &ref) {}; // NOP
 };
