@@ -40,6 +40,7 @@
 #include "duckdb/common/enums/optimizer_type.hpp"
 #include "duckdb/common/enums/order_preservation_type.hpp"
 #include "duckdb/common/enums/order_type.hpp"
+#include "duckdb/common/enums/ordinality.hpp"
 #include "duckdb/common/enums/output_type.hpp"
 #include "duckdb/common/enums/pending_execution_result.hpp"
 #include "duckdb/common/enums/physical_operator_type.hpp"
@@ -5085,6 +5086,29 @@ OrderType EnumUtil::FromString<OrderType>(const char *value) {
 		return OrderType::DESCENDING;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<OrderType>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<Ordinality>(Ordinality value) {
+	switch(value) {
+	case Ordinality::NO_ORDINALITY:
+		return "NO_ORDINALITY";
+	case Ordinality::WITH_ORDINALITY:
+		return "WITH_ORDINALITY";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<Ordinality>", value));
+	}
+}
+
+template<>
+Ordinality EnumUtil::FromString<Ordinality>(const char *value) {
+	if (StringUtil::Equals(value, "NO_ORDINALITY")) {
+		return Ordinality::NO_ORDINALITY;
+	}
+	if (StringUtil::Equals(value, "WITH_ORDINALITY")) {
+		return Ordinality::WITH_ORDINALITY;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<Ordinality>", value));
 }
 
 template<>

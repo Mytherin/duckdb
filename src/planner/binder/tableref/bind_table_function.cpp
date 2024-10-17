@@ -20,6 +20,8 @@
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/function/table/read_csv.hpp"
+#include "duckdb/planner/expression/list.hpp"
+#include "duckdb/planner/operator/list.hpp"
 
 namespace duckdb {
 
@@ -230,17 +232,24 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 			return_names[i] = "C" + to_string(i);
 		}
 	}
+	if (ref.ordinality == Ordinality::WITH_ORDINALITY) {
+		return_types.push_back(LogicalType::UBIGINT);
+		return_names.push_back("ordinality");
+	}
 
 	auto get = make_uniq<LogicalGet>(bind_index, table_function, std::move(bind_data), return_types, return_names);
 	get->parameters = parameters;
 	get->named_parameters = named_parameters;
 	get->input_table_types = input_table_types;
 	get->input_table_names = input_table_names;
+	get->ordinality = ref.ordinality;
+	
 	if (table_function.in_out_function && !table_function.projection_pushdown) {
 		for (idx_t i = 0; i < return_types.size(); i++) {
 			get->AddColumnId(i);
 		}
 	}
+
 	// now add the table function to the bind context so its columns can be bound
 	bind_context.AddTableFunction(bind_index, function_name, return_names, return_types, get->GetMutableColumnIds(),
 	                              get->GetTable().get());
@@ -329,6 +338,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 			input_table_names.push_back(string());
 		}
 	}
+
 	if (!parameters.empty()) {
 		// cast the parameters to the type of the function
 		for (idx_t i = 0; i < arguments.size(); i++) {
@@ -351,11 +361,14 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 			}
 		}
 	}
-
 	auto get = BindTableFunctionInternal(table_function, ref, std::move(parameters), std::move(named_parameters),
 	                                     std::move(input_table_types), std::move(input_table_names));
+
 	auto table_function_ref = make_uniq<BoundTableFunction>(std::move(get));
-	table_function_ref->subquery = std::move(subquery);
+	if (subquery) {
+		table_function_ref->subquery = std::move(subquery);
+	}
+
 	return std::move(table_function_ref);
 }
 

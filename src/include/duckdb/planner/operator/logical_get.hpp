@@ -12,6 +12,7 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/extra_operator_info.hpp"
+#include "duckdb/common/enums/ordinality.hpp"
 
 namespace duckdb {
 class DynamicTableFilterSet;
@@ -54,6 +55,8 @@ public:
 	ExtraOperatorInfo extra_info;
 	//! Contains a reference to dynamically generated table filters (through e.g. a join up in the tree)
 	shared_ptr<DynamicTableFilterSet> dynamic_filters;
+	// for WITH ORDINALITY
+	Ordinality ordinality = Ordinality::NO_ORDINALITY;
 
 	string GetName() const override;
 	InsertionOrderPreservingMap<string> ParamsToString() const override;

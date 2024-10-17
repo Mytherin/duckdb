@@ -179,6 +179,7 @@ void LogicalGet::Serialize(Serializer &serializer) const {
 		serializer.WriteProperty(209, "input_table_names", input_table_names);
 	}
 	serializer.WriteProperty(210, "projected_input", projected_input);
+	serializer.WritePropertyWithDefault(211, "ordinality", ordinality, Ordinality::NO_ORDINALITY);
 }
 
 unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) {
@@ -232,6 +233,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	}
 	result->bind_data = std::move(bind_data);
 	deserializer.ReadProperty(210, "projected_input", result->projected_input);
+	deserializer.ReadPropertyWithExplicitDefault(211, "ordinality", result->ordinality, Ordinality::NO_ORDINALITY);
 	return std::move(result);
 }
 
