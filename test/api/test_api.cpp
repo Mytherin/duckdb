@@ -3,12 +3,182 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/main/connection_manager.hpp"
+#include "duckdb/common/random_engine.hpp"
+
+#include <catch.hpp>
+#include <iostream>
+#include <variant>
 
 #include <chrono>
 #include <thread>
 
 using namespace duckdb;
 using namespace std;
+
+enum ActionType {
+	ENABLE_OPTIMISTIC_DATA_WRITES = 0,
+	DISABLE_OPTIMISTIC_DATA_WRITES = 1,
+	SMALL_WRITE = 2,
+	LARGE_WRITE = 3,
+	UPDATE = 4
+};
+
+struct OperationWithCondition {
+	std::string condition;
+};
+
+struct Action {
+	ActionType type;
+	OperationWithCondition options;
+};
+
+inline duckdb::DuckDB open_ddb(duckdb::DBConfig *config_in = nullptr) {
+	duckdb::DuckDB db = duckdb::DuckDB("", config_in);
+	return db;
+}
+
+template<typename Con>
+void run(Con& con, const std::string& query) {
+	std::cout << "Query: " << query << std::endl;
+	auto qr = con.Query(query);
+	if (qr->HasError()) {
+		std::cout << "Failed with " << qr->GetError() << std::endl;
+	}
+	REQUIRE(!qr->HasError());
+}
+
+template<typename Con>
+std::string compute_checksum(Con& con) {
+	auto qr = con.Query("SELECT bit_xor(hash(i)) FROM t");
+	if (qr->HasError()) {
+		std::cout << "Checksum failed with " << qr->GetError() << std::endl;
+	}
+	REQUIRE(!qr->HasError());
+	return qr->GetValue(0, 0).ToString();
+}
+
+void optimistic_write_base(std::vector<Action> actions) {
+	auto config = make_uniq<duckdb::DBConfig>();
+	config->options.checkpoint_wal_size = 1 << 20;
+	config->options.checkpoint_on_shutdown = false;
+	config->options.debug_skip_checkpoint_on_commit = true;
+	config->options.trim_free_blocks = true;
+	config->options.checkpoint_on_shutdown = false;
+
+	std::string path = "/tmp/test.db";
+	auto wal_path = path + ".wal";
+	std::string checksum;
+
+	std::remove(path.c_str());
+
+	{
+		duckdb::DuckDB db = open_ddb(config.get());
+		duckdb::Connection con(db);
+
+		run(con, "ATTACH '" + path + "' AS main_db");
+		run(con, "use main_db;");
+		run(con, "CREATE TABLE IF NOT EXISTS t(i INTEGER)");
+
+		checksum = compute_checksum(con);
+	}
+
+	// Used to track appends
+	size_t counter_ = 0;
+	for (const auto &action : actions) {
+
+		// Re-attach the database. Check if the checksum still matches from the last iteration
+		duckdb::DuckDB db = open_ddb(config.get());
+		duckdb::Connection con(db);
+		run(con, "ATTACH '" + path + "' AS main_db");
+		run(con, "use main_db;");
+
+		REQUIRE(checksum == compute_checksum(con));
+
+		switch (action.type) {
+		case ActionType::ENABLE_OPTIMISTIC_DATA_WRITES:
+			std::cout << "debug_skip_checkpoint_on_commit=true" << std::endl;
+			config->options.debug_skip_checkpoint_on_commit = true;
+			break;
+		case ActionType::DISABLE_OPTIMISTIC_DATA_WRITES:
+			std::cout << "debug_skip_checkpoint_on_commit=false" << std::endl;
+			config->options.debug_skip_checkpoint_on_commit = false;
+			break;
+		case ActionType::SMALL_WRITE: {
+			run(con, "INSERT INTO t SELECT * FROM RANGE(" + std::to_string(counter_) + "," +
+			             std::to_string(counter_ + 100) + ")");
+			counter_ += 100;
+			break;
+		}
+		case ActionType::LARGE_WRITE:
+			run(con, "INSERT INTO t SELECT * FROM RANGE(" + std::to_string(counter_) + "," +
+			             std::to_string(counter_ + 1000000) + ")");
+			counter_ += 1000000;
+			break;
+		case ActionType::UPDATE:
+			run(con, "UPDATE t SET i = i * 2 WHERE " + action.options.condition);
+			break;
+		}
+
+		// Only compute the checksum if there is no fault injection
+		checksum = compute_checksum(con);
+	}
+}
+
+TEST_CASE("duckdb_optimistic_writes_fuzzed", "[fuse][ddb][optimistic]") {
+	// Use timestamp=now as the random seed
+	// auto now = std::chrono::steady_clock::now();
+	uint64_t seed = 193521334896739; // now.time_since_epoch().count();
+	duckdb::RandomEngine random_engine(seed);
+
+	std::cout << "Seeding test with now=" << seed << std::endl;
+	srand(seed);
+
+	bool checkpoint_allowed = true;
+	std::vector<Action> actions;
+
+	std::map<double, ActionType> pct_to_action =
+	    {
+	        {0.05, ActionType::DISABLE_OPTIMISTIC_DATA_WRITES},
+	        {0.1, ActionType::ENABLE_OPTIMISTIC_DATA_WRITES},
+	        {0.5, ActionType::LARGE_WRITE},
+	        {0.75, ActionType::SMALL_WRITE},
+	        {0.85, ActionType::UPDATE},
+	        // {0.95, ActionType::DELETE},
+	        // {1.0, ActionType::LARGE_WRITE_WITH_FAULT}
+	    };
+
+	size_t num_large_writes = 0;
+	for (int i = 0; i < 100; i++) {
+		double selection = random_engine.NextRandom(0, 1);
+		for (const auto &entry : pct_to_action) {
+			auto &prob = entry.first;
+			auto &type = entry.second;
+			if (selection > prob) {
+				continue;
+			}
+
+			if (type == ActionType::LARGE_WRITE) {
+				num_large_writes++;
+			}
+
+			if (type == ActionType::UPDATE) {
+				uint64_t row_estimate = num_large_writes * 1000000;
+				uint64_t offset = random_engine.NextRandom(0, row_estimate);
+				uint64_t length = random_engine.NextRandom(0, row_estimate - offset);
+				actions.push_back(
+				    {.type = type,
+				     .options = OperationWithCondition {.condition = "i > " + std::to_string(offset) + " and i < " +
+				                                                     std::to_string(offset + length)}});
+			} else {
+				actions.push_back({type});
+			}
+			break;
+		}
+	}
+	// Sanity check
+	// REQUIRE(actions.size() == 100);
+	optimistic_write_base(actions);
+}
 
 TEST_CASE("Test comment in CPP API", "[api]") {
 	DuckDB db(nullptr);
