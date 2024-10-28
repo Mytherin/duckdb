@@ -79,6 +79,18 @@ unique_ptr<BoundTableRef> Binder::BindWithReplacementScan(ClientContext &context
 	return nullptr;
 }
 
+vector<CatalogSearchEntry> Binder::GetSchemaSearchPath(const SchemaCatalogEntry &schema) {
+	vector<CatalogSearchEntry> result;
+	auto &catalog = schema.ParentCatalog();
+	auto &catalog_name = catalog.GetName();
+	auto &schema_name = schema.name;
+	result.emplace_back(catalog_name, schema_name);
+	if (schema_name != DEFAULT_SCHEMA) {
+		result.emplace_back(catalog.GetName(), DEFAULT_SCHEMA);
+	}
+	return result;
+}
+
 unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 	QueryErrorContext error_context(ref.query_location);
 	// CTEs and views are also referred to using BaseTableRefs, hence need to distinguish here
@@ -275,15 +287,8 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			view_names.push_back(view_catalog_entry.names[n]);
 		}
 		subquery.column_name_alias = BindContext::AliasColumnNames(ref.table_name, view_names, ref.column_name_alias);
-
 		// when binding a view, we always look into the catalog/schema where the view is stored first
-		vector<CatalogSearchEntry> view_search_path;
-		auto &catalog_name = view_catalog_entry.ParentCatalog().GetName();
-		auto &schema_name = view_catalog_entry.ParentSchema().name;
-		view_search_path.emplace_back(catalog_name, schema_name);
-		if (schema_name != DEFAULT_SCHEMA) {
-			view_search_path.emplace_back(view_catalog_entry.ParentCatalog().GetName(), DEFAULT_SCHEMA);
-		}
+		auto view_search_path = GetSchemaSearchPath(view_catalog_entry.ParentSchema());
 		view_binder->entry_retriever.SetSearchPath(std::move(view_search_path));
 		// bind the child subquery
 		view_binder->AddBoundView(view_catalog_entry);

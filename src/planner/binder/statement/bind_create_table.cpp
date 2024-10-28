@@ -244,7 +244,9 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 	}
 }
 
-void Binder::BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expression>> &bound_defaults) {
+void Binder::BindDefaultValues(const SchemaCatalogEntry &schema, const ColumnList &columns, vector<unique_ptr<Expression>> &bound_defaults) {
+	shared_ptr<Binder> default_binder;
+
 	for (auto &column : columns.Physical()) {
 		unique_ptr<Expression> bound_default;
 		if (column.HasDefaultValue()) {
@@ -254,9 +256,14 @@ void Binder::BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expr
 			if (default_copy->HasParameter()) {
 				throw BinderException("DEFAULT values cannot contain parameters");
 			}
-			ConstantBinder default_binder(*this, context, "DEFAULT value");
-			default_binder.target_type = column.Type();
-			bound_default = default_binder.Bind(default_copy);
+			if (!default_binder) {
+				auto table_search_path = GetSchemaSearchPath(schema);
+				default_binder = Binder::CreateBinder(context);
+				default_binder->entry_retriever.SetSearchPath(std::move(table_search_path));
+			}
+			ConstantBinder default_expr_binder(*default_binder, context, "DEFAULT value");
+			default_expr_binder.target_type = column.Type();
+			bound_default = default_expr_binder.Bind(default_copy);
 		} else {
 			// no default value specified: push a default value of constant null
 			bound_default = make_uniq<BoundConstantExpression>(Value(column.Type()));
@@ -358,7 +365,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		// bind any constraints
 		bound_constraints = BindNewConstraints(base.constraints, base.table, base.columns);
 		// bind the default values
-		BindDefaultValues(base.columns, bound_defaults);
+		BindDefaultValues(schema, base.columns, bound_defaults);
 	}
 	// extract dependencies from any default values or CHECK constraints
 	ExtractDependencies(*result, bound_defaults, bound_constraints);

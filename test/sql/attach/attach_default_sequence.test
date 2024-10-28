@@ -1,0 +1,27 @@
+# name: test/sql/attach/attach_default_sequence.test
+# description: Test ATTACH with a quoted database name
+# group: [attach]
+
+require noforcestorage
+
+statement ok
+attach '__TEST_DIR__/default_sequence.db' AS db1;
+
+statement ok
+CREATE SEQUENCE db1.seq;
+
+statement ok
+CREATE TABLE db1.test (a INTEGER DEFAULT nextval('seq'), b INTEGER, c INTEGER DEFAULT currval('seq'));
+
+statement ok
+INSERT INTO db1.test (b) VALUES (11);
+
+statement ok
+DETACH db1
+
+statement ok
+attach '__TEST_DIR__/default_sequence.db' AS mydb;
+
+statement ok
+INSERT INTO mydb.test (b) VALUES (11);
+
