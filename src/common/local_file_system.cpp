@@ -1073,6 +1073,18 @@ void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener
 	}
 }
 
+void LocalFileSystem::RemoveFileIfExists(const string &filename, optional_ptr<FileOpener> opener) {
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
+	if (!DeleteFileW(unicode_path.c_str())) {
+		DWORD errorMessageID = GetLastError();
+		if (errorMessageID == ERROR_FILE_NOT_FOUND) {
+			return;
+		}
+		auto error = LocalFileSystem::GetLastErrorAsString();
+		throw IOException("Failed to delete file \"%s\": %s", filename, error);
+	}
+}
+
 bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
                                 FileOpener *opener) {
 	string search_dir = JoinPath(directory, "*");

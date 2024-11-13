@@ -437,7 +437,7 @@ void FileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener> ope
 }
 
 void FileSystem::RemoveFileIfExists(const string &filename, optional_ptr<FileOpener> opener) {
-	if (!FileExists(filename, opener)) {
+	if (FileExists(filename, opener)) {
 		RemoveFile(filename, opener);
 	}
 }

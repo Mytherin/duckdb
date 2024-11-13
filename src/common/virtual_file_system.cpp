@@ -113,6 +113,10 @@ void VirtualFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpen
 	FindFileSystem(filename).RemoveFile(filename, opener);
 }
 
+void VirtualFileSystem::RemoveFileIfExists(const string &filename, optional_ptr<FileOpener> opener) {
+	FindFileSystem(filename).RemoveFileIfExists(filename, opener);
+}
+
 string VirtualFileSystem::PathSeparator(const string &path) {
 	return FindFileSystem(path).PathSeparator(path);
 }

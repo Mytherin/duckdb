@@ -52,6 +52,7 @@ public:
 
 	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener) override;
 	void RemoveFile(const string &filename, optional_ptr<FileOpener> opener) override;
+	void RemoveFileIfExists(const string &filename, optional_ptr<FileOpener> opener) override;
 
 	vector<string> Glob(const string &path, FileOpener *opener = nullptr) override;
 

@@ -117,6 +117,11 @@ public:
 		VerifyCanAccessFile(filename);
 		GetFileSystem().RemoveFile(filename, GetOpener());
 	}
+	void RemoveFileIfExists(const string &filename, optional_ptr<FileOpener> opener) override {
+		VerifyNoOpener(opener);
+		VerifyCanAccessFile(filename);
+		GetFileSystem().RemoveFileIfExists(filename, GetOpener());
+	}
 
 	string PathSeparator(const string &path) override {
 		return GetFileSystem().PathSeparator(path);
