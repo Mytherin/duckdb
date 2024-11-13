@@ -171,11 +171,8 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 
 		// check if a WAL file already exists
 		auto wal_path = GetWALPath();
-		if (fs.FileExists(wal_path)) {
-			// WAL file exists but database file does not
-			// remove the WAL
-			fs.RemoveFile(wal_path);
-		}
+		// remove the WAL if there is any
+		fs.RemoveFileIfExists(wal_path);
 
 		// Set the block allocation size for the new database file.
 		if (storage_options.block_alloc_size.IsValid()) {

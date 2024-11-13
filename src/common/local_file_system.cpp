@@ -634,6 +634,16 @@ void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener
 	}
 }
 
+void LocalFileSystem::RemoveFileIfExists(const string &filename, optional_ptr<FileOpener> opener) {
+	if (std::remove(filename.c_str()) != 0) {
+		if (errno == ENOENT) {
+			return;
+		}
+		throw IOException("Could not remove file \"%s\": %s", {{"errno", std::to_string(errno)}}, filename,
+		                  strerror(errno));
+	}
+}
+
 bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
                                 FileOpener *opener) {
 	auto dir = opendir(directory.c_str());

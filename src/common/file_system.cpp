@@ -436,6 +436,12 @@ void FileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener> ope
 	throw NotImplementedException("%s: RemoveFile is not implemented!", GetName());
 }
 
+void FileSystem::RemoveFileIfExists(const string &filename, optional_ptr<FileOpener> opener) {
+	if (!FileExists(filename, opener)) {
+		RemoveFile(filename, opener);
+	}
+}
+
 void FileSystem::FileSync(FileHandle &handle) {
 	throw NotImplementedException("%s: FileSync is not implemented!", GetName());
 }
