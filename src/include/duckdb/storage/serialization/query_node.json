@@ -90,20 +90,29 @@
       {
         "id": 201,
         "name": "left",
-        "type": "QueryNode*"
+        "type": "QueryNode*",
+        "serialize_property": "SerializeChildNode(0)"
       },
       {
         "id": 202,
         "name": "right",
-        "type": "QueryNode*"
+        "type": "QueryNode*",
+        "serialize_property": "SerializeChildNode(1)"
       },
       {
         "id": 203,
         "name": "setop_all",
         "type": "bool",
         "default": "true"
+      },
+      {
+        "id": 204,
+        "name": "children",
+        "type": "vector<QueryNode*>",
+        "serialize_property": "SerializeChildNodes()"
       }
-    ]
+    ],
+    "constructor": ["left", "right", "children"]
   },
   {
     "class": "RecursiveCTENode",

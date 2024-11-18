@@ -122,11 +122,14 @@ unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PG
 		if (stmt.withClause) {
 			TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(stmt.withClause), node->cte_map);
 		}
-		result.left = TransformSelectNode(*stmt.larg);
-		result.right = TransformSelectNode(*stmt.rarg);
-		if (!result.left || !result.right) {
+
+		auto left = TransformSelectNode(*stmt.larg);
+		auto right = TransformSelectNode(*stmt.rarg);
+		if (!left || !right) {
 			throw InternalException("Failed to transform setop children.");
 		}
+		result.children.push_back(std::move(left));
+		result.children.push_back(std::move(right));
 
 		result.setop_all = stmt.all;
 		switch (stmt.op) {
