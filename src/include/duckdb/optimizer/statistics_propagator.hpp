@@ -60,6 +60,8 @@ private:
 	//! Run a comparison with two sets of statistics, returns if the comparison will always returns true/false or not
 	FilterPropagateResult PropagateComparison(BaseStatistics &left, BaseStatistics &right, ExpressionType comparison);
 
+	unique_ptr<NodeStatistics> PropagateUnion(LogicalSetOperation &op, unique_ptr<LogicalOperator> &node_ptr);
+
 	//! Update filter statistics from a filter with a constant
 	void UpdateFilterStatistics(BaseStatistics &input, ExpressionType comparison_type, const Value &constant);
 	//! Update statistics from a filter between two stats

@@ -112,7 +112,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 	// Generate the logical plan for the children of the set operation
 
 	D_ASSERT(node.bound_children.size() >= 2);
-	unique_ptr<LogicalOperator> root;
+	vector<unique_ptr<LogicalOperator>> children;
 	for (auto &child : node.bound_children) {
 		child.binder->is_outside_flattened = is_outside_flattened;
 
@@ -138,13 +138,9 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 		if (child.binder->has_unplanned_dependent_joins) {
 			has_unplanned_dependent_joins = true;
 		}
-		if (!root) {
-			root = std::move(child_node);
-		} else {
-			root = make_uniq<LogicalSetOperation>(node.setop_index, node.types.size(), std::move(root),
-			                                      std::move(child_node), logical_type, node.setop_all);
-		}
+		children.push_back(std::move(child_node));
 	}
+	auto root = make_uniq<LogicalSetOperation>(node.setop_index, node.types.size(), std::move(children), logical_type, node.setop_all);
 	return VisitQueryNode(node, std::move(root));
 }
 

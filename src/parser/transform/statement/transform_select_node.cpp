@@ -52,6 +52,10 @@ bool Transformer::SetOperationsMatch(duckdb_libpgquery::PGSelectStmt &root, duck
 		// set operation type does not match
 		return false;
 	}
+	if (root.op != duckdb_libpgquery::PG_SETOP_UNION && root.op != duckdb_libpgquery::PG_SETOP_UNION_BY_NAME) {
+		// only generate multi-child nodes for UNION/UNION ALL
+		return false;
+	}
 	// check if this is a "simple" set operation
 	if (stmt.withClause	|| stmt.sortClause || stmt.limitCount || stmt.limitOffset ||stmt.sampleOptions) {
 		// it is not - we need to unfold it

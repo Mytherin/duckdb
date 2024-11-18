@@ -17,7 +17,7 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::UNION;
 
 public:
-	PhysicalUnion(vector<LogicalType> types, unique_ptr<PhysicalOperator> top, unique_ptr<PhysicalOperator> bottom,
+	PhysicalUnion(vector<LogicalType> types, vector<unique_ptr<PhysicalOperator>> children,
 	              idx_t estimated_cardinality, bool allow_out_of_order);
 
 	bool allow_out_of_order;

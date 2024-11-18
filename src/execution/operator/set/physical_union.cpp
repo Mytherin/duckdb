@@ -6,12 +6,10 @@
 
 namespace duckdb {
 
-PhysicalUnion::PhysicalUnion(vector<LogicalType> types, unique_ptr<PhysicalOperator> top,
-                             unique_ptr<PhysicalOperator> bottom, idx_t estimated_cardinality, bool allow_out_of_order)
+PhysicalUnion::PhysicalUnion(vector<LogicalType> types, vector<unique_ptr<PhysicalOperator>> children_p, idx_t estimated_cardinality, bool allow_out_of_order)
     : PhysicalOperator(PhysicalOperatorType::UNION, std::move(types), estimated_cardinality),
       allow_out_of_order(allow_out_of_order) {
-	children.push_back(std::move(top));
-	children.push_back(std::move(bottom));
+	children = std::move(children_p);
 }
 
 //===--------------------------------------------------------------------===//
@@ -42,6 +40,9 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 		if (!sink->ParallelSink()) {
 			order_matters = true;
 		}
+	}
+	if (children.size() != 2) {
+		throw InternalException("FIXME: union - build pipelines");
 	}
 
 	// create a union pipeline that has identical dependencies to 'current'

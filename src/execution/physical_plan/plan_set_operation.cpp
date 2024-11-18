@@ -32,25 +32,31 @@ static JoinCondition CreateNotDistinctComparison(const LogicalType &type, idx_t 
 }
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperation &op) {
-	D_ASSERT(op.children.size() == 2);
-
 	unique_ptr<PhysicalOperator> result;
 
-	auto left = CreatePlan(*op.children[0]);
-	auto right = CreatePlan(*op.children[1]);
+	vector<unique_ptr<PhysicalOperator>> children;
+	for(auto &child : op.children) {
+		children.push_back(CreatePlan(*child));
+	}
 
-	if (left->GetTypes() != right->GetTypes()) {
-		throw InvalidInputException("Type mismatch for SET OPERATION");
+	for(idx_t i = 1; i < children.size(); i++) {
+		if (children[i]->GetTypes() != children[0]->GetTypes()) {
+			throw InvalidInputException("Type mismatch for SET OPERATION");
+		}
 	}
 
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_UNION:
 		// UNION
-		result = make_uniq<PhysicalUnion>(op.types, std::move(left), std::move(right), op.estimated_cardinality,
+		result = make_uniq<PhysicalUnion>(op.types, std::move(children), op.estimated_cardinality,
 		                                  op.allow_out_of_order);
 		break;
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_INTERSECT: {
+		D_ASSERT(op.children.size() == 2);
+		auto left = std::move(children[0]);
+		auto right = std::move(children[1]);
+
 		auto &types = left->GetTypes();
 		vector<JoinCondition> conditions;
 		// create equality condition for all columns
