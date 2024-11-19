@@ -23,8 +23,8 @@ public:
 	LogicalSetOperation(idx_t table_index, idx_t column_count, unique_ptr<LogicalOperator> top,
 	                    unique_ptr<LogicalOperator> bottom, LogicalOperatorType type, bool setop_all,
 	                    bool allow_out_of_order = true);
-	LogicalSetOperation(idx_t table_index, idx_t column_count, vector<unique_ptr<LogicalOperator>> children, LogicalOperatorType type, bool setop_all,
-			    bool allow_out_of_order = true);
+	LogicalSetOperation(idx_t table_index, idx_t column_count, vector<unique_ptr<LogicalOperator>> children,
+	                    LogicalOperatorType type, bool setop_all, bool allow_out_of_order = true);
 
 	idx_t table_index;
 	idx_t column_count;

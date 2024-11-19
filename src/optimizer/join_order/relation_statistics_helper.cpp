@@ -229,7 +229,7 @@ RelationStats RelationStatisticsHelper::CombineStatsOfNonReorderableOperator(Log
 
 	// default predicted cardinality is the max of all child cardinalities
 	ret.cardinality = 0;
-	for(auto &stats : child_stats) {
+	for (auto &stats : child_stats) {
 		idx_t child_cardinality = stats.stats_initialized ? stats.cardinality : 0;
 		ret.cardinality = MaxValue(ret.cardinality, child_cardinality);
 		child_cardinalities.push_back(child_cardinality);
@@ -259,7 +259,7 @@ RelationStats RelationStatisticsHelper::CombineStatsOfNonReorderableOperator(Log
 		if (setop.setop_all) {
 			// setop returns all records
 			ret.cardinality = 0;
-			for(auto &child_cardinality : child_cardinalities) {
+			for (auto &child_cardinality : child_cardinalities) {
 				ret.cardinality += child_cardinality;
 			}
 		}

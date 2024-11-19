@@ -6,7 +6,8 @@
 
 namespace duckdb {
 
-PhysicalUnion::PhysicalUnion(vector<LogicalType> types, vector<unique_ptr<PhysicalOperator>> children_p, idx_t estimated_cardinality, bool allow_out_of_order)
+PhysicalUnion::PhysicalUnion(vector<LogicalType> types, vector<unique_ptr<PhysicalOperator>> children_p,
+                             idx_t estimated_cardinality, bool allow_out_of_order)
     : PhysicalOperator(PhysicalOperatorType::UNION, std::move(types), estimated_cardinality),
       allow_out_of_order(allow_out_of_order) {
 	children = std::move(children_p);
@@ -41,41 +42,40 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 			order_matters = true;
 		}
 	}
-	if (children.size() != 2) {
-		throw InternalException("FIXME: union - build pipelines");
-	}
 
 	// create a union pipeline that has identical dependencies to 'current'
 	auto &union_pipeline = meta_pipeline.CreateUnionPipeline(current, order_matters);
 
 	// continue with the current pipeline
 	children[0]->BuildPipelines(current, meta_pipeline);
-
 	vector<shared_ptr<Pipeline>> dependencies;
-	optional_ptr<MetaPipeline> last_child_ptr;
-	const auto can_saturate_threads = children[0]->CanSaturateThreads(current.GetClientContext());
-	if (order_matters || can_saturate_threads) {
-		// we add dependencies if order matters: union_pipeline comes after all pipelines created by building current
-		dependencies = meta_pipeline.AddDependenciesFrom(union_pipeline, union_pipeline, false);
-		// we also add dependencies if the LHS child can saturate all available threads
-		// in that case, we recursively make all RHS children depend on the LHS.
-		// This prevents breadth-first plan evaluation
-		if (can_saturate_threads) {
-			last_child_ptr = meta_pipeline.GetLastChild();
+	for (idx_t i = 1; i < children.size(); i++) {
+		optional_ptr<MetaPipeline> last_child_ptr;
+		const auto can_saturate_threads = children[0]->CanSaturateThreads(current.GetClientContext());
+		if (order_matters || can_saturate_threads) {
+			// we add dependencies if order matters: union_pipeline comes after all pipelines created by building
+			// current
+			dependencies = meta_pipeline.AddDependenciesFrom(union_pipeline, union_pipeline, false);
+			// we also add dependencies if the LHS child can saturate all available threads
+			// in that case, we recursively make all RHS children depend on the LHS.
+			// This prevents breadth-first plan evaluation
+			if (can_saturate_threads) {
+				last_child_ptr = meta_pipeline.GetLastChild();
+			}
 		}
+
+		// build the union pipeline
+		children[i]->BuildPipelines(union_pipeline, meta_pipeline);
+
+		if (last_child_ptr) {
+			// the pointer was set, set up the dependencies
+			meta_pipeline.AddRecursiveDependencies(dependencies, *last_child_ptr);
+		}
+
+		// Assign proper batch index to the union pipeline
+		// This needs to happen after the pipelines have been built because unions can be nested
+		meta_pipeline.AssignNextBatchIndex(union_pipeline);
 	}
-
-	// build the union pipeline
-	children[1]->BuildPipelines(union_pipeline, meta_pipeline);
-
-	if (last_child_ptr) {
-		// the pointer was set, set up the dependencies
-		meta_pipeline.AddRecursiveDependencies(dependencies, *last_child_ptr);
-	}
-
-	// Assign proper batch index to the union pipeline
-	// This needs to happen after the pipelines have been built because unions can be nested
-	meta_pipeline.AssignNextBatchIndex(union_pipeline);
 }
 
 vector<const_reference<PhysicalOperator>> PhysicalUnion::GetSources() const {

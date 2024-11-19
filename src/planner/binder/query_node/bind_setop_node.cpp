@@ -207,7 +207,8 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 	if (statement.children.size() < 2) {
 		throw InternalException("Set Operations must have at least 2 children");
 	}
-	if (statement.children.size() != 2 && statement.setop_type != SetOperationType::UNION && statement.setop_type != SetOperationType::UNION_BY_NAME) {
+	if (statement.children.size() != 2 && statement.setop_type != SetOperationType::UNION &&
+	    statement.setop_type != SetOperationType::UNION_BY_NAME) {
 		throw InternalException("Set Operation type must have exactly 2 children - except for UNION/UNION_BY_NAME");
 	}
 	for (auto &child : statement.children) {

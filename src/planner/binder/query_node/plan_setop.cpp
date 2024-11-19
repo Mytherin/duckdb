@@ -140,7 +140,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 		}
 		children.push_back(std::move(child_node));
 	}
-	auto root = make_uniq<LogicalSetOperation>(node.setop_index, node.types.size(), std::move(children), logical_type, node.setop_all);
+	auto root = make_uniq<LogicalSetOperation>(node.setop_index, node.types.size(), std::move(children), logical_type,
+	                                           node.setop_all);
 	return VisitQueryNode(node, std::move(root));
 }
 

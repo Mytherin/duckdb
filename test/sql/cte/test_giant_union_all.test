@@ -2008,6 +2008,7 @@ UNION ALL
 SELECT 999
 
 
-query III
-SELECT COUNT(*), MIN(i), MAX(i) FROM union_view
+query IIII
+SELECT COUNT(*), MIN(i), MAX(i), AVG(i) FROM union_view
 ----
+1000	0	999	499.5

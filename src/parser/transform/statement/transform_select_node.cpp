@@ -57,7 +57,7 @@ bool Transformer::SetOperationsMatch(duckdb_libpgquery::PGSelectStmt &root, duck
 		return false;
 	}
 	// check if this is a "simple" set operation
-	if (stmt.withClause	|| stmt.sortClause || stmt.limitCount || stmt.limitOffset ||stmt.sampleOptions) {
+	if (stmt.withClause || stmt.sortClause || stmt.limitCount || stmt.limitOffset || stmt.sampleOptions) {
 		// it is not - we need to unfold it
 		return false;
 	}
@@ -70,7 +70,7 @@ void Transformer::TransformSetOperationChildren(duckdb_libpgquery::PGSelectStmt 
 	set_operations.push_back(*stmt.larg);
 	set_operations.push_back(*stmt.rarg);
 
-	for(idx_t i = 0; i < set_operations.size(); i++) {
+	for (idx_t i = 0; i < set_operations.size(); i++) {
 		auto &node = set_operations[i].get();
 		// check if this set operation can be merged into the parents' set operation
 		if (!SetOperationsMatch(stmt, node)) {

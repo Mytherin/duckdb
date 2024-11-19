@@ -32,7 +32,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 	         op->type == LogicalOperatorType::LOGICAL_INTERSECT);
 	auto &setop = op->Cast<LogicalSetOperation>();
 
-	for(auto &child : op->children) {
+	for (auto &child : op->children) {
 		auto child_bindings = child->GetColumnBindings();
 
 		FilterPushdown child_pushdown(optimizer, convert_mark_joins);
@@ -56,13 +56,13 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 	}
 	if (op->type == LogicalOperatorType::LOGICAL_UNION) {
 		// for UNION we can erase all children that are empty
-		for(idx_t i = 0; i < op->children.size(); i++) {
+		for (idx_t i = 0; i < op->children.size(); i++) {
 			if (op->children[i]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
 				op->children.erase(op->children.begin() + static_cast<int64_t>(i));
 				i--;
 			}
 		}
-		switch(op->children.size()) {
+		switch (op->children.size()) {
 		case 0:
 			// no children left
 			return make_uniq<LogicalEmptyResult>(std::move(op));

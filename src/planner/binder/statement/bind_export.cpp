@@ -144,7 +144,7 @@ unique_ptr<LogicalOperator> Binder::UnionOperators(vector<unique_ptr<LogicalOper
 		return std::move(nodes[0]);
 	}
 	return make_uniq<LogicalSetOperation>(GenerateTableIndex(), 1U, std::move(nodes),
-													 LogicalOperatorType::LOGICAL_UNION, true, false);
+	                                      LogicalOperatorType::LOGICAL_UNION, true, false);
 }
 
 BoundStatement Binder::Bind(ExportStatement &stmt) {

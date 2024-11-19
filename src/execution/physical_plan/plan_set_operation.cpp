@@ -35,11 +35,11 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperati
 	unique_ptr<PhysicalOperator> result;
 
 	vector<unique_ptr<PhysicalOperator>> children;
-	for(auto &child : op.children) {
+	for (auto &child : op.children) {
 		children.push_back(CreatePlan(*child));
 	}
 
-	for(idx_t i = 1; i < children.size(); i++) {
+	for (idx_t i = 1; i < children.size(); i++) {
 		if (children[i]->GetTypes() != children[0]->GetTypes()) {
 			throw InvalidInputException("Type mismatch for SET OPERATION");
 		}
@@ -48,8 +48,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperati
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_UNION:
 		// UNION
-		result = make_uniq<PhysicalUnion>(op.types, std::move(children), op.estimated_cardinality,
-		                                  op.allow_out_of_order);
+		result =
+		    make_uniq<PhysicalUnion>(op.types, std::move(children), op.estimated_cardinality, op.allow_out_of_order);
 		break;
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_INTERSECT: {

@@ -614,26 +614,26 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		auto &setop = plan->Cast<LogicalSetOperation>();
 		// set operator, push into all children
 #ifdef DEBUG
-		for(auto &child : plan->children) {
+		for (auto &child : plan->children) {
 			child->ResolveOperatorTypes();
 		}
-		for(idx_t i = 1; i < plan->children.size(); i++) {
+		for (idx_t i = 1; i < plan->children.size(); i++) {
 			D_ASSERT(plan->children[0]->types.size() == plan->children[i]->types.size());
 		}
 #endif
-		for(auto &child : plan->children) {
+		for (auto &child : plan->children) {
 			child = PushDownDependentJoin(std::move(child));
 		}
 		plan->children[0] = PushDownDependentJoin(std::move(plan->children[0]));
 		plan->children[1] = PushDownDependentJoin(std::move(plan->children[1]));
 #ifdef DEBUG
-		for(idx_t i = 1; i < plan->children.size(); i++) {
+		for (idx_t i = 1; i < plan->children.size(); i++) {
 			D_ASSERT(plan->children[0]->GetColumnBindings().size() == plan->children[i]->GetColumnBindings().size());
 		}
-		for(auto &child : plan->children) {
+		for (auto &child : plan->children) {
 			child->ResolveOperatorTypes();
 		}
-		for(idx_t i = 1; i < plan->children.size(); i++) {
+		for (idx_t i = 1; i < plan->children.size(); i++) {
 			D_ASSERT(plan->children[0]->types.size() == plan->children[i]->types.size());
 		}
 #endif

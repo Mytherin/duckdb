@@ -28,22 +28,22 @@ void StatisticsPropagator::AddCardinalities(unique_ptr<NodeStatistics> &stats, N
 }
 
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateUnion(LogicalSetOperation &setop,
-unique_ptr<LogicalOperator> &node_ptr) {
+                                                                unique_ptr<LogicalOperator> &node_ptr) {
 	// first propagate statistics in the child nodes
 	vector<unique_ptr<NodeStatistics>> stats;
-	for(auto &child : setop.children) {
+	for (auto &child : setop.children) {
 		stats.push_back(PropagateStatistics(child));
 	}
 
 	// now fetch the column bindings of the children both sides
 	vector<vector<ColumnBinding>> child_bindings;
-	for(auto &child : setop.children) {
+	for (auto &child : setop.children) {
 		child_bindings.push_back(child->GetColumnBindings());
 	}
 	for (idx_t i = 0; i < setop.column_count; i++) {
 		// for each column binding, we fetch the statistics from both the lhs and the rhs
 		unique_ptr<BaseStatistics> new_stats;
-		for(idx_t child_idx = 0; child_idx < setop.children.size(); child_idx++) {
+		for (idx_t child_idx = 0; child_idx < setop.children.size(); child_idx++) {
 			auto stats_entry = statistics_map.find(child_bindings[child_idx][i]);
 			if (stats_entry == statistics_map.end()) {
 				new_stats.reset();
@@ -65,7 +65,7 @@ unique_ptr<LogicalOperator> &node_ptr) {
 		statistics_map[binding] = std::move(new_stats);
 	}
 	// merge all cardinalities of the child stats together
-	for(idx_t i = 1; i < stats.size(); i++) {
+	for (idx_t i = 1; i < stats.size(); i++) {
 		if (!stats[i]) {
 			return nullptr;
 		}

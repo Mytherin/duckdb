@@ -370,6 +370,7 @@ private:
 
 	void TransformSetOperationChildren(duckdb_libpgquery::PGSelectStmt &stmt, SetOperationNode &result);
 	static bool SetOperationsMatch(duckdb_libpgquery::PGSelectStmt &root, duckdb_libpgquery::PGNode &node);
+
 public:
 	static void SetQueryLocation(ParsedExpression &expr, int query_location);
 	static void SetQueryLocation(TableRef &ref, int query_location);
