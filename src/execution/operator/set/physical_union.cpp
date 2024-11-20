@@ -43,18 +43,26 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 		}
 	}
 
-	// create a union pipeline that has identical dependencies to 'current'
-	auto &union_pipeline = meta_pipeline.CreateUnionPipeline(current, order_matters);
+	// create union pipelines that has identical dependencies to 'current'
+	vector<reference<Pipeline>> union_pipelines;
+	for(idx_t i = 0; i + 1 < children.size(); i++) {
+		auto &union_pipeline = meta_pipeline.CreateUnionPipeline(current, order_matters);
+		union_pipelines.push_back(union_pipeline);
+	}
 
 	// continue with the current pipeline
 	children[0]->BuildPipelines(current, meta_pipeline);
-	vector<shared_ptr<Pipeline>> dependencies;
-	for (idx_t i = 1; i < children.size(); i++) {
+	bool can_saturate_threads = children[0]->CanSaturateThreads(current.GetClientContext());
+	for(idx_t i = 1; i < children.size(); i++) {
+		auto &union_pipeline = union_pipelines[children.size() - i - 1].get();
+
+		vector<shared_ptr<Pipeline>> dependencies;
 		optional_ptr<MetaPipeline> last_child_ptr;
-		const auto can_saturate_threads = children[0]->CanSaturateThreads(current.GetClientContext());
+		if (children[i - 1]->CanSaturateThreads(current.GetClientContext())) {
+			can_saturate_threads = true;
+		}
 		if (order_matters || can_saturate_threads) {
-			// we add dependencies if order matters: union_pipeline comes after all pipelines created by building
-			// current
+			// we add dependencies if order matters: union_pipeline comes after all pipelines created by building current
 			dependencies = meta_pipeline.AddDependenciesFrom(union_pipeline, union_pipeline, false);
 			// we also add dependencies if the LHS child can saturate all available threads
 			// in that case, we recursively make all RHS children depend on the LHS.
