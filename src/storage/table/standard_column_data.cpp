@@ -57,8 +57,10 @@ void StandardColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t 
 idx_t StandardColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                                idx_t target_count) {
 	D_ASSERT(state.row_index == state.child_states[0].row_index);
-	auto scan_count = ColumnData::Scan(transaction, vector_index, state, result, target_count);
-	validity.Scan(transaction, vector_index, state.child_states[0], result, target_count);
+	auto scan_type = GetVectorScanType(state, target_count, result);
+	auto mode = ScanVectorMode::REGULAR_SCAN;
+	auto scan_count = ColumnData::ScanVector(transaction, vector_index, state, result, target_count, scan_type, mode);
+	validity.ScanVector(transaction, vector_index, state.child_states[0], result, target_count, scan_type, mode);
 	return scan_count;
 }
 
@@ -74,6 +76,26 @@ idx_t StandardColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_
 	auto scan_count = ColumnData::ScanCount(state, result, count);
 	validity.ScanCount(state.child_states[0], result, count);
 	return scan_count;
+}
+
+void StandardColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+		SelectionVector &sel, idx_t sel_count) {
+	if (type.InternalType() != PhysicalType::VARCHAR) {
+		// only do direct select for varchar columns (for now?)
+		ColumnData::Select(transaction, vector_index, state, result, sel, sel_count);
+		return;
+	}
+	auto target_count = GetVectorCount(vector_index);
+	auto scan_type = GetVectorScanType(state, target_count, result);
+	if (scan_type != ScanVectorType::SCAN_ENTIRE_VECTOR) {
+		// we are not scanning an entire vector - this can have several causes (updates, etc)
+		// fallback to scan + slice
+		ScanVector(transaction, vector_index, state, result, target_count, scan_type, ScanVectorMode::REGULAR_SCAN);
+		result.Slice(sel, sel_count);
+		return;
+	}
+	ColumnData::SelectVector(state, result, target_count, sel, sel_count);
+	validity.SelectVector(state, result, target_count, sel, sel_count);
 }
 
 void StandardColumnData::InitializeAppend(ColumnAppendState &state) {

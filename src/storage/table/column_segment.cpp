@@ -139,6 +139,14 @@ void ColumnSegment::ScanPartial(ColumnScanState &state, idx_t scan_count, Vector
 	function.get().scan_partial(*this, state, scan_count, result, result_offset);
 }
 
+
+void ColumnSegment::Select(ColumnScanState &state, idx_t scan_count, Vector &result, SelectionVector &sel, idx_t sel_count) {
+	if (!function.get().select) {
+		throw InternalException("FIXME: ColumnSegment::Select not implemented");
+	}
+	function.get().select(*this, state, scan_count, result, sel, sel_count);
+}
+
 //===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//

@@ -136,10 +136,7 @@ void ColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanSta
 	}
 }
 
-idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, ScanVectorType scan_type) {
-	if (scan_type == ScanVectorType::SCAN_FLAT_VECTOR && result.GetVectorType() != VectorType::FLAT_VECTOR) {
-		throw InternalException("ScanVector called with SCAN_FLAT_VECTOR but result is not a flat vector");
-	}
+void ColumnData::BeginScanVectorInternal(ColumnScanState &state) {
 	state.previous_states.clear();
 	if (!state.initialized) {
 		D_ASSERT(state.current);
@@ -153,6 +150,13 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 		state.current->Skip(state);
 	}
 	D_ASSERT(state.current->type == type);
+}
+
+idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, ScanVectorType scan_type) {
+	if (scan_type == ScanVectorType::SCAN_FLAT_VECTOR && result.GetVectorType() != VectorType::FLAT_VECTOR) {
+		throw InternalException("ScanVector called with SCAN_FLAT_VECTOR but result is not a flat vector");
+	}
+	BeginScanVectorInternal(state);
 	idx_t initial_remaining = remaining;
 	while (remaining > 0) {
 		D_ASSERT(state.row_index >= state.current->start &&
@@ -189,6 +193,24 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 	}
 	state.internal_index = state.row_index;
 	return initial_remaining - remaining;
+}
+
+void ColumnData::SelectVector(ColumnScanState &state, Vector &result, idx_t target_count, SelectionVector &sel, idx_t sel_count) {
+	BeginScanVectorInternal(state);
+	if (state.current->start + state.current->count - state.row_index < target_count) {
+		throw InternalException("ColumnData::SelectVector should be able to fetch everything from one segment");
+	}
+	if (state.scan_options && state.scan_options->force_fetch_row) {
+		for (idx_t i = 0; i < sel_count; i++) {
+			auto source_idx = sel.get_index(i);
+			ColumnFetchState fetch_state;
+			state.current->FetchRow(fetch_state, UnsafeNumericCast<row_t>(state.row_index + source_idx), result,
+									i);
+		}
+	} else {
+		state.current->Select(state, target_count, result, sel, sel_count);
+	}
+	state.row_index += target_count;
 }
 
 unique_ptr<BaseStatistics> ColumnData::GetUpdateStatistics() {
@@ -231,8 +253,7 @@ void ColumnData::UpdateInternal(TransactionData transaction, idx_t column_index,
 }
 
 idx_t ColumnData::ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-                             idx_t target_scan, ScanVectorMode mode) {
-	auto scan_type = GetVectorScanType(state, target_scan, result);
+							 idx_t target_scan, ScanVectorType scan_type, ScanVectorMode mode) {
 	auto scan_count = ScanVector(state, result, target_scan, scan_type);
 	if (scan_type != ScanVectorType::SCAN_ENTIRE_VECTOR) {
 		// if we are scanning an entire vector we cannot have updates
@@ -241,6 +262,12 @@ idx_t ColumnData::ScanVector(TransactionData transaction, idx_t vector_index, Co
 		FetchUpdates(transaction, vector_index, result, scan_count, allow_updates, scan_committed);
 	}
 	return scan_count;
+}
+
+idx_t ColumnData::ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+                             idx_t target_scan, ScanVectorMode mode) {
+	auto scan_type = GetVectorScanType(state, target_scan, result);
+	return ScanVector(transaction, vector_index, state, result, target_scan, scan_type, mode);
 }
 
 idx_t ColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
@@ -300,8 +327,7 @@ void ColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnS
 	ColumnSegment::FilterSelection(sel, result, vdata, filter, scan_count, s_count);
 }
 
-void ColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-                        SelectionVector &sel, idx_t s_count) {
+void ColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t s_count) {
 	Scan(transaction, vector_index, state, result);
 	result.Slice(sel, s_count);
 }

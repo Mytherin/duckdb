@@ -71,6 +71,8 @@ public:
 	void Scan(ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset, ScanVectorType scan_type);
 	//! Fetch a value of the specific row id and append it to the result
 	void FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx);
+	//! Select a subset of one vector from this segment
+	void Select(ColumnScanState &state, idx_t scan_count, Vector &result, SelectionVector &sel, idx_t sel_count);
 
 	static idx_t FilterSelection(SelectionVector &sel, Vector &vector, UnifiedVectorFormat &vdata,
 	                             const TableFilter &filter, idx_t scan_count, idx_t &approved_tuple_count);

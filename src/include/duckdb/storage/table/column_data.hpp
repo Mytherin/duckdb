@@ -178,12 +178,16 @@ protected:
 	//! Append a transient segment
 	void AppendTransientSegment(SegmentLock &l, idx_t start_row);
 
+	void BeginScanVectorInternal(ColumnScanState &state);
 	//! Scans a base vector from the column
 	idx_t ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, ScanVectorType scan_type);
 	//! Scans a vector from the column merged with any potential updates
-	//! If ALLOW_UPDATES is set to false, the function will instead throw an exception if any updates are found
 	idx_t ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
 	                 idx_t target_scan, ScanVectorMode mode);
+	idx_t ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+								 idx_t target_scan, ScanVectorType scan_type, ScanVectorMode mode);
+	void SelectVector(ColumnScanState &state, Vector &result, idx_t target_count, SelectionVector &sel, idx_t sel_count);
+
 
 	void ClearUpdates();
 	void FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result, idx_t scan_count,
