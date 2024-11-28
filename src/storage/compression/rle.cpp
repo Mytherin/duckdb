@@ -263,16 +263,27 @@ struct RLEScanState : public SegmentScanState {
 		auto data = handle.Ptr() + segment.GetBlockOffset();
 		auto index_pointer = reinterpret_cast<rle_count_t *>(data + rle_count_offset);
 
-		for (idx_t i = 0; i < skip_count; i++) {
-			// assign the current value
-			position_in_entry++;
-			if (position_in_entry >= index_pointer[entry_pos]) {
-				// handled all entries in this RLE value
-				// move to the next entry
-				entry_pos++;
-				position_in_entry = 0;
+		while(skip_count > 0) {
+			rle_count_t run_end = index_pointer[entry_pos];
+			idx_t skip_amount = MinValue<idx_t>(skip_count, run_end - position_in_entry);
+
+			skip_count -= skip_amount;
+			position_in_entry += skip_amount;
+			if (ExhaustedRun(index_pointer)) {
+				ForwardToNextRun();
 			}
 		}
+	}
+
+	inline void ForwardToNextRun() {
+		// handled all entries in this RLE value
+		// move to the next entry
+		entry_pos++;
+		position_in_entry = 0;
+	}
+
+	inline bool ExhaustedRun(rle_count_t *index_pointer) {
+		return position_in_entry >= index_pointer[entry_pos];
 	}
 
 	BufferHandle handle;
@@ -313,27 +324,14 @@ static bool CanEmitConstantVector(idx_t position, idx_t run_length, idx_t scan_c
 }
 
 template <class T>
-inline static void ForwardToNextRun(RLEScanState<T> &scan_state) {
-	// handled all entries in this RLE value
-	// move to the next entry
-	scan_state.entry_pos++;
-	scan_state.position_in_entry = 0;
-}
-
-template <class T>
-inline static bool ExhaustedRun(RLEScanState<T> &scan_state, rle_count_t *index_pointer) {
-	return scan_state.position_in_entry >= index_pointer[scan_state.entry_pos];
-}
-
-template <class T>
 static void RLEScanConstant(RLEScanState<T> &scan_state, rle_count_t *index_pointer, T *data_pointer, idx_t scan_count,
                             Vector &result) {
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	auto result_data = ConstantVector::GetData<T>(result);
 	result_data[0] = data_pointer[scan_state.entry_pos];
 	scan_state.position_in_entry += scan_count;
-	if (ExhaustedRun(scan_state, index_pointer)) {
-		ForwardToNextRun(scan_state);
+	if (scan_state.ExhaustedRun(index_pointer)) {
+		scan_state.ForwardToNextRun();
 	}
 	return;
 }
@@ -367,8 +365,8 @@ void RLEScanPartialInternal(ColumnSegment &segment, ColumnScanState &state, idx_
 
 		result_offset += scan_amount;
 		scan_state.position_in_entry += scan_amount;
-		if (ExhaustedRun(scan_state, index_pointer)) {
-			ForwardToNextRun(scan_state);
+		if (scan_state.ExhaustedRun(index_pointer)) {
+			scan_state.ForwardToNextRun();
 		}
 	}
 }
