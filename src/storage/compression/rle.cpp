@@ -263,7 +263,7 @@ struct RLEScanState : public SegmentScanState {
 		auto data = handle.Ptr() + segment.GetBlockOffset();
 		auto index_pointer = reinterpret_cast<rle_count_t *>(data + rle_count_offset);
 
-		while(skip_count > 0) {
+		while (skip_count > 0) {
 			rle_count_t run_end = index_pointer[entry_pos];
 			idx_t skip_amount = MinValue<idx_t>(skip_count, run_end - position_in_entry);
 
@@ -354,20 +354,27 @@ void RLEScanPartialInternal(ColumnSegment &segment, ColumnScanState &state, idx_
 
 	auto result_data = FlatVector::GetData<T>(result);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
+
 	idx_t result_end = result_offset + scan_count;
-	while(result_offset < result_end) {
+	while (result_offset < result_end) {
 		rle_count_t run_end = index_pointer[scan_state.entry_pos];
-		rle_count_t scan_amount = UnsafeNumericCast<rle_count_t>(MinValue<idx_t>(result_end - result_offset, run_end - scan_state.position_in_entry));
-
-		for(rle_count_t i = 0; i < scan_amount; i++) {
-			result_data[result_offset + i] = data_pointer[scan_state.entry_pos];
+		idx_t run_count = run_end - scan_state.position_in_entry;
+		idx_t remaining_scan_count = result_end - result_offset;
+		T element = data_pointer[scan_state.entry_pos];
+		if (DUCKDB_UNLIKELY(run_count > remaining_scan_count)) {
+			for (idx_t i = 0; i < remaining_scan_count; i++) {
+				result_data[result_offset + i] = element;
+			}
+			scan_state.position_in_entry += remaining_scan_count;
+			break;
 		}
 
-		result_offset += scan_amount;
-		scan_state.position_in_entry += scan_amount;
-		if (scan_state.ExhaustedRun(index_pointer)) {
-			scan_state.ForwardToNextRun();
+		for (idx_t i = 0; i < run_count; i++) {
+			result_data[result_offset + i] = element;
 		}
+
+		result_offset += run_count;
+		scan_state.ForwardToNextRun();
 	}
 }
 
