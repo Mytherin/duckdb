@@ -356,10 +356,17 @@ void RLEScanPartialInternal(ColumnSegment &segment, ColumnScanState &state, idx_
 
 	auto result_data = FlatVector::GetData<T>(result);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	for (idx_t i = 0; i < scan_count; i++) {
-		// assign the current value
-		result_data[result_offset + i] = data_pointer[scan_state.entry_pos];
-		scan_state.position_in_entry++;
+	idx_t result_end = result_offset + scan_count;
+	while(result_offset < result_end) {
+		rle_count_t run_end = index_pointer[scan_state.entry_pos];
+		rle_count_t scan_amount = UnsafeNumericCast<rle_count_t>(MinValue<idx_t>(result_end - result_offset, run_end - scan_state.position_in_entry));
+
+		for(rle_count_t i = 0; i < scan_amount; i++) {
+			result_data[result_offset + i] = data_pointer[scan_state.entry_pos];
+		}
+
+		result_offset += scan_amount;
+		scan_state.position_in_entry += scan_amount;
 		if (ExhaustedRun(scan_state, index_pointer)) {
 			ForwardToNextRun(scan_state);
 		}
