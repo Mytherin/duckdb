@@ -475,46 +475,6 @@ public:
 				// our initial reader was reset
 				return nullptr;
 			}
-		} else if (config.options.object_cache_enable) {
-			// multiple files, object cache enabled: merge statistics
-			unique_ptr<BaseStatistics> overall_stats;
-
-			auto &cache = ObjectCache::GetObjectCache(context);
-			// for more than one file, we could be lucky and metadata for *every* file is in the object cache (if
-			// enabled at all)
-			FileSystem &fs = FileSystem::GetFileSystem(context);
-
-			for (const auto &file_name : bind_data.file_list->Files()) {
-				auto metadata = cache.Get<ParquetFileMetadataCache>(file_name);
-				if (!metadata) {
-					// missing metadata entry in cache, no usable stats
-					return nullptr;
-				}
-				if (!fs.IsRemoteFile(file_name)) {
-					auto handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
-					// we need to check if the metadata cache entries are current
-					if (fs.GetLastModifiedTime(*handle) >= metadata->read_time) {
-						// missing or invalid metadata entry in cache, no usable stats overall
-						return nullptr;
-					}
-				} else {
-					// for remote files we just avoid reading stats entirely
-					return nullptr;
-				}
-				// get and merge stats for file
-				auto file_stats = ParquetReader::ReadStatistics(context, bind_data.parquet_options, metadata,
-				                                                bind_data.names[column_index]);
-				if (!file_stats) {
-					return nullptr;
-				}
-				if (overall_stats) {
-					overall_stats->Merge(*file_stats);
-				} else {
-					overall_stats = std::move(file_stats);
-				}
-			}
-			// success!
-			return overall_stats;
 		}
 
 		// multiple files and no object cache, no luck!

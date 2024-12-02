@@ -40,8 +40,7 @@ public:
 				values_read += repeat_batch;
 			} else if (literal_count_ > 0) {
 				uint32_t literal_batch = MinValue(batch_size - values_read, static_cast<uint32_t>(literal_count_));
-				ParquetDecodeUtils::BitUnpack<T>(buffer_, bitpack_pos, values + values_read,
-				                                                        literal_batch, bit_width_);
+				ParquetDecodeUtils::BitUnpack<T>(buffer_, bitpack_pos, values + values_read, literal_batch, bit_width_);
 				literal_count_ -= literal_batch;
 				values_read += literal_batch;
 			} else {

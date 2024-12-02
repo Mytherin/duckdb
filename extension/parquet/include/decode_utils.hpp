@@ -33,7 +33,7 @@ private:
 public:
 	template <class T>
 	static void BitUnpack(ByteBuffer &src, bitpacking_width_t &bitpack_pos, T *dst, idx_t count,
-	                          const bitpacking_width_t width) {
+	                      const bitpacking_width_t width) {
 		if (bitpack_pos == 0 && count >= BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) {
 			idx_t remainder = count % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 			idx_t aligned_count = count - remainder;
