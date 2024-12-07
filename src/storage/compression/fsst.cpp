@@ -762,6 +762,7 @@ CompressionFunction FSSTFun::GetFunction(PhysicalType data_type) {
 }
 
 bool FSSTFun::TypeIsSupported(const PhysicalType physical_type) {
+	return false;
 	return physical_type == PhysicalType::VARCHAR;
 }
 
