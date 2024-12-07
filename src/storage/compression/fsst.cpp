@@ -36,7 +36,7 @@ typedef struct BPDeltaDecodeOffsets {
 } bp_delta_offsets_t;
 
 struct FSSTStorage {
-	static constexpr double MINIMUM_COMPRESSION_RATIO = 1.2;
+	static constexpr double FSST_PENALTY = 4.0;
 	static constexpr double ANALYSIS_SAMPLE_SIZE = 0.25;
 
 	static unique_ptr<AnalyzeState> StringInitAnalyze(ColumnData &col_data, PhysicalType type);
@@ -199,7 +199,7 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	auto symtable_size = num_blocks * sizeof(duckdb_fsst_decoder_t);
 	auto estimated_size = estimated_base_size + symtable_size;
 
-	return LossyNumericCast<idx_t>(estimated_size * MINIMUM_COMPRESSION_RATIO);
+	return LossyNumericCast<idx_t>(estimated_size * FSST_PENALTY);
 }
 
 //===--------------------------------------------------------------------===//
