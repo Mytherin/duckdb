@@ -27,7 +27,7 @@ ScanVectorType StandardColumnData::GetVectorScanType(ColumnScanState &state, idx
 	if (scan_type == ScanVectorType::SCAN_FLAT_VECTOR) {
 		return ScanVectorType::SCAN_FLAT_VECTOR;
 	}
-	if (state.child_states.empty()) {
+	if (state.child_states.empty() || !state.scan_child_column[0]) {
 		return scan_type;
 	}
 	return validity.GetVectorScanType(state.child_states[0], scan_count, result);
@@ -41,17 +41,24 @@ void StandardColumnData::InitializePrefetch(PrefetchState &prefetch_state, Colum
 void StandardColumnData::InitializeScan(ColumnScanState &state) {
 	ColumnData::InitializeScan(state);
 
-	// initialize the validity segment
-	D_ASSERT(state.child_states.size() == 1);
-	validity.InitializeScan(state.child_states[0]);
+	bool requires_validity = !compression || compression->validity == CompressionValidity::REQUIRES_VALIDITY;
+	state.scan_child_column = {requires_validity};
+	if (state.scan_child_column[0]) {
+		// initialize the validity segment
+		validity.InitializeScan(state.child_states[0]);
+	}
 }
 
 void StandardColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
 	ColumnData::InitializeScanWithOffset(state, row_idx);
 
-	// initialize the validity segment
-	D_ASSERT(state.child_states.size() == 1);
-	validity.InitializeScanWithOffset(state.child_states[0], row_idx);
+	bool requires_validity = !compression || compression->validity == CompressionValidity::REQUIRES_VALIDITY;
+	state.scan_child_column = {requires_validity};
+	if (state.scan_child_column[0]) {
+		// initialize the validity segment
+		D_ASSERT(state.child_states.size() == 1);
+		validity.InitializeScanWithOffset(state.child_states[0], row_idx);
+	}
 }
 
 idx_t StandardColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
@@ -60,7 +67,9 @@ idx_t StandardColumnData::Scan(TransactionData transaction, idx_t vector_index, 
 	auto scan_type = GetVectorScanType(state, target_count, result);
 	auto mode = ScanVectorMode::REGULAR_SCAN;
 	auto scan_count = ScanVector(transaction, vector_index, state, result, target_count, scan_type, mode);
-	validity.ScanVector(transaction, vector_index, state.child_states[0], result, target_count, scan_type, mode);
+	if (state.scan_child_column[0]) {
+		validity.ScanVector(transaction, vector_index, state.child_states[0], result, target_count, scan_type, mode);
+	}
 	return scan_count;
 }
 
@@ -68,13 +77,17 @@ idx_t StandardColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &sta
                                         idx_t target_count) {
 	D_ASSERT(state.row_index == state.child_states[0].row_index);
 	auto scan_count = ColumnData::ScanCommitted(vector_index, state, result, allow_updates, target_count);
-	validity.ScanCommitted(vector_index, state.child_states[0], result, allow_updates, target_count);
+	if (state.scan_child_column[0]) {
+		validity.ScanCommitted(vector_index, state.child_states[0], result, allow_updates, target_count);
+	}
 	return scan_count;
 }
 
 idx_t StandardColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) {
 	auto scan_count = ColumnData::ScanCount(state, result, count);
-	validity.ScanCount(state.child_states[0], result, count);
+	if (state.scan_child_column[0]) {
+		validity.ScanCount(state.child_states[0], result, count);
+	}
 	return scan_count;
 }
 
@@ -93,7 +106,9 @@ void StandardColumnData::Select(TransactionData transaction, idx_t vector_index,
 		return;
 	}
 	SelectVector(state, result, target_count, sel, sel_count);
-	validity.SelectVector(state.child_states[0], result, target_count, sel, sel_count);
+	if (state.scan_child_column[0]) {
+		validity.SelectVector(state.child_states[0], result, target_count, sel, sel_count);
+	}
 }
 
 void StandardColumnData::InitializeAppend(ColumnAppendState &state) {

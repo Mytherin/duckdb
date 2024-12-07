@@ -465,13 +465,14 @@ unique_ptr<SegmentScanState> DictionaryCompressionStorage::StringInitScan(Column
 
 	state->dictionary = make_buffer<Vector>(segment.type, index_buffer_count);
 	state->dictionary_size = index_buffer_count;
-	auto dict_child_data = FlatVector::GetData<string_t>(*(state->dictionary));
+	auto dict_child_data = FlatVector::GetData<string_t>(*state->dictionary);
 
-	for (uint32_t i = 0; i < index_buffer_count; i++) {
+	FlatVector::SetNull(*state->dictionary, 0, true);
+	for (uint32_t i = 1; i < index_buffer_count; i++) {
 		// NOTE: the passing of dict_child_vector, will not be used, its for big strings
 		uint16_t str_len = GetStringLength(index_buffer_ptr, i);
-		dict_child_data[i] =
-		    FetchStringFromDict(segment, dict, baseptr, UnsafeNumericCast<int32_t>(index_buffer_ptr[i]), str_len);
+		auto dict_offset = UnsafeNumericCast<int32_t>(index_buffer_ptr[i]);
+		dict_child_data[i] = FetchStringFromDict(segment, dict, baseptr, dict_offset, str_len);
 	}
 
 	return std::move(state);
@@ -522,10 +523,13 @@ void DictionaryCompressionStorage::StringScanPartial(ColumnSegment &segment, Col
 		for (idx_t i = 0; i < scan_count; i++) {
 			// Lookup dict offset in index buffer
 			auto string_number = scan_state.sel_vec->get_index(i + start_offset);
-			auto dict_offset = index_buffer_ptr[string_number];
-			auto str_len = GetStringLength(index_buffer_ptr, UnsafeNumericCast<sel_t>(string_number));
-			result_data[result_offset + i] =
-			    FetchStringFromDict(segment, dict, baseptr, UnsafeNumericCast<int32_t>(dict_offset), str_len);
+			auto dict_offset = UnsafeNumericCast<int32_t>(index_buffer_ptr[string_number]);
+			if (dict_offset == 0) {
+				FlatVector::SetNull(result, result_offset + i, true);
+			} else {
+				auto str_len = GetStringLength(index_buffer_ptr, UnsafeNumericCast<sel_t>(string_number));
+				result_data[result_offset + i] = FetchStringFromDict(segment, dict, baseptr, dict_offset, str_len);
+			}
 		}
 
 	} else {
@@ -584,10 +588,14 @@ void DictionaryCompressionStorage::StringFetchRow(ColumnSegment &segment, Column
 	                                          BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE, width);
 
 	auto selection_value = decompression_buffer[start_offset];
-	auto dict_offset = index_buffer_ptr[selection_value];
-	uint16_t str_len = GetStringLength(index_buffer_ptr, selection_value);
+	auto dict_offset = NumericCast<int32_t>(index_buffer_ptr[selection_value]);
 
-	result_data[result_idx] = FetchStringFromDict(segment, dict, baseptr, NumericCast<int32_t>(dict_offset), str_len);
+	if (dict_offset == 0) {
+		FlatVector::SetNull(result, result_idx, true);
+	} else {
+		uint16_t str_len = GetStringLength(index_buffer_ptr, selection_value);
+		result_data[result_idx] = FetchStringFromDict(segment, dict, baseptr, dict_offset, str_len);
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -628,11 +636,7 @@ string_t DictionaryCompressionStorage::FetchStringFromDict(ColumnSegment &segmen
                                                            data_ptr_t baseptr, int32_t dict_offset,
                                                            uint16_t string_len) {
 
-	D_ASSERT(dict_offset >= 0 && dict_offset <= NumericCast<int32_t>(segment.GetBlockManager().GetBlockSize()));
-	if (dict_offset == 0) {
-		return string_t(nullptr, 0);
-	}
-
+	D_ASSERT(dict_offset > 0 && dict_offset <= NumericCast<int32_t>(segment.GetBlockManager().GetBlockSize()));
 	// normal string: read string from this block
 	auto dict_end = baseptr + dict.end;
 	auto dict_pos = dict_end - dict_offset;
@@ -653,7 +657,7 @@ uint16_t DictionaryCompressionStorage::GetStringLength(uint32_t *index_buffer_pt
 // Get Function
 //===--------------------------------------------------------------------===//
 CompressionFunction DictionaryCompressionFun::GetFunction(PhysicalType data_type) {
-	return CompressionFunction(
+	CompressionFunction compression(
 	    CompressionType::COMPRESSION_DICTIONARY, data_type, DictionaryCompressionStorage ::StringInitAnalyze,
 	    DictionaryCompressionStorage::StringAnalyze, DictionaryCompressionStorage::StringFinalAnalyze,
 	    DictionaryCompressionStorage::InitCompression, DictionaryCompressionStorage::Compress,
@@ -661,6 +665,8 @@ CompressionFunction DictionaryCompressionFun::GetFunction(PhysicalType data_type
 	    DictionaryCompressionStorage::StringScan, DictionaryCompressionStorage::StringScanPartial<false>,
 	    DictionaryCompressionStorage::StringFetchRow, UncompressedFunctions::EmptySkip,
 	    UncompressedStringStorage::StringInitSegment);
+	compression.validity = CompressionValidity::HANDLES_VALIDITY;
+	return compression;
 }
 
 bool DictionaryCompressionFun::TypeIsSupported(const PhysicalType physical_type) {
