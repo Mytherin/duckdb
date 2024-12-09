@@ -401,17 +401,47 @@ void ValidityScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t s
 }
 
 void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
-	result.Flatten(scan_count);
-
 	auto start = segment.GetRelativeIndex(state.row_index);
 	if (start % ValidityMask::BITS_PER_VALUE == 0) {
+		// aligned scan
 		auto &scan_state = state.scan_state->Cast<ValidityScanState>();
-
 		auto buffer_ptr = scan_state.handle.Ptr() + segment.GetBlockOffset();
 		D_ASSERT(scan_state.block_id == segment.block->BlockId());
+
+		if (result.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+			// to prevent flattening dictionaries
+			auto dict_size = DictionaryVector::DictionarySize(result);
+			if (dict_size.IsValid()) {
+				// we are doing an aligned scan and we have a dictionary size
+				// we can keep the dictionary in-tact by
+				// we have a dict size
+				// set every invalid entry to "dict_size - 1"
+				sel_t invalid_entry_index = NumericCast<sel_t>(dict_size.GetIndex() - 1);
+				auto &sel_vector = DictionaryVector::SelVector(result);
+				auto input_data = reinterpret_cast<validity_t *>(buffer_ptr);
+				idx_t start_offset = start / ValidityMask::BITS_PER_VALUE;
+				idx_t entry_scan_count = (scan_count + ValidityMask::BITS_PER_VALUE - 1) / ValidityMask::BITS_PER_VALUE;
+				for (idx_t i = 0, result_offset = 0; i < entry_scan_count; i++, result_offset += ValidityMask::BITS_PER_VALUE) {
+					auto input_entry = input_data[start_offset + i];
+					if (input_entry == ValidityMask::ValidityBuffer::MAX_ENTRY) {
+						// all valid - skip
+						continue;
+					}
+					for(idx_t k = 0; k < ValidityMask::BITS_PER_VALUE; k++) {
+						if (!ValidityMask::RowIsValid(input_entry, k)) {
+							sel_vector.set_index(result_offset + k, invalid_entry_index);
+						}
+					}
+				}
+				return;
+			}
+		}
+
+		result.Flatten(scan_count);
 		ValidityUncompressed::AlignedScan(buffer_ptr, start, result, scan_count);
 	} else {
 		// unaligned scan: fall back to scan_partial which does bitshift tricks
+		result.Flatten(scan_count);
 		ValidityScanPartial(segment, state, scan_count, result, 0);
 	}
 }

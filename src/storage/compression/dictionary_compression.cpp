@@ -463,8 +463,8 @@ unique_ptr<SegmentScanState> DictionaryCompressionStorage::StringInitScan(Column
 
 	auto index_buffer_ptr = reinterpret_cast<uint32_t *>(baseptr + index_buffer_offset);
 
-	state->dictionary = make_buffer<Vector>(segment.type, index_buffer_count);
-	state->dictionary_size = index_buffer_count;
+	state->dictionary_size = index_buffer_count + 1;
+	state->dictionary = make_buffer<Vector>(segment.type, state->dictionary_size);
 	auto dict_child_data = FlatVector::GetData<string_t>(*(state->dictionary));
 
 	for (uint32_t i = 0; i < index_buffer_count; i++) {
@@ -473,6 +473,9 @@ unique_ptr<SegmentScanState> DictionaryCompressionStorage::StringInitScan(Column
 		dict_child_data[i] =
 		    FetchStringFromDict(segment, dict, baseptr, UnsafeNumericCast<int32_t>(index_buffer_ptr[i]), str_len);
 	}
+	// set the last element to NULL
+	FlatVector::SetNull(*state->dictionary, index_buffer_count, true);
+
 
 	return std::move(state);
 }
