@@ -36,7 +36,7 @@ typedef struct BPDeltaDecodeOffsets {
 } bp_delta_offsets_t;
 
 struct FSSTStorage {
-	static constexpr double MINIMUM_COMPRESSION_RATIO = 1.2;
+	static constexpr double MINIMUM_COMPRESSION_RATIO = 3.0;
 	static constexpr double ANALYSIS_SAMPLE_SIZE = 0.25;
 
 	static unique_ptr<AnalyzeState> StringInitAnalyze(ColumnData &col_data, PhysicalType type);
