@@ -31,8 +31,7 @@ void DictionaryCompressionCompressState::CreateEmptySegment(idx_t row_start) {
 	next_width = 0;
 
 	// Reset the pointers into the current segment.
-	auto &buffer_manager = BufferManager::GetBufferManager(checkpointer.GetDatabase());
-	current_handle = buffer_manager.Pin(current_segment->block);
+	current_handle = current_segment->PinBlock();
 	current_dictionary = DictionaryCompression::GetDictionary(*current_segment, current_handle);
 	current_end_ptr = current_handle.Ptr() + current_dictionary.end;
 }
@@ -114,8 +113,7 @@ void DictionaryCompressionCompressState::Flush(bool final) {
 }
 
 idx_t DictionaryCompressionCompressState::Finalize() {
-	auto &buffer_manager = BufferManager::GetBufferManager(checkpointer.GetDatabase());
-	auto handle = buffer_manager.Pin(current_segment->block);
+	auto handle = current_segment->PinBlock();
 	D_ASSERT(current_dictionary.end == info.GetBlockSize());
 
 	// calculate sizes

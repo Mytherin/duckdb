@@ -24,7 +24,7 @@ unique_ptr<BaseStatistics> ColumnCheckpointState::GetStatistics() {
 
 PartialBlockForCheckpoint::PartialBlockForCheckpoint(ColumnData &data, ColumnSegment &segment, PartialBlockState state,
                                                      BlockManager &block_manager)
-    : PartialBlock(state, block_manager, segment.block) {
+    : PartialBlock(state, block_manager, segment.GetBlock()) {
 	AddSegmentToTail(data, segment, 0);
 }
 
@@ -61,7 +61,7 @@ void PartialBlockForCheckpoint::Flush(const idx_t free_space_left) {
 			D_ASSERT(segment.offset_in_block == 0);
 			segment.segment.ConvertToPersistent(&block_manager, state.block_id);
 			// update the block after it has been converted to a persistent segment
-			block_handle = segment.segment.block;
+			block_handle = segment.segment.GetBlock();
 		} else {
 			// subsequent segments are MARKED as persistent - they don't need to be rewritten
 			segment.segment.MarkAsPersistent(block_handle, segment.offset_in_block);
@@ -150,7 +150,7 @@ void ColumnCheckpointState::FlushSegmentInternal(unique_ptr<ColumnSegment> segme
 			D_ASSERT(offset_in_block > 0);
 			auto &pstate = allocation.partial_block->Cast<PartialBlockForCheckpoint>();
 			// pin the source block
-			auto old_handle = buffer_manager.Pin(segment->block);
+			auto old_handle = buffer_manager.Pin(segment->GetBlock());
 			// pin the target block
 			auto new_handle = buffer_manager.Pin(pstate.block_handle);
 			// memcpy the contents of the old block to the new block

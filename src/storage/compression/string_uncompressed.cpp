@@ -65,7 +65,7 @@ idx_t UncompressedStringStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 // Scan
 //===--------------------------------------------------------------------===//
 void UncompressedStringInitPrefetch(ColumnSegment &segment, PrefetchState &prefetch_state) {
-	prefetch_state.AddBlock(segment.block);
+	prefetch_state.AddBlock(segment.GetBlock());
 	auto segment_state = segment.GetSegmentState();
 	if (segment_state) {
 		auto &state = segment_state->Cast<UncompressedStringSegmentState>();
@@ -79,8 +79,7 @@ void UncompressedStringInitPrefetch(ColumnSegment &segment, PrefetchState &prefe
 
 unique_ptr<SegmentScanState> UncompressedStringStorage::StringInitScan(ColumnSegment &segment) {
 	auto result = make_uniq<StringScanState>();
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-	result->handle = buffer_manager.Pin(segment.block);
+	result->handle = segment.PinBlock();
 	return std::move(result);
 }
 
@@ -142,13 +141,12 @@ void UncompressedStringStorage::Select(ColumnSegment &segment, ColumnScanState &
 // Fetch
 //===--------------------------------------------------------------------===//
 BufferHandle &ColumnFetchState::GetOrInsertHandle(ColumnSegment &segment) {
-	auto primary_id = segment.block->BlockId();
+	auto primary_id = segment.GetBlockId();
 
 	auto entry = handles.find(primary_id);
 	if (entry == handles.end()) {
 		// not pinned yet: pin it
-		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-		auto handle = buffer_manager.Pin(segment.block);
+		auto handle = segment.PinBlock();
 		auto pinned_entry = handles.insert(make_pair(primary_id, std::move(handle)));
 		return pinned_entry.first->second;
 	} else {
@@ -196,9 +194,8 @@ void SerializedStringSegmentState::Serialize(Serializer &serializer) const {
 unique_ptr<CompressedSegmentState>
 UncompressedStringStorage::StringInitSegment(ColumnSegment &segment, block_id_t block_id,
                                              optional_ptr<ColumnSegmentState> segment_state) {
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	if (block_id == INVALID_BLOCK) {
-		auto handle = buffer_manager.Pin(segment.block);
+		auto handle = segment.PinBlock();
 		StringDictionaryContainer dictionary;
 		dictionary.size = 0;
 		dictionary.end = UnsafeNumericCast<uint32_t>(segment.SegmentSize());
@@ -213,8 +210,7 @@ UncompressedStringStorage::StringInitSegment(ColumnSegment &segment, block_id_t 
 }
 
 idx_t UncompressedStringStorage::FinalizeAppend(ColumnSegment &segment, SegmentStatistics &) {
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-	auto handle = buffer_manager.Pin(segment.block);
+	auto handle = segment.PinBlock();
 	auto dict = GetDictionary(segment, handle);
 	D_ASSERT(dict.end == segment.SegmentSize());
 	// compute the total size required to store this segment

@@ -9,6 +9,9 @@ namespace duckdb {
 PartialBlock::PartialBlock(PartialBlockState state, BlockManager &block_manager,
                            const shared_ptr<BlockHandle> &block_handle)
     : state(state), block_manager(block_manager), block_handle(block_handle) {
+	if (!block_handle) {
+		throw InternalException("PartialBlock requires a block handle");
+	}
 }
 
 void PartialBlock::AddUninitializedRegion(idx_t start, idx_t end) {

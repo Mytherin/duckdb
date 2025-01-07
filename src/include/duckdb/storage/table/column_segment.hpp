@@ -22,6 +22,7 @@
 namespace duckdb {
 class ColumnSegment;
 class BlockManager;
+class BufferHandle;
 class ColumnData;
 class DatabaseInstance;
 class Transaction;
@@ -104,7 +105,7 @@ public:
 	//! Gets a data pointer from a persistent column segment
 	DataPointer GetDataPointer();
 
-	block_id_t GetBlockId() {
+	block_id_t GetBlockId() const {
 		D_ASSERT(segment_type == ColumnSegmentType::PERSISTENT);
 		return block_id;
 	}
@@ -116,15 +117,22 @@ public:
 		return block->block_manager;
 	}
 
-	idx_t GetBlockOffset() {
+	idx_t GetBlockOffset() const {
 		D_ASSERT(segment_type == ColumnSegmentType::PERSISTENT || offset == 0);
 		return offset;
 	}
 
-	idx_t GetRelativeIndex(idx_t row_index) {
+	idx_t GetRelativeIndex(idx_t row_index) const {
 		D_ASSERT(row_index >= this->start);
 		D_ASSERT(row_index <= this->start + this->count);
 		return row_index - this->start;
+	}
+
+	//! Pin the data of the column segment
+	BufferHandle PinBlock();
+
+	shared_ptr<BlockHandle> &GetBlock() {
+		return block;
 	}
 
 	optional_ptr<CompressedSegmentState> GetSegmentState() {
@@ -148,10 +156,10 @@ public:
 	ColumnSegmentType segment_type;
 	//! The statistics for the segment
 	SegmentStatistics stats;
-	//! The block that this segment relates to
-	shared_ptr<BlockHandle> block;
 
 private:
+	//! The block that this segment relates to
+	shared_ptr<BlockHandle> block;
 	//! The compression function
 	reference<CompressionFunction> function;
 	//! The block id that this segment relates to (persistent segment only)

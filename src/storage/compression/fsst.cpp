@@ -227,8 +227,7 @@ public:
 		last_fitting_size = 0;
 
 		// Reset the pointers into the current segment
-		auto &buffer_manager = BufferManager::GetBufferManager(current_segment->db);
-		current_handle = buffer_manager.Pin(current_segment->block);
+		current_handle = current_segment->PinBlock();
 		current_dictionary = FSSTStorage::GetDictionary(*current_segment, current_handle);
 		current_end_ptr = current_handle.Ptr() + current_dictionary.end;
 	}
@@ -327,8 +326,7 @@ public:
 	}
 
 	idx_t Finalize() {
-		auto &buffer_manager = BufferManager::GetBufferManager(current_segment->db);
-		auto handle = buffer_manager.Pin(current_segment->block);
+		auto handle = current_segment->PinBlock();
 		D_ASSERT(current_dictionary.end == info.GetBlockSize());
 
 		// calculate sizes
@@ -550,8 +548,7 @@ struct FSSTScanState : public StringScanState {
 unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(ColumnSegment &segment) {
 	auto string_block_limit = StringUncompressed::GetStringBlockLimit(segment.GetBlockManager().GetBlockSize());
 	auto state = make_uniq<FSSTScanState>(string_block_limit);
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-	state->handle = buffer_manager.Pin(segment.block);
+	state->handle = segment.PinBlock();
 	auto base_ptr = state->handle.Ptr() + segment.GetBlockOffset();
 
 	state->duckdb_fsst_decoder = make_buffer<duckdb_fsst_decoder_t>();
@@ -704,9 +701,7 @@ void FSSTStorage::Select(ColumnSegment &segment, ColumnScanState &state, idx_t v
 //===--------------------------------------------------------------------===//
 void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
                                  idx_t result_idx) {
-
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-	auto handle = buffer_manager.Pin(segment.block);
+	auto handle = segment.PinBlock();
 	auto base_ptr = handle.Ptr() + segment.GetBlockOffset();
 	auto base_data = data_ptr_cast(base_ptr + sizeof(fsst_compression_header_t));
 	auto dict = GetDictionary(segment, handle);

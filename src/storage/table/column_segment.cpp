@@ -217,6 +217,12 @@ void ColumnSegment::RevertAppend(idx_t start_row) {
 	this->count = start_row - this->start;
 }
 
+BufferHandle ColumnSegment::PinBlock() {
+	auto &buffer_manager = BufferManager::GetBufferManager(db);
+	// This block was initialized in StringInitSegment
+	return buffer_manager.Pin(block);
+}
+
 //===--------------------------------------------------------------------===//
 // Convert To Persistent
 //===--------------------------------------------------------------------===//

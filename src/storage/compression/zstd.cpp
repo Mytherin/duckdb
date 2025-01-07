@@ -523,8 +523,7 @@ public:
 		                                                                info.GetBlockSize(), info.GetBlockSize());
 		segment = std::move(compressed_segment);
 
-		auto &buffer_manager = BufferManager::GetBufferManager(checkpointer.GetDatabase());
-		segment_handle = buffer_manager.Pin(segment->block);
+		segment_handle = segment->PinBlock();
 	}
 
 	void FlushSegment() {
@@ -688,7 +687,7 @@ public:
 	      block_manager(segment.GetBlockManager()), buffer_manager(BufferManager::GetBufferManager(segment.db)),
 	      segment_block_offset(segment.GetBlockOffset()) {
 		decompression_context = duckdb_zstd::ZSTD_createDCtx();
-		segment_handle = buffer_manager.Pin(segment.block);
+		segment_handle = segment.PinBlock();
 
 		auto data = segment_handle.Ptr() + segment.GetBlockOffset();
 		idx_t offset = 0;

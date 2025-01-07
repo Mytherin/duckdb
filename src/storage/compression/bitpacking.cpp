@@ -502,8 +502,7 @@ public:
 		                                                                info.GetBlockSize(), info.GetBlockSize());
 		current_segment = std::move(compressed_segment);
 
-		auto &buffer_manager = BufferManager::GetBufferManager(db);
-		handle = buffer_manager.Pin(current_segment->block);
+		handle = current_segment->PinBlock();
 
 		data_ptr = handle.Ptr() + BitpackingPrimitives::BITPACKING_HEADER_SIZE;
 		metadata_ptr = handle.Ptr() + info.GetBlockSize();
@@ -627,8 +626,7 @@ template <class T, class T_S = typename MakeSigned<T>::type>
 struct BitpackingScanState : public SegmentScanState {
 public:
 	explicit BitpackingScanState(ColumnSegment &segment) : current_segment(segment) {
-		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-		handle = buffer_manager.Pin(segment.block);
+		handle = segment.PinBlock();
 		auto data_ptr = handle.Ptr();
 
 		// load offset to bitpacking widths pointer

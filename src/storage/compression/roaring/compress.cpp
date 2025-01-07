@@ -283,8 +283,7 @@ void RoaringCompressState::CreateEmptySegment(idx_t row_start) {
 	    ColumnSegment::CreateTransientSegment(db, function, type, row_start, info.GetBlockSize(), info.GetBlockSize());
 	current_segment = std::move(compressed_segment);
 
-	auto &buffer_manager = BufferManager::GetBufferManager(db);
-	handle = buffer_manager.Pin(current_segment->block);
+	handle = current_segment->PinBlock();
 	data_ptr = handle.Ptr();
 	data_ptr += sizeof(idx_t);
 	metadata_ptr = handle.Ptr() + info.GetBlockSize();
