@@ -7,8 +7,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 
 PartialBlock::PartialBlock(PartialBlockState state, BlockManager &block_manager,
-                           const shared_ptr<BlockHandle> &block_handle)
-    : state(state), block_manager(block_manager), block_handle(block_handle) {
+                           const shared_ptr<BlockHandle> &block_handle_p)
+    : state(state), block_manager(block_manager), block_handle(block_handle_p) {
 	if (!block_handle) {
 		throw InternalException("PartialBlock requires a block handle");
 	}
@@ -19,7 +19,6 @@ void PartialBlock::AddUninitializedRegion(idx_t start, idx_t end) {
 }
 
 void PartialBlock::FlushInternal(const idx_t free_space_left) {
-
 	// ensure that we do not leak any data
 	if (free_space_left > 0 || !uninitialized_regions.empty()) {
 		auto buffer_handle = block_manager.buffer_manager.Pin(block_handle);
