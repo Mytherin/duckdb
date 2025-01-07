@@ -1,0 +1,22 @@
+# name: test/sql/binder/struct_unpack_alias.test
+# description: Test struct extract of an alias
+# group: [binder]
+
+statement ok
+PRAGMA enable_verification
+
+query II
+select foo as f, f.n from generate_series(3) foo(n);
+----
+{'n': 0}	0
+{'n': 1}	1
+{'n': 2}	2
+{'n': 3}	3
+
+query III
+select {'x': foo} as f, f.x as g, g.n from generate_series(3) foo(n);
+----
+{'x': {'n': 0}}	{'n': 0}	0
+{'x': {'n': 1}}	{'n': 1}	1
+{'x': {'n': 2}}	{'n': 2}	2
+{'x': {'n': 3}}	{'n': 3}	3

@@ -43,6 +43,10 @@ string WhereBinder::UnsupportedAggregateMessage() {
 	return "WHERE clause cannot contain aggregates!";
 }
 
+optional_ptr<ColumnAliasBinder> WhereBinder::GetAliasBinder() {
+	return column_alias_binder;
+}
+
 bool WhereBinder::QualifyColumnAlias(const ColumnRefExpression &colref) {
 	if (column_alias_binder) {
 		return column_alias_binder->QualifyColumnAlias(colref);

@@ -13,6 +13,8 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
+#include "duckdb/planner/expression_binder/column_alias_binder.hpp"
+#include "duckdb/planner/expression_binder/select_bind_state.hpp"
 
 namespace duckdb {
 
@@ -78,6 +80,15 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 	auto lambda_ref = LambdaRefExpression::FindMatchingBinding(lambda_bindings, column_name);
 	if (lambda_ref) {
 		return lambda_ref;
+	}
+
+	// try binding as an alias
+	auto alias_binder = GetAliasBinder();
+	if (alias_binder) {
+		auto entry = alias_binder->bind_state.alias_map.find(column_name);
+		if (entry != alias_binder->bind_state.alias_map.end()) {
+			return alias_binder->bind_state.original_expressions[entry->second]->Copy();
+		}
 	}
 
 	// find a table binding that contains this column name
@@ -212,8 +223,9 @@ void ExpressionBinder::QualifyColumnNamesInLambda(FunctionExpression &function,
 	}
 }
 
-void ExpressionBinder::QualifyColumnNames(Binder &binder, unique_ptr<ParsedExpression> &expr) {
-	WhereBinder where_binder(binder, binder.context);
+void ExpressionBinder::QualifyColumnNames(Binder &binder, unique_ptr<ParsedExpression> &expr,
+                                          optional_ptr<ColumnAliasBinder> alias_binder) {
+	WhereBinder where_binder(binder, binder.context, alias_binder);
 	vector<unordered_set<string>> lambda_params;
 	where_binder.QualifyColumnNames(expr, lambda_params);
 }
@@ -493,4 +505,9 @@ bool ExpressionBinder::QualifyColumnAlias(const ColumnRefExpression &col_ref) {
 	// otherwise we return false
 	return false;
 }
+
+optional_ptr<ColumnAliasBinder> ExpressionBinder::GetAliasBinder() {
+	return nullptr;
+}
+
 } // namespace duckdb
