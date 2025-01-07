@@ -150,7 +150,7 @@ void ColumnCheckpointState::FlushSegmentInternal(unique_ptr<ColumnSegment> segme
 			D_ASSERT(offset_in_block > 0);
 			auto &pstate = allocation.partial_block->Cast<PartialBlockForCheckpoint>();
 			// pin the source block
-			auto old_handle = buffer_manager.Pin(segment->GetBlock());
+			auto old_handle = segment->PinBlock();
 			// pin the target block
 			auto new_handle = buffer_manager.Pin(pstate.block_handle);
 			// memcpy the contents of the old block to the new block

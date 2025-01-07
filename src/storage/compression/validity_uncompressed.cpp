@@ -210,7 +210,7 @@ struct ValidityScanState : public SegmentScanState {
 unique_ptr<SegmentScanState> ValidityInitScan(ColumnSegment &segment) {
 	auto result = make_uniq<ValidityScanState>();
 	result->handle = segment.PinBlock();
-	result->block_id = segment.GetBlockId();
+	result->block_id = segment.GetBlock()->BlockId();
 	return std::move(result);
 }
 
@@ -395,7 +395,7 @@ void ValidityScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t s
 	auto &scan_state = state.scan_state->Cast<ValidityScanState>();
 
 	auto buffer_ptr = scan_state.handle.Ptr() + segment.GetBlockOffset();
-	D_ASSERT(scan_state.block_id == segment.block->BlockId());
+	D_ASSERT(scan_state.block_id == segment.GetBlock()->BlockId());
 	ValidityUncompressed::UnalignedScan(buffer_ptr, segment.count, start, result, result_offset, scan_count);
 }
 
@@ -407,7 +407,7 @@ void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_cou
 		auto &scan_state = state.scan_state->Cast<ValidityScanState>();
 
 		auto buffer_ptr = scan_state.handle.Ptr() + segment.GetBlockOffset();
-		D_ASSERT(scan_state.block_id == segment.block->BlockId());
+		D_ASSERT(scan_state.block_id == segment.GetBlock()->BlockId());
 		ValidityUncompressed::AlignedScan(buffer_ptr, start, result, scan_count);
 	} else {
 		// unaligned scan: fall back to scan_partial which does bitshift tricks
