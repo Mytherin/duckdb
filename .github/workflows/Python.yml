@@ -165,6 +165,7 @@ jobs:
     needs: manylinux-extensions-x64
     runs-on: ubuntu-20.04
     strategy:
+      fail-fast: false
       matrix:
         arch: [x86_64, aarch64]
         python_build: [cp37-*, cp38-*, cp39-*, cp310-*, cp311-*, cp312-*, cp313-*]
@@ -175,19 +176,8 @@ jobs:
           # For now we don't distribute the 2_28 wheels on x64
           - arch: x86_64
             manylinux: manylinux_2_28
-          # Speed things up a bit for non-releases
-          - isRelease: false
-            python_build: 'cp37-*'
-          - isRelease: false
-            python_build: 'cp38-*'
-          - isRelease: false
-            python_build: 'cp39-*'
-          - isRelease: false
-            python_build: 'cp310-*'
-          - isRelease: false
-            python_build: 'cp311-*'
-          - isRelease: false
-            arch: aarch64
+          - arch: aarch64
+            manylinux: manylinux2014
     env:
       CIBW_BUILD: ${{ matrix.python_build}}
       CIBW_SKIP: '*-musllinux_aarch64 cp37-musllinux* cp38-musllinux*'
