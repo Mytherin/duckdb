@@ -102,12 +102,7 @@ FilterResult FilterCombiner::AddFilter(unique_ptr<Expression> expr) {
 }
 
 void FilterCombiner::GenerateFilters(const std::function<void(unique_ptr<Expression> filter)> &callback) {
-	// first loop over the remaining filters
-	for (auto &filter : remaining_filters) {
-		callback(std::move(filter));
-	}
-	remaining_filters.clear();
-	// now loop over the equivalence sets
+	// loop over the equivalence sets
 	for (auto &entry : equivalence_map) {
 		auto equivalence_set = entry.first;
 		auto &entries = entry.second;
@@ -172,6 +167,11 @@ void FilterCombiner::GenerateFilters(const std::function<void(unique_ptr<Express
 	equivalence_set_map.clear();
 	constant_values.clear();
 	equivalence_map.clear();
+	// finally loop over the remaining filters
+	for (auto &filter : remaining_filters) {
+		callback(std::move(filter));
+	}
+	remaining_filters.clear();
 }
 
 bool FilterCombiner::HasFilters() {

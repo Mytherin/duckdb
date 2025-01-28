@@ -60,7 +60,8 @@ bool Expression::IsConsistent() const {
 
 bool Expression::CanThrow() const {
 	bool can_throw = false;
-	ExpressionIterator::EnumerateChildren(*this, [&](const Expression &child) { can_throw |= child.CanThrow(); });
+	ExpressionIterator::EnumerateChildren(*this,
+	                                      [&](const Expression &child) { can_throw = can_throw || child.CanThrow(); });
 	return can_throw;
 }
 
