@@ -848,6 +848,9 @@ FilterResult FilterCombiner::AddFilter(Expression &expr) {
 	if (expr.HasParameter()) {
 		return FilterResult::UNSUPPORTED;
 	}
+	if (expr.CanThrow()) {
+		return FilterResult::UNSUPPORTED;
+	}
 	if (expr.IsFoldable()) {
 		// scalar condition, evaluate it
 		Value result;
