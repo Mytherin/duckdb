@@ -28,7 +28,7 @@ struct ReadTextOperation {
 	}
 
 	static inline void VERIFY(const string &filename, const string_t &content) {
-		if (Utf8Proc::Analyze(content.GetData(), content.GetSize()) == UnicodeType::INVALID) {
+		if (!Utf8Proc::IsValid(content.GetData(), content.GetSize())) {
 			throw InvalidInputException(
 			    "read_text: could not read content of file '%s' as valid UTF-8 encoded text. You "
 			    "may want to use read_blob instead.",

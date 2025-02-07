@@ -21,7 +21,7 @@ void StringHeap::Move(StringHeap &other) {
 }
 
 string_t StringHeap::AddString(const char *data, idx_t len) {
-	D_ASSERT(Utf8Proc::Analyze(data, len) != UnicodeType::INVALID);
+	D_ASSERT(Utf8Proc::IsValid(data, len));
 	return AddBlob(data, len);
 }
 

@@ -2,6 +2,7 @@
 #include "utf8proc.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/likely.hpp"
 
 using namespace std;
 
@@ -37,7 +38,7 @@ template <const int nextra_bytes, const int mask>
 static inline UnicodeType UTF8ExtraByteLoop(const int first_pos_seq, int utf8char, size_t &i, const char *s,
                                             const size_t len, UnicodeInvalidReason *invalid_reason,
                                             size_t *invalid_pos) {
-	if ((len - i) < (nextra_bytes + 1)) {
+	if (DUCKDB_UNLIKELY((len - i) < (nextra_bytes + 1))) {
 		/* incomplete byte sequence */
 		AssignInvalidUTF8Reason(invalid_reason, invalid_pos, first_pos_seq, UnicodeInvalidReason::BYTE_MISMATCH);
 		return UnicodeType::INVALID;
@@ -45,24 +46,24 @@ static inline UnicodeType UTF8ExtraByteLoop(const int first_pos_seq, int utf8cha
 	for (size_t j = 0; j < nextra_bytes; j++) {
 		int c = (int)s[++i];
 		/* now validate the extra bytes */
-		if ((c & 0xC0) != 0x80) {
+		if (DUCKDB_UNLIKELY((c & 0xC0) != 0x80)) {
 			/* extra byte is not in the format 10xxxxxx */
 			AssignInvalidUTF8Reason(invalid_reason, invalid_pos, i, UnicodeInvalidReason::BYTE_MISMATCH);
 			return UnicodeType::INVALID;
 		}
 		utf8char = (utf8char << 6) | (c & 0x3F);
 	}
-	if ((utf8char & mask) == 0) {
+	if (DUCKDB_UNLIKELY((utf8char & mask) == 0)) {
 		/* invalid UTF-8 codepoint, not shortest possible */
 		AssignInvalidUTF8Reason(invalid_reason, invalid_pos, first_pos_seq, UnicodeInvalidReason::INVALID_UNICODE);
 		return UnicodeType::INVALID;
 	}
-	if (utf8char > 0x10FFFF) {
+	if (DUCKDB_UNLIKELY(utf8char > 0x10FFFF)) {
 		/* value not representable by Unicode */
 		AssignInvalidUTF8Reason(invalid_reason, invalid_pos, first_pos_seq, UnicodeInvalidReason::INVALID_UNICODE);
 		return UnicodeType::INVALID;
 	}
-	if ((utf8char & 0x1FFF800) == 0xD800) {
+	if (DUCKDB_UNLIKELY((utf8char & 0x1FFF800) == 0xD800)) {
 		/* Unicode characters from U+D800 to U+DFFF are surrogate characters used by UTF-16 which are invalid in UTF-8
 		 */
 		AssignInvalidUTF8Reason(invalid_reason, invalid_pos, first_pos_seq, UnicodeInvalidReason::INVALID_UNICODE);

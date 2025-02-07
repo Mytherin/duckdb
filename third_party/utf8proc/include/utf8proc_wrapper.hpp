@@ -52,8 +52,6 @@ public:
 
 	//! Returns the number of grapheme clusters in a string
 	static size_t GraphemeCount(const char *s, size_t len);
-
-
 };
 
 struct GraphemeCluster {

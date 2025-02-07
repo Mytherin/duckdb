@@ -25,10 +25,7 @@ uint32_t StringColumnReader::VerifyString(const char *str_data, uint32_t str_len
 	}
 	// verify if a string is actually UTF8, and if there are no null bytes in the middle of the string
 	// technically Parquet should guarantee this, but reality is often disappointing
-	UnicodeInvalidReason reason;
-	size_t pos;
-	auto utf_type = Utf8Proc::Analyze(str_data, str_len, &reason, &pos);
-	if (utf_type == UnicodeType::INVALID) {
+	if (!Utf8Proc::IsValid(str_data, str_len)) {
 		throw InvalidInputException("Invalid string encoding found in Parquet file: value \"" +
 		                            Blob::ToString(string_t(str_data, str_len)) + "\" is not valid UTF8!");
 	}
