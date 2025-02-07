@@ -249,12 +249,8 @@ void ColumnReader::PrepareRead() {
 		PrepareDataPage(page_hdr);
 		break;
 	case PageType::DICTIONARY_PAGE: {
-		PreparePage(page_hdr);
-		auto dictionary_size = page_hdr.dictionary_page_header.num_values;
-		if (dictionary_size < 0) {
-			throw std::runtime_error("Invalid dictionary page header (num_values < 0)");
-		}
-		dictionary_decoder.InitializeDictionary(dictionary_size);
+		auto lazy_dictionary = PrepareDictionary(page_hdr);
+		dictionary_decoder.SetDictionary(std::move(lazy_dictionary));
 		break;
 	}
 	default:
@@ -314,6 +310,34 @@ void ColumnReader::AllocateBlock(idx_t size) {
 
 void ColumnReader::AllocateCompressed(idx_t size) {
 	compressed_buffer.resize(GetAllocator(), size);
+}
+
+unique_ptr<LazyDictionary> ColumnReader::PrepareDictionary(PageHeader &page_hdr) {
+	auto lazy_dictionary =
+	    make_uniq<LazyDictionary>(GetAllocator(), page_hdr.compressed_page_size, page_hdr.uncompressed_page_size);
+	if (chunk->meta_data.codec == CompressionCodec::UNCOMPRESSED) {
+		if (page_hdr.compressed_page_size != page_hdr.uncompressed_page_size) {
+			throw std::runtime_error("Page size mismatch");
+		}
+	}
+	reader.ReadData(*protocol, lazy_dictionary->data->ptr, lazy_dictionary->compressed_size);
+	auto dictionary_size = page_hdr.dictionary_page_header.num_values;
+	if (dictionary_size < 0) {
+		throw std::runtime_error("Invalid dictionary page header (num_values < 0)");
+	}
+	lazy_dictionary->codec = chunk->meta_data.codec;
+	lazy_dictionary->dictionary_id = reader.file_name + "_" + schema.name + "_" + std::to_string(chunk_read_offset);
+	lazy_dictionary->dictionary_size = static_cast<idx_t>(dictionary_size);
+	return lazy_dictionary;
+}
+
+shared_ptr<ResizeableBuffer> ColumnReader::DecompressDictionary(LazyDictionary &dict) {
+	if (dict.codec == CompressionCodec::UNCOMPRESSED) {
+		return dict.data;
+	}
+	auto dict_block = make_shared_ptr<ResizeableBuffer>(GetAllocator(), dict.uncompressed_size + 1);
+	DecompressInternal(dict.codec, dict.data->ptr, dict.compressed_size, dict_block->ptr, dict.uncompressed_size);
+	return dict_block;
 }
 
 void ColumnReader::PreparePage(PageHeader &page_hdr) {

@@ -214,6 +214,8 @@ private:
 	void PreparePage(PageHeader &page_hdr);
 	void PrepareDataPage(PageHeader &page_hdr);
 	void PreparePageV2(PageHeader &page_hdr);
+	unique_ptr<LazyDictionary> PrepareDictionary(PageHeader &page_hdr);
+	shared_ptr<ResizeableBuffer> DecompressDictionary(LazyDictionary &dict);
 	void DecompressInternal(CompressionCodec::type codec, const_data_ptr_t src, idx_t src_size, data_ptr_t dst,
 	                        idx_t dst_size);
 	const ColumnChunk *chunk = nullptr;

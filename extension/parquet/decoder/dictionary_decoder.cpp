@@ -4,26 +4,40 @@
 
 namespace duckdb {
 
+LazyDictionary::LazyDictionary(Allocator &allocator, idx_t compressed_size, idx_t uncompressed_size)
+    : data(make_shared_ptr<ResizeableBuffer>(allocator, compressed_size + 1)), compressed_size(compressed_size),
+      uncompressed_size(uncompressed_size) {
+}
+
 DictionaryDecoder::DictionaryDecoder(ColumnReader &reader)
     : reader(reader), offset_buffer(reader.encoding_buffers[0]), valid_sel(STANDARD_VECTOR_SIZE),
       dictionary_selection_vector(STANDARD_VECTOR_SIZE), dictionary_size(0) {
 }
 
-void DictionaryDecoder::InitializeDictionary(idx_t new_dictionary_size) {
+void DictionaryDecoder::SetDictionary(unique_ptr<LazyDictionary> lazy_dictionary_p) {
+	lazy_dictionary = std::move(lazy_dictionary_p);
+}
+
+void DictionaryDecoder::InitializeDictionary() {
+	if (!lazy_dictionary) {
+		return;
+	}
+	auto dict_block = reader.DecompressDictionary(*lazy_dictionary);
+
 	auto old_dict_size = dictionary_size;
-	dictionary_size = new_dictionary_size;
+	dictionary_size = std::move(lazy_dictionary->dictionary_size);
 	// we use the first value in the dictionary to keep a NULL
 	if (!dictionary) {
 		dictionary = make_uniq<Vector>(reader.type, dictionary_size + 1);
 	} else if (dictionary_size > old_dict_size) {
 		dictionary->Resize(old_dict_size, dictionary_size + 1);
 	}
-	dictionary_id = reader.reader.file_name + "_" + reader.schema.name + "_" + std::to_string(reader.chunk_read_offset);
 	// we use the last entry as a NULL, dictionary vectors don't have a separate validity mask
 	auto &dict_validity = FlatVector::Validity(*dictionary);
 	dict_validity.Reset(dictionary_size + 1);
 	dict_validity.SetInvalid(dictionary_size);
-	reader.Plain(reader.block, nullptr, dictionary_size, 0, *dictionary);
+	reader.Plain(dict_block, nullptr, dictionary_size, 0, *dictionary);
+	lazy_dictionary.reset();
 }
 
 void DictionaryDecoder::InitializePage() {
@@ -47,6 +61,7 @@ void DictionaryDecoder::ConvertDictToSelVec(uint32_t *offsets, const SelectionVe
 }
 
 void DictionaryDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result, idx_t result_offset) {
+	InitializeDictionary();
 	if (!dictionary || dictionary_size < 0) {
 		throw std::runtime_error("Parquet file is likely corrupted, missing dictionary");
 	}
@@ -88,9 +103,6 @@ void DictionaryDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result,
 }
 
 void DictionaryDecoder::Skip(uint8_t *defines, idx_t skip_count) {
-	if (!dictionary || dictionary_size < 0) {
-		throw std::runtime_error("Parquet file is likely corrupted, missing dictionary");
-	}
 	idx_t valid_count = reader.GetValidCount(defines, skip_count);
 	// skip past the valid offsets
 	dict_decoder->Skip(valid_count);
