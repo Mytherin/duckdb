@@ -214,7 +214,7 @@ struct ParquetWriteGlobalState : public GlobalFunctionData {
 
 struct ParquetWriteLocalState : public LocalFunctionData {
 	explicit ParquetWriteLocalState(ClientContext &context, const vector<LogicalType> &types)
-	    : buffer(BufferAllocator::Get(context), types) {
+	    : buffer(BufferManager::GetBufferManager(context), types) {
 		buffer.InitializeAppend(append_state);
 	}
 
