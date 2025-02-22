@@ -9,22 +9,22 @@ statement ok
 CREATE TABLE  t0(c0 BIT);
 
 statement ok
-INSERT INTO t0(c0) VALUES (0);
+INSERT INTO t0(c0) VALUES (0::INT);
 
 statement ok
-INSERT INTO t0(c0) VALUES (1);
+INSERT INTO t0(c0) VALUES (1::INT);
 
 statement ok
-INSERT INTO t0(c0) VALUES (2);
+INSERT INTO t0(c0) VALUES (2::INT);
 
 statement ok
-INSERT INTO t0(c0) VALUES (3);
+INSERT INTO t0(c0) VALUES (3::INT);
 
 statement ok
-INSERT INTO t0(c0) VALUES (4);
+INSERT INTO t0(c0) VALUES (4::INT);
 
 statement ok
-INSERT INTO t0(c0) VALUES (5);
+INSERT INTO t0(c0) VALUES (5::INT);
 
 statement ok
 INSERT INTO t1(c0) VALUES (X'41');
@@ -91,16 +91,16 @@ statement ok
 CREATE OR REPLACE TABLE  t0(c0 BIT);
 
 statement ok
-CREATE OR REPLACE VIEW v0(c0) AS SELECT 1 FROM t1, t0 GROUP BY t0.c0;
+CREATE OR REPLACE VIEW v0(c0) AS SELECT 1::INT FROM t1, t0 GROUP BY t0.c0;
 
 statement ok
 INSERT INTO t0(c0) VALUES ( NULL);
 
 statement ok
-INSERT INTO t0(c0) VALUES (0);
+INSERT INTO t0(c0) VALUES (0::INT);
 
 statement ok
-INSERT INTO t0(c0) VALUES ( 1);
+INSERT INTO t0(c0) VALUES ( 1::INT);
 
 statement ok
 INSERT INTO t1(c0) VALUES (X'41');

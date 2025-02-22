@@ -930,6 +930,7 @@ duckdb::string_t CastFromBitToString::Operation(duckdb::string_t input, Vector &
 struct CastFromBitToNumeric {
 	template <class SRC = string_t, class DST>
 	static inline bool Operation(SRC input, DST &result, CastParameters &parameters) {
+		auto bit_size = input.GetSize() - 1;
 		D_ASSERT(input.GetSize() > 1);
 
 		// TODO: Allow conversion if the significant bytes of the bitstring can be cast to the target type

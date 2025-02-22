@@ -13,7 +13,7 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(duckdb_libpgquery::PG
 	switch (val.type) {
 	case duckdb_libpgquery::T_PGInteger:
 		D_ASSERT(val.val.ival <= NumericLimits<int32_t>::Maximum());
-		return make_uniq<ConstantExpression>(Value::INTEGER((int32_t)val.val.ival));
+		return make_uniq<ConstantExpression>(Value::BIGINT(static_cast<int64_t>(val.val.ival)));
 	case duckdb_libpgquery::T_PGBitString: // FIXME: this should actually convert to BLOB
 	case duckdb_libpgquery::T_PGString:
 		return make_uniq<ConstantExpression>(Value(string(val.val.str)));

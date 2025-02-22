@@ -19,7 +19,7 @@ VARCHAR
 query I
 EXECUTE v1([1, 2, 3])
 ----
-INTEGER[]
+BIGINT[]
 
 # direct select without cast
 statement ok

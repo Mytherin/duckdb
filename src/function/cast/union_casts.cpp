@@ -27,7 +27,7 @@ unique_ptr<BoundCastData> BindToUnionCast(BindCastInput &input, const LogicalTyp
 			candidates.emplace_back(member_idx, member_name, member_type, member_cast_cost,
 			                        std::move(member_cast_info));
 		}
-	};
+	}
 
 	// no possible casts found!
 	if (candidates.empty()) {
@@ -55,7 +55,6 @@ unique_ptr<BoundCastData> BindToUnionCast(BindCastInput &input, const LogicalTyp
 
 	// check if the cast is ambiguous (2 or more casts have the same cost)
 	if (candidates.size() > 1 && candidates[1].cost == selected_cost) {
-
 		// collect all the ambiguous types
 		auto message = StringUtil::Format(
 		    "Type %s can't be cast as %s. The cast is ambiguous, multiple possible members in target: ", source,

@@ -68,7 +68,7 @@ Could not convert string 'world' to INT32
 statement error
 SELECT struct_pack(a => [1, 2, 3])::STRUCT(a INT)
 ----
-Unimplemented type for cast (INTEGER[] -> INTEGER)
+Unimplemented type for cast
 
 statement error
 SELECT struct_pack(a => struct_pack(b => 42)::STRUCT(b INT))::STRUCT(a INT)

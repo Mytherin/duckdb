@@ -274,13 +274,6 @@ public:
 		if (!StringUtil::CIEquals(children[2].first, "default_value")) {
 			throw InvalidInputException("'schema' expects the third field of the struct to be called 'default_value'");
 		}
-		//! NOTE: default_value can be any type
-
-		if (key_type.id() != LogicalTypeId::INTEGER && key_type.id() != LogicalTypeId::VARCHAR) {
-			throw InvalidInputException(
-			    "'schema' expects the value type of the map to be either INTEGER or VARCHAR, not %s",
-			    LogicalTypeIdToString(key_type.id()));
-		}
 	}
 
 	static void ParquetScanSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,

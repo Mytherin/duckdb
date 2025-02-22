@@ -433,7 +433,7 @@ struct MinMaxType {
 		if (modifiers.size() != 2) {
 			throw BinderException("MINMAX type must have two modifiers");
 		}
-		if (modifiers[0].type() != LogicalType::INTEGER || modifiers[1].type() != LogicalType::INTEGER) {
+		if (!modifiers[0].type().IsIntegral() || !modifiers[1].type().IsIntegral()) {
 			throw BinderException("MINMAX type modifiers must be integers");
 		}
 		if (modifiers[0].IsNull() || modifiers[1].IsNull()) {
@@ -489,7 +489,7 @@ static bool IntToMinMaxCast(Vector &source, Vector &result, idx_t count, CastPar
 	auto &ty = result.GetType();
 	auto min_val = MinMaxType::GetMinValue(ty);
 	auto max_val = MinMaxType::GetMaxValue(ty);
-	UnaryExecutor::Execute<int32_t, int32_t>(source, result, count, [&](int32_t input) {
+	UnaryExecutor::Execute<int64_t, int32_t>(source, result, count, [&](int32_t input) {
 		if (input < min_val || input > max_val) {
 			throw ConversionException(StringUtil::Format("Value %s is outside of range [%s,%s]", to_string(input),
 			                                             to_string(min_val), to_string(max_val)));
@@ -608,7 +608,7 @@ DUCKDB_EXTENSION_API void loadable_extension_demo_init(duckdb::DatabaseInstance 
 	// MinMax Type
 	auto minmax_type = MinMaxType::GetDefault();
 	ExtensionUtil::RegisterType(db, "MINMAX", minmax_type, MinMaxType::Bind);
-	ExtensionUtil::RegisterCastFunction(db, LogicalType::INTEGER, minmax_type, BoundCastInfo(IntToMinMaxCast), 0);
+	ExtensionUtil::RegisterCastFunction(db, LogicalType::BIGINT, minmax_type, BoundCastInfo(IntToMinMaxCast), 0);
 	ExtensionUtil::RegisterFunction(
 	    db, ScalarFunction("minmax_range", {minmax_type}, LogicalType::INTEGER, MinMaxRangeFunc));
 }

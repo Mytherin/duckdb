@@ -113,11 +113,11 @@ alias_alias_name	INTEGER	YES	NULL	NULL	NULL
 query TTTITI
 DESCRIBE SELECT base_name AS alias_name FROM VALUES (1) AS base_table(base_name)
 ----
-alias_name	INTEGER	YES	NULL	NULL	NULL
+alias_name	BIGINT	YES	NULL	NULL	NULL
 
 # Alias CTE
 # column_name | column_type | null | key | default | extra
 query TTTITI
 DESCRIBE WITH cte_rel AS (SELECT 1 as base_name) SELECT base_name as alias_name FROM cte_rel;
 ----
-alias_name	INTEGER	YES	NULL	NULL	NULL
+alias_name	BIGINT	YES	NULL	NULL	NULL

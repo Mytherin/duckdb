@@ -39,7 +39,7 @@ SELECT 1*d FROM decimals
 ----
 99000000000000000.0
 
-statement error
+query I
 SELECT 2*d FROM decimals
 ----
-<REGEX>:Out of Range Error.*Overflow in multiplication of DECIMAL.*
+198000000000000000.0

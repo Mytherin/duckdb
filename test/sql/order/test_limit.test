@@ -190,7 +190,7 @@ SELECT * FROM integers as int LIMIT (SELECT NULL)
 statement error
 SELECT * FROM integers as int LIMIT (SELECT -1);
 ----
-<REGEX>:Invalid Input Error.*INT32.*out of range for.*UINT64.*
+<REGEX>:Invalid Input Error.*out of range for.*UINT64.*
 
 #Subqueries that return strings that can't be converted to integers
 statement error
@@ -276,13 +276,13 @@ SELECT * FROM t ORDER BY x LIMIT (SELECT 3) OFFSET 3;
 statement error
 SELECT * FROM t ORDER BY x LIMIT (SELECT -1);
 ----
-<REGEX>:Invalid Input Error.*INT32.*out of range for.*UINT64.*
+<REGEX>:Invalid Input Error.*out of range for.*UINT64.*
 
 # negeive number in the offset
 statement error
 SELECT * FROM t ORDER BY x OFFSET (SELECT -1);
 ----
-<REGEX>:Invalid Input Error.*INT32.*out of range for.*UINT64.*
+<REGEX>:Invalid Input Error.*out of range for.*UINT64.*
 
 statement ok
 create table t0(c0 int);

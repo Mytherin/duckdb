@@ -7,4 +7,4 @@ PRAGMA enable_verification
 query I
 SELECT typeof(1)
 ----
-INTEGER
+BIGINT

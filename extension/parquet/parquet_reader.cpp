@@ -638,7 +638,14 @@ ParquetOptions::ParquetOptions(ClientContext &context) {
 ParquetColumnDefinition ParquetColumnDefinition::FromSchemaValue(ClientContext &context, const Value &column_value) {
 	ParquetColumnDefinition result;
 	auto &identifier = StructValue::GetChildren(column_value)[0];
-	result.identifier = identifier;
+	if (identifier.type().id() == LogicalTypeId::VARCHAR) {
+		result.identifier = identifier;
+	} else if (identifier.type().id() == LogicalTypeId::BOOLEAN || !identifier.DefaultTryCastAs(LogicalType::INTEGER, result.identifier, nullptr)) {
+			throw InvalidInputException(
+				"'schema' expects the value type of the map to be either INTEGER or VARCHAR, not %s",
+				identifier.type().ToString());
+
+	}
 
 	const auto &column_def = StructValue::GetChildren(column_value)[1];
 	D_ASSERT(column_def.type().id() == LogicalTypeId::STRUCT);

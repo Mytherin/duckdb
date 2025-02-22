@@ -73,7 +73,7 @@ SELECT ['1.0', '2.0', '3.0']::DOUBLE[3]
 statement error
 SELECT [1, 2, 3]::BLOB[3]
 ----
-Unimplemented type for cast (INTEGER -> BLOB)
+Unimplemented type for cast (BIGINT -> BLOB)
 
 # Should be able to cast from NULL
 query I
