@@ -1,0 +1,23 @@
+# name: test/sql/alter/alter_type/test_alter_type_delete.test
+# description: Test ALTER TABLE ALTER TYPE on deleted rows
+# group: [alter_type]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table t (c string);
+
+statement ok
+insert into t values ('asdf'),( '42');
+
+statement ok
+delete from t where c='asdf';
+
+statement ok
+alter table t alter column c type integer;
+
+query I
+FROM t
+----
+42

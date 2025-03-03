@@ -23,7 +23,10 @@ enum class TableScanType : uint8_t {
 	//! Permanently deleted rows are rows which no transaction will ever need again.
 	TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED = 3,
 	//! Scan the latest committed rows
-	TABLE_SCAN_LATEST_COMMITTED_ROWS = 4
+	TABLE_SCAN_LATEST_COMMITTED_ROWS = 4,
+	//! Scan all rows, but nullify the values of any permanently deleted rows.
+	//! Similar to TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED - but this does return all rows (as NULLL values)
+	TABLE_SCAN_COMMITTED_ROWS_NULL_PERMANENTLY_DELETED = 5,
 };
 
 } // namespace duckdb

@@ -299,7 +299,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 	while (true) {
 		// scan the table
 		scan_chunk.Reset();
-		ScanCommitted(scan_state, scan_chunk, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
+		ScanCommitted(scan_state, scan_chunk, TableScanType::TABLE_SCAN_COMMITTED_ROWS_NULL_PERMANENTLY_DELETED);
 		if (scan_chunk.size() == 0) {
 			break;
 		}
@@ -583,6 +583,12 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 					}
 				}
 			}
+			if (TYPE == TableScanType::TABLE_SCAN_COMMITTED_ROWS_NULL_PERMANENTLY_DELETED) {
+				throw InternalException("FIXME");
+				// count = state.row_group->GetCommittedSelVector(transaction.start_time, transaction.transaction_id,
+				// 											   state.vector_index, state.valid_sel, max_count);
+
+			}
 		} else {
 			// partial scan: we have deletions or table filters
 			idx_t approved_tuple_count = count;
@@ -740,6 +746,9 @@ void RowGroup::ScanCommitted(CollectionScanState &state, DataChunk &result, Tabl
 	case TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED:
 	case TableScanType::TABLE_SCAN_LATEST_COMMITTED_ROWS:
 		TemplatedScan<TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED>(data, state, result);
+		break;
+	case TableScanType::TABLE_SCAN_COMMITTED_ROWS_NULL_PERMANENTLY_DELETED:
+		TemplatedScan<TableScanType::TABLE_SCAN_COMMITTED_ROWS_NULL_PERMANENTLY_DELETED>(data, state, result);
 		break;
 	default:
 		throw InternalException("Unrecognized table scan type");
