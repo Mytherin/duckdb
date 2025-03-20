@@ -15,6 +15,9 @@ ExceptionFormatValue::ExceptionFormatValue(double dbl_val)
 ExceptionFormatValue::ExceptionFormatValue(int64_t int_val)
     : type(ExceptionFormatValueType::FORMAT_VALUE_TYPE_INTEGER), int_val(int_val) {
 }
+ExceptionFormatValue::ExceptionFormatValue(uint64_t uint_val)
+    : type(ExceptionFormatValueType::FORMAT_VALUE_TYPE_UINTEGER), uint_val(uint_val) {
+}
 ExceptionFormatValue::ExceptionFormatValue(hugeint_t huge_val)
     : type(ExceptionFormatValueType::FORMAT_VALUE_TYPE_STRING), str_val(Hugeint::ToString(huge_val)) {
 }
@@ -76,6 +79,11 @@ ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(uhugeint_t value) {
 	return ExceptionFormatValue(value);
 }
 
+template <>
+ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(uint64_t value) {
+	return ExceptionFormatValue(value);
+}
+
 string ExceptionFormatValue::Format(const string &msg, std::vector<ExceptionFormatValue> &values) {
 	try {
 		std::vector<duckdb_fmt::basic_format_arg<duckdb_fmt::printf_context>> format_args;
@@ -86,6 +94,9 @@ string ExceptionFormatValue::Format(const string &msg, std::vector<ExceptionForm
 				break;
 			case ExceptionFormatValueType::FORMAT_VALUE_TYPE_INTEGER:
 				format_args.push_back(duckdb_fmt::internal::make_arg<duckdb_fmt::printf_context>(val.int_val));
+				break;
+			case ExceptionFormatValueType::FORMAT_VALUE_TYPE_UINTEGER:
+				format_args.push_back(duckdb_fmt::internal::make_arg<duckdb_fmt::printf_context>(val.uint_val));
 				break;
 			case ExceptionFormatValueType::FORMAT_VALUE_TYPE_STRING:
 				format_args.push_back(duckdb_fmt::internal::make_arg<duckdb_fmt::printf_context>(val.str_val));

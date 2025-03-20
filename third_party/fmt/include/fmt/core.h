@@ -13,6 +13,8 @@
 #include <iterator>
 #include <string>
 #include <type_traits>
+#include "duckdb/common/hugeint.hpp"
+#include "duckdb/common/uhugeint.hpp"
 
 // The fmt library version in the form major * 10000 + minor * 100 + patch.
 #define FMT_VERSION 60102
@@ -231,19 +233,16 @@ using std_string_view = std::experimental::basic_string_view<Char>;
 template <typename T> struct std_string_view {};
 #endif
 
-#ifdef FMT_USE_INT128
-// Do nothing.
-#elif defined(__SIZEOF_INT128__)
-#  define FMT_USE_INT128 1
-using int128_t = __int128_t;
-using uint128_t = __uint128_t;
-#else
-#  define FMT_USE_INT128 0
-#endif
-#if !FMT_USE_INT128
-struct int128_t {};
-struct uint128_t {};
-#endif
+using fmt_int128_t = duckdb::hugeint_t;
+using fmt_uint128_t = duckdb::uhugeint_t;
+
+inline fmt_uint128_t operator-(int lhs, fmt_uint128_t rhs) {
+  return fmt_uint128_t(static_cast<uint64_t>(lhs)) - rhs;
+}
+
+inline char operator+(char c, fmt_uint128_t rhs) {
+  return static_cast<char>(c + static_cast<int64_t>(rhs));
+}
 
 // Casts a nonnegative integer to unsigned.
 template <typename Int>
@@ -706,8 +705,8 @@ FMT_TYPE_CONSTANT(int, int_type);
 FMT_TYPE_CONSTANT(unsigned, uint_type);
 FMT_TYPE_CONSTANT(long long, long_long_type);
 FMT_TYPE_CONSTANT(unsigned long long, ulong_long_type);
-FMT_TYPE_CONSTANT(int128_t, int128_type);
-FMT_TYPE_CONSTANT(uint128_t, uint128_type);
+FMT_TYPE_CONSTANT(fmt_int128_t, int128_type);
+FMT_TYPE_CONSTANT(fmt_uint128_t, uint128_type);
 FMT_TYPE_CONSTANT(bool, bool_type);
 FMT_TYPE_CONSTANT(Char, char_type);
 FMT_TYPE_CONSTANT(float, float_type);
@@ -748,8 +747,8 @@ template <typename Context> class value {
     unsigned uint_value;
     long long long_long_value;
     unsigned long long ulong_long_value;
-    int128_t int128_value;
-    uint128_t uint128_value;
+    fmt_int128_t int128_value;
+    fmt_uint128_t uint128_value;
     bool bool_value;
     char_type char_value;
     float float_value;
@@ -765,8 +764,8 @@ template <typename Context> class value {
   FMT_CONSTEXPR value(unsigned val) : uint_value(val) {}
   value(long long val) : long_long_value(val) {}
   value(unsigned long long val) : ulong_long_value(val) {}
-  value(int128_t val) : int128_value(val) {}
-  value(uint128_t val) : uint128_value(val) {}
+  value(fmt_int128_t val) : int128_value(val) {}
+  value(fmt_uint128_t val) : uint128_value(val) {}
   value(float val) : float_value(val) {}
   value(double val) : double_value(val) {}
   value(long double val) : long_double_value(val) {}
@@ -827,8 +826,8 @@ template <typename Context> struct arg_mapper {
   FMT_CONSTEXPR ulong_type map(unsigned long val) { return val; }
   FMT_CONSTEXPR long long map(long long val) { return val; }
   FMT_CONSTEXPR unsigned long long map(unsigned long long val) { return val; }
-  FMT_CONSTEXPR int128_t map(int128_t val) { return val; }
-  FMT_CONSTEXPR uint128_t map(uint128_t val) { return val; }
+  FMT_CONSTEXPR fmt_int128_t map(fmt_int128_t val) { return val; }
+  FMT_CONSTEXPR fmt_uint128_t map(fmt_uint128_t val) { return val; }
   FMT_CONSTEXPR bool map(bool val) { return val; }
 
   template <typename T, FMT_ENABLE_IF(is_char<T>::value)>
@@ -1004,16 +1003,10 @@ FMT_CONSTEXPR auto visit_format_arg(Visitor&& vis,
     return vis(arg.value_.long_long_value);
   case internal::ulong_long_type:
     return vis(arg.value_.ulong_long_value);
-#if FMT_USE_INT128
   case internal::int128_type:
     return vis(arg.value_.int128_value);
   case internal::uint128_type:
     return vis(arg.value_.uint128_value);
-#else
-  case internal::int128_type:
-  case internal::uint128_type:
-    break;
-#endif
   case internal::bool_type:
     return vis(arg.value_.bool_value);
   case internal::char_type:

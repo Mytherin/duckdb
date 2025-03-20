@@ -43,12 +43,14 @@ struct LogicalType;
 enum class ExceptionFormatValueType : uint8_t {
 	FORMAT_VALUE_TYPE_DOUBLE,
 	FORMAT_VALUE_TYPE_INTEGER,
+	FORMAT_VALUE_TYPE_UINTEGER,
 	FORMAT_VALUE_TYPE_STRING
 };
 
 struct ExceptionFormatValue {
 	DUCKDB_API ExceptionFormatValue(double dbl_val);     // NOLINT
 	DUCKDB_API ExceptionFormatValue(int64_t int_val);    // NOLINT
+	DUCKDB_API ExceptionFormatValue(uint64_t uint_val);  // NOLINT
 	DUCKDB_API ExceptionFormatValue(string str_val);     // NOLINT
 	DUCKDB_API ExceptionFormatValue(hugeint_t hg_val);   // NOLINT
 	DUCKDB_API ExceptionFormatValue(uhugeint_t uhg_val); // NOLINT
@@ -57,6 +59,7 @@ struct ExceptionFormatValue {
 
 	double dbl_val = 0;
 	int64_t int_val = 0;
+	uint64_t uint_val = 0;
 	string str_val;
 
 public:
@@ -89,5 +92,7 @@ template <>
 DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(hugeint_t value);
 template <>
 DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(uhugeint_t value);
+template <>
+DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(uint64_t value);
 
 } // namespace duckdb

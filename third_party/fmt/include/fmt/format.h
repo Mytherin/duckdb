@@ -34,6 +34,7 @@
 #define FMT_FORMAT_H_
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/limits.hpp"
 #include "fmt/core.h"
 
 #include <algorithm>
@@ -684,12 +685,33 @@ namespace internal {
 
 // Returns true if value is negative, false otherwise.
 // Same as `value < 0` but doesn't produce warnings if T is an unsigned type.
-template <typename T, FMT_ENABLE_IF(std::numeric_limits<T>::is_signed)>
+template<typename T>
 FMT_CONSTEXPR bool is_negative(T value) {
   return value < 0;
 }
-template <typename T, FMT_ENABLE_IF(!std::numeric_limits<T>::is_signed)>
-FMT_CONSTEXPR bool is_negative(T) {
+
+template<>
+FMT_CONSTEXPR bool is_negative(uint8_t value) {
+  return false;
+}
+
+template<>
+FMT_CONSTEXPR bool is_negative(uint16_t value) {
+  return false;
+}
+
+template<>
+FMT_CONSTEXPR bool is_negative(uint32_t value) {
+  return false;
+}
+
+template<>
+FMT_CONSTEXPR bool is_negative(uint64_t value) {
+  return false;
+}
+
+template<>
+FMT_CONSTEXPR bool is_negative(fmt_uint128_t value) {
   return false;
 }
 
@@ -697,8 +719,9 @@ FMT_CONSTEXPR bool is_negative(T) {
 // represent all values of T.
 template <typename T>
 using uint32_or_64_or_128_t = conditional_t<
-    std::numeric_limits<T>::digits <= 32, uint32_t,
-    conditional_t<std::numeric_limits<T>::digits <= 64, uint64_t, uint128_t>>;
+	std::is_same<T, fmt_int128_t>::value, fmt_uint128_t, conditional_t<
+	std::is_same<T, fmt_uint128_t>::value, fmt_uint128_t, conditional_t<
+	std::numeric_limits<T>::digits <= 32, uint32_t, uint64_t>>>;
 
 // Static data is placed in this class template for the header-only config.
 template <typename T = void> struct FMT_EXTERN_TEMPLATE_API basic_data {
@@ -748,8 +771,7 @@ inline int count_digits(uint64_t n) {
 }
 #endif
 
-#if FMT_USE_INT128
-inline int count_digits(uint128_t n) {
+inline int count_digits(fmt_uint128_t n) {
   int count = 1;
   for (;;) {
     // Integer division is slow so do it for a group of four digits instead
@@ -763,7 +785,6 @@ inline int count_digits(uint128_t n) {
     count += 4;
   }
 }
-#endif
 
 // Counts the number of digits in n. BITS = log2(radix).
 template <unsigned BITS, typename UInt> inline int count_digits(UInt n) {
@@ -848,8 +869,8 @@ inline Char* format_decimal(Char* buffer, UInt value, int num_digits,
 template <typename Int> constexpr int digits10() noexcept {
   return std::numeric_limits<Int>::digits10;
 }
-template <> constexpr int digits10<int128_t>() noexcept { return 38; }
-template <> constexpr int digits10<uint128_t>() noexcept { return 38; }
+template <> constexpr int digits10<fmt_int128_t>() noexcept { return 38; }
+template <> constexpr int digits10<fmt_uint128_t>() noexcept { return 38; }
 
 template <typename Char, typename UInt, typename Iterator, typename F>
 inline Iterator format_decimal(Iterator out, UInt value, int num_digits,
@@ -874,7 +895,7 @@ inline Char* format_uint(Char* buffer, UInt value, int num_digits,
   Char* end = buffer;
   do {
     const char* digits = upper ? "0123456789ABCDEF" : data::hex_digits;
-    unsigned digit = (value & ((1 << BASE_BITS) - 1));
+    unsigned digit = unsigned(value & ((1 << BASE_BITS) - 1));
     *--buffer = static_cast<Char>(BASE_BITS < 4 ? static_cast<char>('0' + digit)
                                                 : digits[digit]);
   } while ((value >>= BASE_BITS) != 0);
@@ -1644,10 +1665,8 @@ template <typename Range> class basic_writer {
   void write(unsigned long value) { write_decimal(value); }
   void write(unsigned long long value) { write_decimal(value); }
 
-#if FMT_USE_INT128
-  void write(int128_t value) { write_decimal(value); }
-  void write(uint128_t value) { write_decimal(value); }
-#endif
+  void write(fmt_int128_t value) { write_decimal(value); }
+  void write(fmt_uint128_t value) { write_decimal(value); }
 
   template <typename T, typename Spec>
   void write_int(T value, const Spec& spec) {
@@ -1764,8 +1783,8 @@ template <typename Range> class basic_writer {
 using writer = basic_writer<buffer_range<char>>;
 
 template <typename T> struct is_integral : std::is_integral<T> {};
-template <> struct is_integral<int128_t> : std::true_type {};
-template <> struct is_integral<uint128_t> : std::true_type {};
+template <> struct is_integral<fmt_int128_t> : std::true_type {};
+template <> struct is_integral<fmt_uint128_t> : std::true_type {};
 
 template <typename Range, typename ErrorHandler = internal::error_handler>
 class arg_formatter_base {
