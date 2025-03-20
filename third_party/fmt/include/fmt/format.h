@@ -683,45 +683,13 @@ using wmemory_buffer = basic_memory_buffer<wchar_t>;
 
 namespace internal {
 
-// Returns true if value is negative, false otherwise.
-// Same as `value < 0` but doesn't produce warnings if T is an unsigned type.
-FMT_CONSTEXPR bool is_negative(int8_t value) {
+template <typename T, FMT_ENABLE_IF(std::is_same<T, fmt_int128_t>::value || std::numeric_limits<T>::is_signed)>
+FMT_CONSTEXPR bool is_negative(T value) {
   return value < 0;
 }
 
-FMT_CONSTEXPR bool is_negative(int16_t value) {
-  return value < 0;
-}
-
-FMT_CONSTEXPR bool is_negative(int32_t value) {
-  return value < 0;
-}
-
-FMT_CONSTEXPR bool is_negative(int64_t value) {
-  return value < 0;
-}
-
-FMT_CONSTEXPR bool is_negative(fmt_int128_t value) {
-  return value < 0;
-}
-
-FMT_CONSTEXPR bool is_negative(uint8_t value) {
-  return false;
-}
-
-FMT_CONSTEXPR bool is_negative(uint16_t value) {
-  return false;
-}
-
-FMT_CONSTEXPR bool is_negative(uint32_t value) {
-  return false;
-}
-
-FMT_CONSTEXPR bool is_negative(uint64_t value) {
-  return false;
-}
-
-FMT_CONSTEXPR bool is_negative(fmt_uint128_t value) {
+template <typename T, FMT_ENABLE_IF(!std::is_same<T, fmt_int128_t>::value && !std::numeric_limits<T>::is_signed)>
+FMT_CONSTEXPR bool is_negative(T value) {
   return false;
 }
 
