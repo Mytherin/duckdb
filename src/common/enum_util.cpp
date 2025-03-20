@@ -1198,6 +1198,7 @@ const StringUtil::EnumStringLiteral *GetExceptionFormatValueTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(ExceptionFormatValueType::FORMAT_VALUE_TYPE_DOUBLE), "FORMAT_VALUE_TYPE_DOUBLE" },
 		{ static_cast<uint32_t>(ExceptionFormatValueType::FORMAT_VALUE_TYPE_INTEGER), "FORMAT_VALUE_TYPE_INTEGER" },
+		{ static_cast<uint32_t>(ExceptionFormatValueType::FORMAT_VALUE_TYPE_UINTEGER), "FORMAT_VALUE_TYPE_UINTEGER" },
 		{ static_cast<uint32_t>(ExceptionFormatValueType::FORMAT_VALUE_TYPE_STRING), "FORMAT_VALUE_TYPE_STRING" }
 	};
 	return values;
@@ -1205,12 +1206,12 @@ const StringUtil::EnumStringLiteral *GetExceptionFormatValueTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<ExceptionFormatValueType>(ExceptionFormatValueType value) {
-	return StringUtil::EnumToString(GetExceptionFormatValueTypeValues(), 3, "ExceptionFormatValueType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetExceptionFormatValueTypeValues(), 4, "ExceptionFormatValueType", static_cast<uint32_t>(value));
 }
 
 template<>
 ExceptionFormatValueType EnumUtil::FromString<ExceptionFormatValueType>(const char *value) {
-	return static_cast<ExceptionFormatValueType>(StringUtil::StringToEnum(GetExceptionFormatValueTypeValues(), 3, "ExceptionFormatValueType", value));
+	return static_cast<ExceptionFormatValueType>(StringUtil::StringToEnum(GetExceptionFormatValueTypeValues(), 4, "ExceptionFormatValueType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetExceptionTypeValues() {
