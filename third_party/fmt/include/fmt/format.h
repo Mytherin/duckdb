@@ -685,32 +685,42 @@ namespace internal {
 
 // Returns true if value is negative, false otherwise.
 // Same as `value < 0` but doesn't produce warnings if T is an unsigned type.
-template<typename T>
-FMT_CONSTEXPR bool is_negative(T value) {
+FMT_CONSTEXPR bool is_negative(int8_t value) {
   return value < 0;
 }
 
-template<>
+FMT_CONSTEXPR bool is_negative(int16_t value) {
+  return value < 0;
+}
+
+FMT_CONSTEXPR bool is_negative(int32_t value) {
+  return value < 0;
+}
+
+FMT_CONSTEXPR bool is_negative(int64_t value) {
+  return value < 0;
+}
+
+FMT_CONSTEXPR bool is_negative(fmt_int128_t value) {
+  return value < 0;
+}
+
 FMT_CONSTEXPR bool is_negative(uint8_t value) {
   return false;
 }
 
-template<>
 FMT_CONSTEXPR bool is_negative(uint16_t value) {
   return false;
 }
 
-template<>
 FMT_CONSTEXPR bool is_negative(uint32_t value) {
   return false;
 }
 
-template<>
 FMT_CONSTEXPR bool is_negative(uint64_t value) {
   return false;
 }
 
-template<>
 FMT_CONSTEXPR bool is_negative(fmt_uint128_t value) {
   return false;
 }
@@ -1991,7 +2001,7 @@ template <typename ErrorHandler> class width_checker {
   template <typename T, FMT_ENABLE_IF(is_integer<T>::value)>
   FMT_CONSTEXPR unsigned long long operator()(T value) {
     if (is_negative(value)) handler_.on_error("negative width");
-    return static_cast<unsigned long long>(value);
+    return static_cast<uint64_t>(value);
   }
 
   template <typename T, FMT_ENABLE_IF(!is_integer<T>::value)>
@@ -2011,7 +2021,7 @@ template <typename ErrorHandler> class precision_checker {
   template <typename T, FMT_ENABLE_IF(is_integer<T>::value)>
   FMT_CONSTEXPR unsigned long long operator()(T value) {
     if (is_negative(value)) handler_.on_error("negative precision");
-    return static_cast<unsigned long long>(value);
+    return static_cast<uint64_t>(value);
   }
 
   template <typename T, FMT_ENABLE_IF(!is_integer<T>::value)>
