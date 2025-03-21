@@ -7,6 +7,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/common/random_engine.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "jaro_winkler.hpp"
