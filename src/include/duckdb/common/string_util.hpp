@@ -10,11 +10,11 @@
 
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/complex_json.hpp"
+#include "duckdb/common/to_string.hpp"
 #include <cstring>
 
 namespace duckdb {
@@ -42,19 +42,19 @@ public:
 
 	static uint8_t GetHexValue(char c) {
 		if (c >= '0' && c <= '9') {
-			return UnsafeNumericCast<uint8_t>(c - '0');
+			return static_cast<uint8_t>(c - '0');
 		}
 		if (c >= 'a' && c <= 'f') {
-			return UnsafeNumericCast<uint8_t>(c - 'a' + 10);
+			return static_cast<uint8_t>(c - 'a' + 10);
 		}
 		if (c >= 'A' && c <= 'F') {
-			return UnsafeNumericCast<uint8_t>(c - 'A' + 10);
+			return static_cast<uint8_t>(c - 'A' + 10);
 		}
 		throw InvalidInputException("Invalid input for hex digit: %s", string(1, c));
 	}
 	static uint8_t GetBinaryValue(char c) {
 		if (c >= '0' && c <= '1') {
-			return UnsafeNumericCast<uint8_t>(c - '0');
+			return static_cast<uint8_t>(c - '0');
 		}
 		throw InvalidInputException("Invalid input for binary digit: %s", string(1, c));
 	}
@@ -73,13 +73,13 @@ public:
 	}
 	static char CharacterToUpper(char c) {
 		if (c >= 'a' && c <= 'z') {
-			return UnsafeNumericCast<char>(c - ('a' - 'A'));
+			return static_cast<char>(c - ('a' - 'A'));
 		}
 		return c;
 	}
 	static char CharacterToLower(char c) {
 		if (c >= 'A' && c <= 'Z') {
-			return UnsafeNumericCast<char>(c + ('a' - 'A'));
+			return static_cast<char>(c + ('a' - 'A'));
 		}
 		return c;
 	}
@@ -168,6 +168,7 @@ public:
 	//! BOM skipping (https://en.wikipedia.org/wiki/Byte_order_mark)
 	DUCKDB_API static void SkipBOM(const char *buffer_ptr, const idx_t &buffer_size, idx_t &buffer_pos);
 
+	//! Convert a string to an unsigned integer - throws an exception on failure
 	DUCKDB_API static idx_t ToUnsigned(const string &str);
 
 	template <class T>
@@ -300,6 +301,12 @@ public:
 		return strcmp(s1, s2) == 0;
 	}
 
+	//! Convert a value to a string
+	template <class T>
+	static string ValueToString(T value) {
+		return to_string(value);
+	}
+
 	//! JSON method that parses a { string: value } JSON blob
 	//! NOTE: this method is not efficient
 	//! NOTE: this method is used in Exception construction - as such it does NOT throw on invalid JSON, instead an
@@ -335,5 +342,10 @@ public:
 	DUCKDB_API static const uint8_t ASCII_TO_LOWER_MAP[];
 	DUCKDB_API static const uint8_t ASCII_TO_UPPER_MAP[];
 };
+
+template <>
+string StringUtil::ValueToString(hugeint_t value);
+template <>
+string StringUtil::ValueToString(uhugeint_t value);
 
 } // namespace duckdb

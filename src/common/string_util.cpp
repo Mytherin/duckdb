@@ -7,6 +7,8 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/common/random_engine.hpp"
+#include "duckdb/common/hugeint.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "jaro_winkler.hpp"
 #include "utf8proc_wrapper.hpp"
 
@@ -52,6 +54,16 @@ bool StringUtil::Contains(const string &haystack, const char &needle_char) {
 
 idx_t StringUtil::ToUnsigned(const string &str) {
 	return std::stoull(str);
+}
+
+template <>
+string StringUtil::ValueToString(hugeint_t value) {
+	return Hugeint::ToString(value);
+}
+
+template <>
+string StringUtil::ValueToString(uhugeint_t value) {
+	return Uhugeint::ToString(value);
 }
 
 void StringUtil::LTrim(string &str) {

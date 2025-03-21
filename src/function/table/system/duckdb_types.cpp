@@ -100,7 +100,7 @@ void DuckDBTypesFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 		// type_oid, BIGINT
 		int64_t oid;
 		if (type_entry.internal) {
-			oid = NumericCast<int64_t>(type.id());
+			oid = static_cast<int64_t>(type.id());
 		} else {
 			oid = NumericCast<int64_t>(type_entry.oid);
 		}

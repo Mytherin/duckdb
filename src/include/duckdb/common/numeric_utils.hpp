@@ -12,6 +12,7 @@
 
 #include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
@@ -47,8 +48,9 @@ struct MakeUnsigned<uhugeint_t> {
 
 template <class TO, class FROM>
 static void ThrowNumericCastError(FROM in, TO minval, TO maxval) {
-	throw InternalException("Information loss on integer cast: value %d outside of target range [%d, %d]", in, minval,
-	                        maxval);
+	throw InternalException("Information loss on integer cast: value %s outside of target range [%s, %s]",
+	                        StringUtil::ValueToString(in), StringUtil::ValueToString(minval),
+	                        StringUtil::ValueToString(maxval));
 }
 
 template <class TO, class FROM, bool are_same_type>
