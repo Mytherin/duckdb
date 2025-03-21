@@ -15,6 +15,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/complex_json.hpp"
 #include "duckdb/common/to_string.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 #include <cstring>
 
 namespace duckdb {
