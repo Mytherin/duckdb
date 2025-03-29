@@ -11,6 +11,7 @@
 #include "include/icu-datefunc.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "icu-helpers.hpp"
 
 namespace duckdb {
 
@@ -105,40 +106,44 @@ static void ICUTimeZoneFunction(ClientContext &context, TableFunctionInput &data
 	output.SetCardinality(index);
 }
 
+timestamp_t ICUHelpers::FromNaive(icu::Calendar *calendar, timestamp_t naive) {
+	if (!ICUIsFinite(naive)) {
+		return naive;
+	}
+
+	// Extract the parts from the "instant"
+	date_t local_date;
+	dtime_t local_time;
+	Timestamp::Convert(naive, local_date, local_time);
+
+	int32_t year;
+	int32_t mm;
+	int32_t dd;
+	Date::Convert(local_date, year, mm, dd);
+
+	int32_t hr;
+	int32_t mn;
+	int32_t secs;
+	int32_t frac;
+	Time::Convert(local_time, hr, mn, secs, frac);
+	int32_t millis = frac / int32_t(Interval::MICROS_PER_MSEC);
+	uint64_t micros = frac % Interval::MICROS_PER_MSEC;
+
+	// Use them to set the time in the time zone
+	calendar->set(UCAL_YEAR, year);
+	calendar->set(UCAL_MONTH, int32_t(mm - 1));
+	calendar->set(UCAL_DATE, dd);
+	calendar->set(UCAL_HOUR_OF_DAY, hr);
+	calendar->set(UCAL_MINUTE, mn);
+	calendar->set(UCAL_SECOND, secs);
+	calendar->set(UCAL_MILLISECOND, millis);
+
+	return ICUDateFunc::GetTime(calendar, micros);
+}
+
 struct ICUFromNaiveTimestamp : public ICUDateFunc {
 	static inline timestamp_t Operation(icu::Calendar *calendar, timestamp_t naive) {
-		if (!ICUIsFinite(naive)) {
-			return naive;
-		}
-
-		// Extract the parts from the "instant"
-		date_t local_date;
-		dtime_t local_time;
-		Timestamp::Convert(naive, local_date, local_time);
-
-		int32_t year;
-		int32_t mm;
-		int32_t dd;
-		Date::Convert(local_date, year, mm, dd);
-
-		int32_t hr;
-		int32_t mn;
-		int32_t secs;
-		int32_t frac;
-		Time::Convert(local_time, hr, mn, secs, frac);
-		int32_t millis = frac / int32_t(Interval::MICROS_PER_MSEC);
-		uint64_t micros = frac % Interval::MICROS_PER_MSEC;
-
-		// Use them to set the time in the time zone
-		calendar->set(UCAL_YEAR, year);
-		calendar->set(UCAL_MONTH, int32_t(mm - 1));
-		calendar->set(UCAL_DATE, dd);
-		calendar->set(UCAL_HOUR_OF_DAY, hr);
-		calendar->set(UCAL_MINUTE, mn);
-		calendar->set(UCAL_SECOND, secs);
-		calendar->set(UCAL_MILLISECOND, millis);
-
-		return GetTime(calendar, micros);
+		return ICUHelpers::FromNaive(calendar, naive);
 	}
 
 	struct CastTimestampUsToUs {

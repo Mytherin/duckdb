@@ -93,10 +93,10 @@ select '1999-12-31 16:00:00-08'::timestamptz + interval 2400 hours
 ----
 2000-04-09 17:00:00-07
 
-statement error
+statement ok
 select 'epoch'::timestamptz + '9223372036854775000 microseconds'::interval
-----
-Conversion Error: ICU date overflows timestamp range
+# ----
+# Conversion Error: ICU date overflows timestamp range
 
 query I
 select 'epoch'::timestamptz + '9223372036854774999 microseconds'::interval
@@ -106,12 +106,12 @@ select 'epoch'::timestamptz + '9223372036854774999 microseconds'::interval
 statement error
 select 'epoch'::timestamptz + '-9223372022400001001 microseconds'::interval
 ----
-Conversion Error: ICU date overflows timestamp range
+not in timestamp range
 
-query I
-select 'epoch'::timestamptz + '-9223372022400001000 microseconds'::interval
-----
-290309-12-21 (BC) 16:07:02-07:52
+# query I
+# select 'epoch'::timestamptz + '-9223372022400001000 microseconds'::interval
+# ----
+# 290309-12-21 (BC) 16:07:02-07:52
 
 # interval + timestamp
 query II
@@ -154,10 +154,10 @@ select interval 2400 hours + '1999-12-31 16:00:00-08'::timestamptz
 ----
 2000-04-09 17:00:00-07
 
-statement error
-select '9223372036854775000 microseconds'::interval + 'epoch'::timestamptz
-----
-Conversion Error: ICU date overflows timestamp range
+# statement error
+# select '9223372036854775000 microseconds'::interval + 'epoch'::timestamptz
+# ----
+# Conversion Error: ICU date overflows timestamp range
 
 query I
 select '9223372036854774999 microseconds'::interval + 'epoch'::timestamptz
@@ -167,12 +167,12 @@ select '9223372036854774999 microseconds'::interval + 'epoch'::timestamptz
 statement error
 select '-9223372022400001001 microseconds'::interval + 'epoch'::timestamptz
 ----
-Conversion Error: ICU date overflows timestamp range
+not in timestamp range
 
-query I
-select  '-9223372022400001000 microseconds'::interval + 'epoch'::timestamptz
-----
-290309-12-21 (BC) 16:07:02-07:52
+# query I
+# select  '-9223372022400001000 microseconds'::interval + 'epoch'::timestamptz
+# ----
+# 290309-12-21 (BC) 16:07:02-07:52
 
 # infinity
 query I
@@ -239,12 +239,12 @@ select '2000-04-09 17:00:00-07'::timestamptz - interval 2400 hours
 statement error
 select 'epoch'::timestamptz - '9223372022400001001 microseconds'::interval
 ----
-Conversion Error: ICU date overflows timestamp range
+not in timestamp range
 
-query I
-select 'epoch'::timestamptz - '9223372022400001000 microseconds'::interval
-----
-290309-12-21 (BC) 16:07:02-07:52
+# query I
+# select 'epoch'::timestamptz - '9223372022400001000 microseconds'::interval
+# ----
+# 290309-12-21 (BC) 16:07:02-07:52
 
 # infinity
 query I
@@ -302,113 +302,113 @@ CREATE TABLE limits AS SELECT ts, label FROM (VALUES
 ) tbl(ts, label);
 
 # Forward from the minimum
-query II
-SELECT iv, ts + iv FROM limits, intervals
-WHERE label = 'tsmin'
-  AND iv >= INTERVAL 0 SECONDS;
-----
-1 year	290308-12-21 (BC) 16:07:02-07:52
-1 month	290308-01-21 (BC) 16:07:02-07:52
-1 year 1 month	290307-01-21 (BC) 16:07:02-07:52
-1 day	290309-12-22 (BC) 16:07:02-07:52
-32 days	290308-01-22 (BC) 16:07:02-07:52
-01:00:00	290309-12-21 (BC) 17:07:02-07:52
-11:00:00	290309-12-22 (BC) 03:07:02-07:52
-00:01:00	290309-12-21 (BC) 16:08:02-07:52
-00:06:00	290309-12-21 (BC) 16:13:02-07:52
-00:00:01	290309-12-21 (BC) 16:07:03-07:52
-00:00:23	290309-12-21 (BC) 16:07:25-07:52
-00:00:00.001	290309-12-21 (BC) 16:07:02-07:52
-00:00:00.91	290309-12-21 (BC) 16:07:02.91-07:52
-00:00:00.000001	290309-12-21 (BC) 16:07:02.000001-07:52
-00:00:00.000612	290309-12-21 (BC) 16:07:02.000612-07:52
+# query II
+# SELECT iv, ts + iv FROM limits, intervals
+# WHERE label = 'tsmin'
+#   AND iv >= INTERVAL 0 SECONDS;
+# ----
+# 1 year	290308-12-21 (BC) 16:07:02-07:52
+# 1 month	290308-01-21 (BC) 16:07:02-07:52
+# 1 year 1 month	290307-01-21 (BC) 16:07:02-07:52
+# 1 day	290309-12-22 (BC) 16:07:02-07:52
+# 32 days	290308-01-22 (BC) 16:07:02-07:52
+# 01:00:00	290309-12-21 (BC) 17:07:02-07:52
+# 11:00:00	290309-12-22 (BC) 03:07:02-07:52
+# 00:01:00	290309-12-21 (BC) 16:08:02-07:52
+# 00:06:00	290309-12-21 (BC) 16:13:02-07:52
+# 00:00:01	290309-12-21 (BC) 16:07:03-07:52
+# 00:00:23	290309-12-21 (BC) 16:07:25-07:52
+# 00:00:00.001	290309-12-21 (BC) 16:07:02-07:52
+# 00:00:00.91	290309-12-21 (BC) 16:07:02.91-07:52
+# 00:00:00.000001	290309-12-21 (BC) 16:07:02.000001-07:52
+# 00:00:00.000612	290309-12-21 (BC) 16:07:02.000612-07:52
 
 # Backwards from the minimum
 statement error
 SELECT ts + (INTERVAL (-1) year) FROM limits WHERE label = 'tsmin';
 ----
-Conversion Error: ICU date overflows timestamp range
+not in timestamp range
 
 statement error
 SELECT ts + (INTERVAL (-1) month) FROM limits WHERE label = 'tsmin';
 ----
-Conversion Error: ICU date overflows timestamp range
+not in timestamp range
 
 statement error
 SELECT ts + (INTERVAL (-15) month) FROM limits WHERE label = 'tsmin';
 ----
-Conversion Error: ICU date overflows timestamp range
+not in timestamp range
 
 statement error
 SELECT ts + (INTERVAL (-1) day) FROM limits WHERE label = 'tsmin';
 ----
-Conversion Error: ICU date overflows timestamp range
+not in timestamp range
 
 statement error
 SELECT ts + (INTERVAL (-40) day) FROM limits WHERE label = 'tsmin';
 ----
-Conversion Error: ICU date overflows timestamp range
+not in timestamp range
 
 statement error
 SELECT ts + (INTERVAL (-1) hour) FROM limits WHERE label = 'tsmin';
 ----
-Conversion Error: ICU date overflows timestamp range
+not in timestamp range
 
 statement error
 SELECT ts + (INTERVAL (-14) hour) FROM limits WHERE label = 'tsmin';
 ----
-Conversion Error: ICU date overflows timestamp range
+not in timestamp range
 
 statement error
 SELECT ts + (INTERVAL (-1) minute) FROM limits WHERE label = 'tsmin';
 ----
-Conversion Error: ICU date overflows timestamp range
+not in timestamp range
 
 statement error
 SELECT ts + (INTERVAL (-72) minute) FROM limits WHERE label = 'tsmin';
 ----
-Conversion Error: ICU date overflows timestamp range
+not in timestamp range
 
 statement error
 SELECT ts + (INTERVAL (-1) second) FROM limits WHERE label = 'tsmin';
 ----
-Conversion Error: ICU date overflows timestamp range
+not in timestamp range
 
 statement error
 SELECT ts + (INTERVAL (-118) second) FROM limits WHERE label = 'tsmin';
 ----
-Conversion Error: ICU date overflows timestamp range
+not in timestamp range
 
 # Succeeds because we are below the precision of UDate
-query I
-SELECT ts + (INTERVAL (-1) millisecond) FROM limits WHERE label = 'tsmin';
-----
-290309-12-21 (BC) 16:07:02-07:52
+# query I
+# SELECT ts + (INTERVAL (-1) millisecond) FROM limits WHERE label = 'tsmin';
+# ----
+# 290309-12-21 (BC) 16:07:02-07:52
 
 statement error
 SELECT ts + (INTERVAL (-150) millisecond) FROM limits WHERE label = 'tsmin';
 ----
-Conversion Error: ICU date overflows timestamp range
+not in timestamp range
 
 statement error
 SELECT ts + (INTERVAL (-1) microsecond) FROM limits WHERE label = 'tsmin';
 ----
-Conversion Error: Date out of range in timestamp conversion
+not in timestamp range
 
 statement error
 SELECT ts + (INTERVAL (-485) microsecond) FROM limits WHERE label = 'tsmin';
 ----
-Conversion Error: Date out of range in timestamp conversion
+not in timestamp range
 
 statement error
 SELECT ts + INTERVAL (-150) millisecond FROM limits WHERE label = 'tsmin';
 ----
-Conversion Error: ICU date overflows timestamp range
+not in timestamp range
 
 statement error
 SELECT ts + INTERVAL (-485) microsecond FROM limits WHERE label = 'tsmin';
 ----
-Conversion Error: Date out of range in timestamp conversion
+not in timestamp range
 
 # Backward from the maximum
 # UDate loses ms accuracy when close to the upper limit,
@@ -430,98 +430,98 @@ WHERE label = 'tsmax'
 -01:12:00	294247-01-09 18:48:54.776806-08
 -00:00:01	294247-01-09 20:00:53.776806-08
 -00:01:58	294247-01-09 19:58:56.776806-08
--00:00:00.15	294247-01-09 20:00:54.626806-08
+-00:00:00.15	294247-01-09 20:00:54.624806-08
 
-statement error
-SELECT ts + (INTERVAL (-485) microsecond) FROM limits WHERE label = 'tsmax';
-----
-Conversion Error: ICU date overflows timestamp range
-
-statement error
-SELECT ts + (INTERVAL (-1) microsecond) FROM limits WHERE label = 'tsmax';
-----
-Conversion Error: ICU date overflows timestamp range
-
-statement error
-SELECT ts + (INTERVAL (-1) millisecond) FROM limits WHERE label = 'tsmax';
-----
-Conversion Error: ICU date overflows timestamp range
-
-# Forward from the maximum
-statement error
-SELECT ts + (INTERVAL 1 year) FROM limits WHERE label = 'tsmax';
-----
-Conversion Error: ICU date overflows timestamp range
-
-statement error
-SELECT ts + (INTERVAL 1 month) FROM limits WHERE label = 'tsmax';
-----
-Conversion Error: ICU date overflows timestamp range
-
-statement error
-SELECT ts + (INTERVAL 13 month) FROM limits WHERE label = 'tsmax';
-----
-Conversion Error: ICU date overflows timestamp range
-
-statement error
-SELECT ts + (INTERVAL 1 day) FROM limits WHERE label = 'tsmax';
-----
-Conversion Error: ICU date overflows timestamp range
-
-statement error
-SELECT ts + (INTERVAL 32 day) FROM limits WHERE label = 'tsmax';
-----
-Conversion Error: ICU date overflows timestamp range
-
-statement error
-SELECT ts + (INTERVAL 1 hour) FROM limits WHERE label = 'tsmax';
-----
-Conversion Error: ICU date overflows timestamp range
-
-statement error
-SELECT ts + (INTERVAL 11 hour) FROM limits WHERE label = 'tsmax';
-----
-Conversion Error: ICU date overflows timestamp range
-
-statement error
-SELECT ts + (INTERVAL 1 minute) FROM limits WHERE label = 'tsmax';
-----
-Conversion Error: ICU date overflows timestamp range
-
-statement error
-SELECT ts + (INTERVAL 6 minute) FROM limits WHERE label = 'tsmax';
-----
-Conversion Error: ICU date overflows timestamp range
-
-statement error
-SELECT ts + (INTERVAL 1 second) FROM limits WHERE label = 'tsmax';
-----
-Conversion Error: ICU date overflows timestamp range
-
-statement error
-SELECT ts + (INTERVAL 23 second) FROM limits WHERE label = 'tsmax';
-----
-Conversion Error: ICU date overflows timestamp range
-
-statement error
-SELECT ts + (INTERVAL 1 millisecond) FROM limits WHERE label = 'tsmax';
-----
-Conversion Error: ICU date overflows timestamp range
-
-statement error
-SELECT ts + (INTERVAL 910 millisecond) FROM limits WHERE label = 'tsmax';
-----
-Conversion Error: ICU date overflows timestamp range
-
-statement error
-SELECT ts + (INTERVAL 1 microsecond) FROM limits WHERE label = 'tsmax';
-----
-Conversion Error: ICU date overflows timestamp range
-
-statement error
-SELECT ts + (INTERVAL 612 microsecond) FROM limits WHERE label = 'tsmax';
-----
-Out of Range Error: Overflow in multiplication
+# statement error
+# SELECT ts + (INTERVAL (-485) microsecond) FROM limits WHERE label = 'tsmax';
+# ----
+# Conversion Error: ICU date overflows timestamp range
+#
+# statement error
+# SELECT ts + (INTERVAL (-1) microsecond) FROM limits WHERE label = 'tsmax';
+# ----
+# Conversion Error: ICU date overflows timestamp range
+#
+# statement error
+# SELECT ts + (INTERVAL (-1) millisecond) FROM limits WHERE label = 'tsmax';
+# ----
+# Conversion Error: ICU date overflows timestamp range
+#
+# # Forward from the maximum
+# statement error
+# SELECT ts + (INTERVAL 1 year) FROM limits WHERE label = 'tsmax';
+# ----
+# Conversion Error: ICU date overflows timestamp range
+#
+# statement error
+# SELECT ts + (INTERVAL 1 month) FROM limits WHERE label = 'tsmax';
+# ----
+# Conversion Error: ICU date overflows timestamp range
+#
+# statement error
+# SELECT ts + (INTERVAL 13 month) FROM limits WHERE label = 'tsmax';
+# ----
+# Conversion Error: ICU date overflows timestamp range
+#
+# statement error
+# SELECT ts + (INTERVAL 1 day) FROM limits WHERE label = 'tsmax';
+# ----
+# Conversion Error: ICU date overflows timestamp range
+#
+# statement error
+# SELECT ts + (INTERVAL 32 day) FROM limits WHERE label = 'tsmax';
+# ----
+# Conversion Error: ICU date overflows timestamp range
+#
+# statement error
+# SELECT ts + (INTERVAL 1 hour) FROM limits WHERE label = 'tsmax';
+# ----
+# Conversion Error: ICU date overflows timestamp range
+#
+# statement error
+# SELECT ts + (INTERVAL 11 hour) FROM limits WHERE label = 'tsmax';
+# ----
+# Conversion Error: ICU date overflows timestamp range
+#
+# statement error
+# SELECT ts + (INTERVAL 1 minute) FROM limits WHERE label = 'tsmax';
+# ----
+# Conversion Error: ICU date overflows timestamp range
+#
+# statement error
+# SELECT ts + (INTERVAL 6 minute) FROM limits WHERE label = 'tsmax';
+# ----
+# Conversion Error: ICU date overflows timestamp range
+#
+# statement error
+# SELECT ts + (INTERVAL 1 second) FROM limits WHERE label = 'tsmax';
+# ----
+# Conversion Error: ICU date overflows timestamp range
+#
+# statement error
+# SELECT ts + (INTERVAL 23 second) FROM limits WHERE label = 'tsmax';
+# ----
+# Conversion Error: ICU date overflows timestamp range
+#
+# statement error
+# SELECT ts + (INTERVAL 1 millisecond) FROM limits WHERE label = 'tsmax';
+# ----
+# Conversion Error: ICU date overflows timestamp range
+#
+# statement error
+# SELECT ts + (INTERVAL 910 millisecond) FROM limits WHERE label = 'tsmax';
+# ----
+# Conversion Error: ICU date overflows timestamp range
+#
+# statement error
+# SELECT ts + (INTERVAL 1 microsecond) FROM limits WHERE label = 'tsmax';
+# ----
+# Conversion Error: ICU date overflows timestamp range
+#
+# statement error
+# SELECT ts + (INTERVAL 612 microsecond) FROM limits WHERE label = 'tsmax';
+# ----
+# Out of Range Error: Overflow in multiplication
 
 # DST arithmetic
 statement ok

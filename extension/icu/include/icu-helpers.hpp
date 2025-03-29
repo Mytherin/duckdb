@@ -27,6 +27,8 @@ struct ICUHelpers {
 	static TimestampData DecomposeTimestamp(timestamp_tz_t ts, icu::Calendar *calendar);
 
 	static timestamp_t ToTimestamp(TimestampData data);
+
+	static timestamp_t FromNaive(icu::Calendar *calendar, timestamp_t);
 };
 
 } // namespace duckdb

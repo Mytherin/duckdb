@@ -58,66 +58,27 @@ timestamp_t ICUCalendarAdd::Operation(timestamp_t timestamp, interval_t interval
 	if (!Timestamp::IsFinite(timestamp)) {
 		return timestamp;
 	}
-
-	int64_t millis = timestamp.value / Interval::MICROS_PER_MSEC;
-	int64_t micros = timestamp.value % Interval::MICROS_PER_MSEC;
-
-	// Manually move the µs
-	micros += interval.micros % Interval::MICROS_PER_MSEC;
-	if (micros >= Interval::MICROS_PER_MSEC) {
-		micros -= Interval::MICROS_PER_MSEC;
-		++millis;
-	} else if (micros < 0) {
-		micros += Interval::MICROS_PER_MSEC;
-		--millis;
+	// compose the interval into two parts - months/days and microseconds
+	if (interval.months != 0 || interval.days != 0) {
+		// month/day arithmetic is done "in" the timezone - decompose, add then recompose
+		interval_t months_days_interval;
+		months_days_interval.months = interval.months;
+		months_days_interval.days = interval.days;
+		months_days_interval.micros = 0;
+		auto ts_data = ICUHelpers::DecomposeTimestamp(timestamp_tz_t(timestamp.value), calendar);
+		auto ts = ICUHelpers::ToTimestamp(ts_data);
+		auto result_ts = Interval::Add(ts, months_days_interval);
+		timestamp = ICUHelpers::FromNaive(calendar, result_ts);
 	}
-
-	// Make sure the value is still in range
-	date_t d;
-	dtime_t t;
-	auto us = MultiplyOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(millis, Interval::MICROS_PER_MSEC);
-	Timestamp::Convert(timestamp_t(us), d, t);
-
-	// Now use the calendar to add the other parts
-	UErrorCode status = U_ZERO_ERROR;
-	const auto udate = UDate(millis);
-	calendar->setTime(udate, status);
-
-	// Break units apart to avoid overflow
-	auto interval_h = interval.micros / Interval::MICROS_PER_MSEC;
-
-	const auto interval_ms = static_cast<int32_t>(interval_h % Interval::MSECS_PER_SEC);
-	interval_h /= Interval::MSECS_PER_SEC;
-
-	const auto interval_s = static_cast<int32_t>(interval_h % Interval::SECS_PER_MINUTE);
-	interval_h /= Interval::SECS_PER_MINUTE;
-
-	const auto interval_m = static_cast<int32_t>(interval_h % Interval::MINS_PER_HOUR);
-	interval_h /= Interval::MINS_PER_HOUR;
-
-	if (interval.months < 0 || interval.days < 0 || interval.micros < 0) {
-		// Add interval fields from lowest to highest (non-ragged to ragged)
-		calendar->add(UCAL_MILLISECOND, interval_ms, status);
-		calendar->add(UCAL_SECOND, interval_s, status);
-		calendar->add(UCAL_MINUTE, interval_m, status);
-		CalendarAddHour(calendar, interval_h, status);
-
-		// PG Adds months before days
-		calendar->add(UCAL_MONTH, interval.months, status);
-		calendar->add(UCAL_DATE, interval.days, status);
-	} else {
-		// PG Adds months before days
-		calendar->add(UCAL_MONTH, interval.months, status);
-		calendar->add(UCAL_DATE, interval.days, status);
-
-		// Add interval fields from highest to lowest (ragged to non-ragged)
-		CalendarAddHour(calendar, interval_h, status);
-		calendar->add(UCAL_MINUTE, interval_m, status);
-		calendar->add(UCAL_SECOND, interval_s, status);
-		calendar->add(UCAL_MILLISECOND, interval_ms, status);
+	if (interval.micros != 0) {
+		// microsecond arithmetic is done directly on the UTC timestamp
+		interval_t microseconds_interval;
+		microseconds_interval.months = 0;
+		microseconds_interval.days = 0;
+		microseconds_interval.micros = interval.micros;
+		timestamp = Interval::Add(timestamp, microseconds_interval);
 	}
-
-	return ICUDateFunc::GetTime(calendar, micros);
+	return timestamp;
 }
 
 template <>
