@@ -35,11 +35,6 @@ TimestampComponents ICUHelpers::GetComponents(timestamp_tz_t ts, icu::Calendar *
 	return ts_data;
 }
 
-timestamp_t ICUHelpers::ToTimestamp(TimestampComponents data) {
-	date_t date_val = Date::FromDate(data.year, data.month, data.day);
-	dtime_t time_val = Time::FromTime(data.hour, data.minute, data.second, data.microsecond);
-	return Timestamp::FromDatetime(date_val, time_val);
-}
 struct ICUStrptime : public ICUDateFunc {
 	using ParseResult = StrpTimeFormat::ParseResult;
 

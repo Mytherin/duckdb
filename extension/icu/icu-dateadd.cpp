@@ -5,10 +5,12 @@
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "include/icu-datefunc.hpp"
 #include "icu-helpers.hpp"
+
 
 namespace duckdb {
 
@@ -65,18 +67,19 @@ timestamp_t ICUCalendarAdd::Operation(timestamp_t timestamp, interval_t interval
 		months_days_interval.months = interval.months;
 		months_days_interval.days = interval.days;
 		months_days_interval.micros = 0;
-		auto ts_data = ICUHelpers::DecomposeTimestamp(timestamp_tz_t(timestamp.value), calendar);
-		auto ts = ICUHelpers::ToTimestamp(ts_data);
+		auto ts_data = ICUHelpers::GetComponents(timestamp_tz_t(timestamp.value), calendar);
+		auto ts = Timestamp::ToTimestamp(ts_data);
 		auto result_ts = Interval::Add(ts, months_days_interval);
 		timestamp = ICUHelpers::FromNaive(calendar, result_ts);
 	}
 	if (interval.micros != 0) {
 		// microsecond arithmetic is done directly on the UTC timestamp
-		interval_t microseconds_interval;
-		microseconds_interval.months = 0;
-		microseconds_interval.days = 0;
-		microseconds_interval.micros = interval.micros;
-		timestamp = Interval::Add(timestamp, microseconds_interval);
+		if (!TryAddOperator::Operation(timestamp.value, interval.micros, timestamp.value)) {
+			throw ConversionException("ICU date overflows timestamp range");
+		}
+		if (!Timestamp::IsFinite(timestamp)) {
+			throw ConversionException("ICU date overflows timestamp range");
+		}
 	}
 	return timestamp;
 }

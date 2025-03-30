@@ -547,4 +547,10 @@ TimestampComponents Timestamp::GetComponents(timestamp_t timestamp) {
 	return result;
 }
 
+timestamp_t Timestamp::ToTimestamp(TimestampComponents data) {
+	date_t date_val = Date::FromDate(data.year, data.month, data.day);
+	dtime_t time_val = Time::FromTime(data.hour, data.minute, data.second, data.microsecond);
+	return Timestamp::FromDatetime(date_val, time_val);
+}
+
 } // namespace duckdb
