@@ -68,8 +68,11 @@ timestamp_t ICUCalendarAdd::Operation(timestamp_t timestamp, interval_t interval
 		months_days_interval.days = interval.days;
 		months_days_interval.micros = 0;
 		auto ts_data = ICUHelpers::GetComponents(timestamp_tz_t(timestamp.value), calendar);
-		auto ts = Timestamp::ToTimestamp(ts_data);
-		auto result_ts = Interval::Add(ts, months_days_interval);
+		auto date_val = Date::FromDate(ts_data.year, ts_data.month, ts_data.day);
+		// we only need to do month/day arithmetic on the date component of the timestamp
+		date_val = Interval::Add(date_val, months_days_interval);
+		auto time_val = Time::FromTime(ts_data.hour, ts_data.minute, ts_data.second, ts_data.microsecond);
+		auto result_ts = Timestamp::FromDatetime(date_val, time_val);
 		timestamp = ICUHelpers::FromNaive(calendar, result_ts);
 	}
 	if (interval.micros != 0) {
