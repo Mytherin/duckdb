@@ -29,10 +29,6 @@ void ColumnList::AddColumn(ColumnDefinition column) {
 }
 
 void ColumnList::Finalize() {
-	// add the "rowid" alias, if there is no rowid column specified in the table
-	if (name_map.find("rowid") == name_map.end()) {
-		name_map["rowid"] = COLUMN_IDENTIFIER_ROW_ID;
-	}
 }
 
 void ColumnList::AddToNameMap(ColumnDefinition &col) {

@@ -54,6 +54,8 @@ public:
 		return true;
 	}
 
+	virtual_column_map_t GetVirtualColumns() const override;
+
 private:
 	unique_ptr<CatalogEntry> RenameColumn(ClientContext &context, RenameColumnInfo &info);
 	unique_ptr<CatalogEntry> AddColumn(ClientContext &context, AddColumnInfo &info);

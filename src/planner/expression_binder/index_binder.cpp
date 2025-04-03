@@ -51,8 +51,8 @@ unique_ptr<BoundIndex> IndexBinder::BindIndex(const UnboundIndex &unbound_index)
 void IndexBinder::InitCreateIndexInfo(LogicalGet &get, CreateIndexInfo &info, const string &schema) {
 	auto &column_ids = get.GetColumnIds();
 	for (auto &column_id : column_ids) {
-		if (column_id.IsRowIdColumn()) {
-			throw BinderException("cannot create an index on the rowid");
+		if (column_id.IsVirtualColumn()) {
+			throw BinderException("cannot create an index on a virtual column");
 		}
 		auto col_id = column_id.GetPrimaryIndex();
 		info.column_ids.push_back(col_id);

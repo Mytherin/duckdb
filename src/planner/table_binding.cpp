@@ -192,7 +192,7 @@ const vector<ColumnIndex> &TableBinding::GetBoundColumnIds() const {
 #ifdef DEBUG
 	unordered_set<idx_t> column_ids;
 	for (auto &col_id : bound_column_ids) {
-		idx_t id = col_id.IsRowIdColumn() ? DConstants::INVALID_INDEX : col_id.GetPrimaryIndex();
+		idx_t id = col_id.IsVirtualColumn() ? DConstants::INVALID_INDEX : col_id.GetPrimaryIndex();
 		auto result = column_ids.insert(id);
 		// assert that all entries in the bound_column_ids are unique
 		D_ASSERT(result.second);
@@ -236,16 +236,6 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	if (!success) {
 		return BindResult(ColumnNotFoundError(column_name));
 	}
-	auto entry = GetStandardEntry();
-	if (entry && column_index != COLUMN_IDENTIFIER_ROW_ID) {
-		D_ASSERT(entry->type == CatalogType::TABLE_ENTRY);
-		// Either there is no table, or the columns category has to be standard
-		auto &table_entry = entry->Cast<TableCatalogEntry>();
-		auto &column_entry = table_entry.GetColumn(LogicalIndex(column_index));
-		(void)table_entry;
-		(void)column_entry;
-		D_ASSERT(column_entry.Category() == TableColumnType::STANDARD);
-	}
 	// fetch the type of the column
 	LogicalType col_type;
 	auto ventry = virtual_columns.find(column_index);
@@ -253,6 +243,16 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 		// virtual column - fetch type from there
 		col_type = ventry->second.type;
 	} else {
+		auto entry = GetStandardEntry();
+		if (entry) {
+			D_ASSERT(entry->type == CatalogType::TABLE_ENTRY);
+			// Either there is no table, or the columns category has to be standard
+			auto &table_entry = entry->Cast<TableCatalogEntry>();
+			auto &column_entry = table_entry.GetColumn(LogicalIndex(column_index));
+			(void)table_entry;
+			(void)column_entry;
+			D_ASSERT(column_entry.Category() == TableColumnType::STANDARD);
+		}
 		// normal column: fetch type from base column
 		col_type = types[column_index];
 		if (colref.GetAlias().empty()) {

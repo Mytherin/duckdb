@@ -916,4 +916,10 @@ TableStorageInfo DuckTableEntry::GetStorageInfo(ClientContext &context) {
 	return storage->GetStorageInfo();
 }
 
+virtual_column_map_t DuckTableEntry::GetVirtualColumns() const {
+	auto result = TableCatalogEntry::GetVirtualColumns();
+	result.insert(make_pair(COLUMN_IDENTIFIER_ROW_NUMBER, TableColumn("rownum", LogicalType::BIGINT)));
+	return result;
+}
+
 } // namespace duckdb

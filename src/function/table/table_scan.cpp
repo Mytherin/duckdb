@@ -59,8 +59,8 @@ static StorageIndex TransformStorageIndex(const ColumnIndex &column_id) {
 }
 
 static StorageIndex GetStorageIndex(TableCatalogEntry &table, const ColumnIndex &column_id) {
-	if (column_id.IsRowIdColumn()) {
-		return StorageIndex();
+	if (column_id.IsVirtualColumn()) {
+		return StorageIndex(column_id.GetPrimaryIndex());
 	}
 
 	// The index of the base ColumnIndex is equal to the physical column index in the table
@@ -330,7 +330,10 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 	auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
 	const auto &columns = duck_table.GetColumns();
 	for (const auto &col_idx : input.column_indexes) {
-		if (col_idx.IsRowIdColumn()) {
+		if (col_idx.IsVirtualColumn()) {
+			if (!col_idx.IsRowIdColumn()) {
+				throw InternalException("FIXME: row num not supported");
+			}
 			g_state->scanned_types.emplace_back(LogicalType::ROW_TYPE);
 		} else {
 			g_state->scanned_types.push_back(columns.GetColumn(col_idx.ToLogical()).Type());
@@ -357,7 +360,10 @@ unique_ptr<GlobalTableFunctionState> DuckIndexScanInitGlobal(ClientContext &cont
 	const auto &columns = duck_table.GetColumns();
 	for (const auto &col_idx : input.column_indexes) {
 		g_state->column_ids.push_back(GetStorageIndex(bind_data.table, col_idx));
-		if (col_idx.IsRowIdColumn()) {
+		if (col_idx.IsVirtualColumn()) {
+			if (!col_idx.IsRowIdColumn()) {
+				throw InternalException("FIXME: row num not supported");
+			}
 			g_state->scanned_types.emplace_back(LogicalType::ROW_TYPE);
 			continue;
 		}
