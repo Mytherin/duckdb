@@ -210,6 +210,10 @@ private:
 	MultiFileColumnDefinition ParseColumnDefinition(const duckdb_parquet::FileMetaData &file_meta_data,
 	                                                ParquetColumnSchema &element);
 
+	void ParseColumnOrdersRecursive(ParquetColumnSchema &column_schema,
+	                                const duckdb_parquet::FileMetaData &file_meta_data, idx_t &column_order_idx);
+	void ParseColumnOrders(ParquetColumnSchema &column_schema, const duckdb_parquet::FileMetaData &file_meta_data);
+
 private:
 	unique_ptr<FileHandle> file_handle;
 };

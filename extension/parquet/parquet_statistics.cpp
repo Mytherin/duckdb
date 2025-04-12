@@ -54,6 +54,10 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::CreateNumericStats(const Logi
 static unique_ptr<BaseStatistics> CreateFloatingPointStats(const LogicalType &type,
                                                            const ParquetColumnSchema &schema_ele,
                                                            const duckdb_parquet::Statistics &parquet_stats) {
+	if (schema_ele.type_order == ParquetTypeOrder::IEEE_754_TOTAL_ORDER) {
+		// if we have the total order defined we can treat floating point stats as regular numeric stats
+		return ParquetStatisticsUtils::CreateNumericStats(type, schema_ele, parquet_stats);
+	}
 	auto stats = NumericStats::CreateUnknown(type);
 
 	// floating point values can always have NaN values - hence we cannot use the max value from the file

@@ -150,6 +150,7 @@ public:
 
 private:
 	void GatherWrittenStatistics();
+	void WriteColumnOrders(const ParquetColumnSchema &column_schemas, duckdb_parquet::FileMetaData &file_meta_data);
 
 private:
 	ClientContext &context;

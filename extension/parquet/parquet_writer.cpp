@@ -417,9 +417,30 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 		column_writers.push_back(
 		    ColumnWriter::CreateWriterRecursive(context, *this, file_meta_data.schema, child_schema, path_in_schema));
 	}
+	for (auto &child_schema : column_schemas) {
+		WriteColumnOrders(child_schema, file_meta_data);
+	}
+	file_meta_data.__isset.column_orders = true;
 }
 
 ParquetWriter::~ParquetWriter() {
+}
+
+void ParquetWriter::WriteColumnOrders(const ParquetColumnSchema &column_schema,
+                                      duckdb_parquet::FileMetaData &file_meta_data) {
+	if (column_schema.children.empty()) {
+		// root schema - write the orders
+		duckdb_parquet::ColumnOrder order;
+		if (column_schema.type.IsFloating()) {
+			duckdb_parquet::IEEE754TotalOrder floating_order;
+			order.__set_IEEE_754_TOTAL_ORDER(floating_order);
+		}
+		file_meta_data.column_orders.push_back(order);
+		return;
+	}
+	for (auto &child_schema : column_schema.children) {
+		WriteColumnOrders(child_schema, file_meta_data);
+	}
 }
 
 void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGroup &result) {

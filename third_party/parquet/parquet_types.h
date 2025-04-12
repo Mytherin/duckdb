@@ -438,6 +438,8 @@ class RowGroup;
 
 class TypeDefinedOrder;
 
+class IEEE754TotalOrder;
+
 class ColumnOrder;
 
 class PageLocation;
@@ -2395,9 +2397,33 @@ void swap(TypeDefinedOrder &a, TypeDefinedOrder &b);
 
 std::ostream& operator<<(std::ostream& out, const TypeDefinedOrder& obj);
 
+
+/**
+ * Empty struct to signal IEEE 754 total order for floating point types
+ */
+class IEEE754TotalOrder : public virtual ::apache::thrift::TBase {
+ public:
+
+  IEEE754TotalOrder(const IEEE754TotalOrder&) noexcept;
+  IEEE754TotalOrder& operator=(const IEEE754TotalOrder&) noexcept;
+  IEEE754TotalOrder() noexcept;
+
+  virtual ~IEEE754TotalOrder() noexcept;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
+
+  virtual void printTo(std::ostream& out) const;
+};
+
+void swap(IEEE754TotalOrder &a, IEEE754TotalOrder &b);
+
+std::ostream& operator<<(std::ostream& out, const IEEE754TotalOrder& obj);
+
 typedef struct _ColumnOrder__isset {
-  _ColumnOrder__isset() : TYPE_ORDER(false) {}
+  _ColumnOrder__isset() : TYPE_ORDER(false), IEEE_754_TOTAL_ORDER(false) {}
   bool TYPE_ORDER :1;
+  bool IEEE_754_TOTAL_ORDER :1;
 } _ColumnOrder__isset;
 
 /**
@@ -2471,10 +2497,13 @@ class ColumnOrder : public virtual ::apache::thrift::TBase {
    *       `-0.0` should be written into the min statistics field.
    */
   TypeDefinedOrder TYPE_ORDER;
+  IEEE754TotalOrder IEEE_754_TOTAL_ORDER;
 
   _ColumnOrder__isset __isset;
 
   void __set_TYPE_ORDER(const TypeDefinedOrder& val);
+
+  void __set_IEEE_754_TOTAL_ORDER(const IEEE754TotalOrder& val);
 
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;

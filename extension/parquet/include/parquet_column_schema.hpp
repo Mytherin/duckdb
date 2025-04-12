@@ -27,6 +27,8 @@ enum class ParquetExtraTypeInfo {
 	FLOAT16
 };
 
+enum class ParquetTypeOrder { STANDARD, IEEE_754_TOTAL_ORDER };
+
 struct ParquetColumnSchema {
 	ParquetColumnSchema() = default;
 	ParquetColumnSchema(idx_t max_define, idx_t max_repeat, idx_t schema_index, idx_t file_index,
@@ -47,6 +49,7 @@ struct ParquetColumnSchema {
 	uint32_t type_scale = 0;
 	duckdb_parquet::Type::type parquet_type = duckdb_parquet::Type::INT32;
 	ParquetExtraTypeInfo type_info = ParquetExtraTypeInfo::NONE;
+	ParquetTypeOrder type_order = ParquetTypeOrder::STANDARD;
 	vector<ParquetColumnSchema> children;
 
 	unique_ptr<BaseStatistics> Stats(ParquetReader &reader, idx_t row_group_idx_p,

@@ -943,6 +943,9 @@ struct RowGroup {
 /** Empty struct to signal the order defined by the physical or logical type */
 struct TypeDefinedOrder {}
 
+/** Empty struct to signal IEEE 754 total order for floating point types */
+struct IEEE754TotalOrder {}
+
 /**
  * Union to specify the order used for the min_value and max_value fields for a
  * column. This union takes the role of an enhanced enum that allows rich
@@ -1008,6 +1011,7 @@ union ColumnOrder {
    *       `-0.0` should be written into the min statistics field.
    */
   1: TypeDefinedOrder TYPE_ORDER;
+  2: IEEE754TotalOrder IEEE_754_TOTAL_ORDER;
 }
 
 struct PageLocation {

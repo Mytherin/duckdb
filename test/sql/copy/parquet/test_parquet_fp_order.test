@@ -1,0 +1,23 @@
+# name: test/sql/copy/parquet/test_parquet_fp_order.test
+# description: Test floating point order
+# group: [parquet]
+
+require parquet
+
+statement ok
+COPY (SELECT i::DOUBLE d FROM range(10) t(i)) TO '__TEST_DIR__/fp_order.parquet';
+
+# verify that we can read back the correct stats
+query I
+SELECT stats(d) FROM '__TEST_DIR__/fp_order.parquet' LIMIT 1
+----
+<REGEX>:.*Min.*0.0.*Max.*9.0.*
+
+statement ok
+SET explain_output = PHYSICAL_ONLY
+
+# we can prune this
+query II
+EXPLAIN SELECT d FROM '__TEST_DIR__/fp_order.parquet' WHERE d>100
+----
+physical_plan	<REGEX>:.*EMPTY_RESULT.*

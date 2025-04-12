@@ -596,6 +596,8 @@ unique_ptr<ParquetColumnSchema> ParquetReader::ParseSchema() {
 	if (root.type.id() != LogicalTypeId::STRUCT) {
 		throw InvalidInputException("Root element of Parquet file must be a struct");
 	}
+	// parse the column orders (if any)
+	ParseColumnOrders(root, *file_meta_data);
 	D_ASSERT(next_schema_idx == file_meta_data->schema.size() - 1);
 	D_ASSERT(file_meta_data->row_groups.empty() || next_file_idx == file_meta_data->row_groups[0].columns.size());
 	if (parquet_options.file_row_number) {
@@ -609,6 +611,33 @@ unique_ptr<ParquetColumnSchema> ParquetReader::ParseSchema() {
 		root.children.push_back(FileRowNumberSchema());
 	}
 	return make_uniq<ParquetColumnSchema>(root);
+}
+
+void ParquetReader::ParseColumnOrdersRecursive(ParquetColumnSchema &column_schema,
+                                               const duckdb_parquet::FileMetaData &file_meta_data,
+                                               idx_t &column_order_idx) {
+	if (column_order_idx >= file_meta_data.column_orders.size()) {
+		// exhausted the column order set
+		return;
+	}
+	if (column_schema.children.empty()) {
+		// root schema - read the order
+		auto &order = file_meta_data.column_orders[column_order_idx];
+		if (order.__isset.IEEE_754_TOTAL_ORDER) {
+			column_schema.type_order = ParquetTypeOrder::IEEE_754_TOTAL_ORDER;
+		}
+		column_order_idx++;
+		return;
+	}
+	for (auto &child_schema : column_schema.children) {
+		ParseColumnOrdersRecursive(child_schema, file_meta_data, column_order_idx);
+	}
+}
+
+void ParquetReader::ParseColumnOrders(ParquetColumnSchema &column_schema,
+                                      const duckdb_parquet::FileMetaData &file_meta_data) {
+	idx_t column_order_idx = 0;
+	ParseColumnOrdersRecursive(column_schema, file_meta_data, column_order_idx);
 }
 
 MultiFileColumnDefinition ParquetReader::ParseColumnDefinition(const FileMetaData &file_meta_data,
