@@ -14,7 +14,9 @@
 #include "duckdb/function/scalar/operator_functions.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/function/scalar/generic_common.hpp"
 
 namespace duckdb {
 
@@ -861,6 +863,70 @@ unique_ptr<FunctionData> BindDecimalMultiply(ClientContext &context, ScalarFunct
 	return std::move(bind_data);
 }
 
+static Value CastHugeintToSmallestFittingInteger(hugeint_t val) {
+	int8_t tinyint_result;
+	if (Hugeint::TryCast(val, tinyint_result)) {
+		return Value::TINYINT(tinyint_result);
+	}
+	int16_t smallint_result;
+	if (Hugeint::TryCast(val, smallint_result)) {
+		return Value::SMALLINT(smallint_result);
+	}
+	int32_t int_result;
+	if (Hugeint::TryCast(val, int_result)) {
+		return Value::INTEGER(int_result);
+	}
+	int64_t bigint_result;
+	if (Hugeint::TryCast(val, bigint_result)) {
+		return Value::BIGINT(bigint_result);
+	}
+	return Value::HUGEINT(val);
+}
+
+static unique_ptr<FunctionData> BindMultiplyIntegerLiteral(ClientContext &context, ScalarFunction &function,
+												vector<unique_ptr<Expression>> &arguments) {
+	for(auto &arg : arguments) {
+		if (!arg->IsFoldable()) {
+			throw InternalException("Integer literal multiply requires a constant input");
+		}
+	}
+
+	auto lhs = ExpressionExecutor::EvaluateScalar(context, *arguments[0]);
+	auto rhs = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
+	if (lhs.IsNull() || rhs.IsNull()) {
+		throw InternalException("Integer literals cannot be NULLs");
+	}
+	// perform the multiplication
+	hugeint_t lhs_val = lhs.GetValue<hugeint_t>();
+	hugeint_t rhs_val = rhs.GetValue<hugeint_t>();
+	hugeint_t result;
+	if (Hugeint::TryMultiply(lhs_val, rhs_val, result)) {
+		auto value = CastHugeintToSmallestFittingInteger(result);
+		function.arguments[0] = value.type();
+		function.arguments[1] = value.type();
+		function.return_type = value.type();
+		return make_uniq<ConstantVariableBindData>(std::move(value));
+	}
+	throw InternalException("Multiply failed!?");
+}
+
+unique_ptr<Expression> BindMultiplyIntegerLiteralExpression(FunctionBindExpressionInput &input) {
+	if (!input.bind_data) {
+		// unknown type
+		throw InternalException("input.bind_data should be set");
+	}
+	auto &bind_data = input.bind_data->Cast<ConstantVariableBindData>();
+	// emit a constant expression
+	return make_uniq<BoundConstantExpression>(bind_data.value);
+}
+
+ScalarFunction MultiplyIntegerLiteral() {
+	ScalarFunction integer_literal({LogicalTypeId::INTEGER_LITERAL, LogicalTypeId::INTEGER_LITERAL}, LogicalTypeId::INTEGER_LITERAL,
+					   nullptr, BindMultiplyIntegerLiteral, nullptr, nullptr);
+	integer_literal.bind_expression = BindMultiplyIntegerLiteralExpression;
+	return integer_literal;
+}
+
 ScalarFunctionSet OperatorMultiplyFun::GetFunctions() {
 	ScalarFunctionSet multiply("*");
 	for (auto &type : LogicalType::Numeric()) {
@@ -884,7 +950,8 @@ ScalarFunctionSet OperatorMultiplyFun::GetFunctions() {
 	                   ScalarFunction::BinaryFunction<interval_t, double, interval_t, MultiplyOperator>));
 	multiply.AddFunction(
 	    ScalarFunction({LogicalType::BIGINT, LogicalType::INTERVAL}, LogicalType::INTERVAL,
-	                   ScalarFunction::BinaryFunction<int64_t, interval_t, interval_t, MultiplyOperator>));
+	    ScalarFunction::BinaryFunction<int64_t, interval_t, interval_t, MultiplyOperator>));
+	multiply.AddFunction(MultiplyIntegerLiteral());
 	for (auto &func : multiply.functions) {
 		ScalarFunction::SetReturnsError(func);
 	}

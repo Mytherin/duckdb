@@ -354,9 +354,12 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		return 20;
 	}
 	if (from.id() == LogicalTypeId::INTEGER_LITERAL) {
+		if (from.id() == to.id()) {
+			return 0;
+		}
 		// the integer literal has an underlying type - this type always matches
 		if (IntegerLiteral::GetType(from).id() == to.id()) {
-			return 0;
+			return 1;
 		}
 		// integer literals can be cast to any other integer type for a low cost, but only if the literal fits
 		if (IntegerLiteral::FitsInType(from, to)) {

@@ -29,6 +29,15 @@ struct ExportAggregateFunctionBindData : public FunctionData {
 	bool Equals(const FunctionData &other_p) const override;
 };
 
+struct ConstantVariableBindData : FunctionData {
+	explicit ConstantVariableBindData(Value value_p);
+
+	Value value;
+
+	bool Equals(const FunctionData &other_p) const override;
+	unique_ptr<FunctionData> Copy() const override;
+};
+
 struct ExportAggregateFunction {
 	static unique_ptr<BoundAggregateExpression> Bind(unique_ptr<BoundAggregateExpression> child_aggregate);
 };

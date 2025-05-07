@@ -3,24 +3,21 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
+#include "duckdb/function/scalar/generic_common.hpp"
 
 namespace duckdb {
 
-struct GetVariableBindData : FunctionData {
-	explicit GetVariableBindData(Value value_p) : value(std::move(value_p)) {
-	}
+ConstantVariableBindData::ConstantVariableBindData(Value value_p) : value(std::move(value_p)) {
+}
 
-	Value value;
+bool ConstantVariableBindData::Equals(const FunctionData &other_p) const {
+	const auto &other = other_p.Cast<ConstantVariableBindData>();
+	return Value::NotDistinctFrom(value, other.value);
+}
 
-	bool Equals(const FunctionData &other_p) const override {
-		const auto &other = other_p.Cast<GetVariableBindData>();
-		return Value::NotDistinctFrom(value, other.value);
-	}
-
-	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<GetVariableBindData>(value);
-	}
-};
+unique_ptr<FunctionData> ConstantVariableBindData::Copy() const {
+	return make_uniq<ConstantVariableBindData>(value);
+}
 
 static unique_ptr<FunctionData> GetVariableBind(ClientContext &context, ScalarFunction &function,
                                                 vector<unique_ptr<Expression>> &arguments) {
@@ -36,7 +33,7 @@ static unique_ptr<FunctionData> GetVariableBind(ClientContext &context, ScalarFu
 		ClientConfig::GetConfig(context).GetUserVariable(variable_name.ToString(), value);
 	}
 	function.return_type = value.type();
-	return make_uniq<GetVariableBindData>(std::move(value));
+	return make_uniq<ConstantVariableBindData>(std::move(value));
 }
 
 unique_ptr<Expression> BindGetVariableExpression(FunctionBindExpressionInput &input) {
@@ -44,7 +41,7 @@ unique_ptr<Expression> BindGetVariableExpression(FunctionBindExpressionInput &in
 		// unknown type
 		throw InternalException("input.bind_data should be set");
 	}
-	auto &bind_data = input.bind_data->Cast<GetVariableBindData>();
+	auto &bind_data = input.bind_data->Cast<ConstantVariableBindData>();
 	// emit a constant expression
 	return make_uniq<BoundConstantExpression>(bind_data.value);
 }
