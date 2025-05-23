@@ -866,6 +866,7 @@ static string AdditionalLockInfo(const std::wstring path) {
 		return "";
 	}
 
+	string conflict_string;
 	for (UINT process_idx = 0; process_idx < process_info_size; process_idx++) {
 		string process_name = WindowsUtil::UnicodeToUTF8(process_info[process_idx].strAppName);
 		auto pid = process_info[process_idx].Process.dwProcessId;
