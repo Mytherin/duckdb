@@ -40,7 +40,7 @@ index 04bd795..0fe6be8 100644
  
  size_t AESStateSSL::Process(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) {
 diff --git a/extension/httpfs/include/crypto.hpp b/extension/httpfs/include/crypto.hpp
-index f819356..eaa850e 100644
+index f819356..a12ed4d 100644
 --- a/extension/httpfs/include/crypto.hpp
 +++ b/extension/httpfs/include/crypto.hpp
 @@ -29,8 +29,8 @@ public:
@@ -49,8 +49,8 @@ index f819356..eaa850e 100644
  public:
 -	void InitializeEncryption(const_data_ptr_t iv, idx_t iv_len, const std::string *key) override;
 -	void InitializeDecryption(const_data_ptr_t iv, idx_t iv_len, const std::string *key) override;
-+	void InitializeEncryption(const_data_ptr_t iv, idx_t iv_len, const std::string *key, const_data_ptr_t aad, idx_t aad_len) override;
-+	void InitializeDecryption(const_data_ptr_t iv, idx_t iv_len, const std::string *key, const_data_ptr_t aad, idx_t aad_len) override;
++	void InitializeEncryption(const_data_ptr_t iv, idx_t iv_len, const std::string *key, const_data_ptr_t aad = nullptr, idx_t aad_len = 0) override;
++	void InitializeDecryption(const_data_ptr_t iv, idx_t iv_len, const std::string *key, const_data_ptr_t aad = nullptr, idx_t aad_len = 0) override;
  	size_t Process(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) override;
  	size_t Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len) override;
  	void GenerateRandomData(data_ptr_t data, idx_t len) override;
