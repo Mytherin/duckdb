@@ -105,6 +105,9 @@ void VectorListBuffer::SetCapacity(idx_t new_capacity) {
 }
 
 void VectorListBuffer::SetSize(idx_t new_size) {
+	if (new_size > capacity) {
+		throw InternalException("List size cannot be larger than list capacity");
+	}
 	this->size = new_size;
 }
 
