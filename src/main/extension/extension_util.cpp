@@ -20,8 +20,6 @@ namespace duckdb {
 
 void ExtensionUtil::RegisterExtension(DatabaseInstance &db, const string &name,
                                       const ExtensionLoadedInfo &description) {
-
-	db.AddExtensionInfo(name, description);
 }
 
 void ExtensionUtil::RegisterFunction(DatabaseInstance &db, ScalarFunction function) {
