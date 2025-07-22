@@ -171,12 +171,6 @@ duckdb_extension_load(extension_2
 )
 ```
 
-Now to merge the vcpkg.json manifests from these two extension run:
-```shell   
-make extension_configuration
-```
-This will create a merged manifest in `./build/extension_configuration/vcpkg.json`.
-
 Next, run:
 ```shell
 USE_MERGED_VCPKG_MANIFEST=1 VCPKG_TOOLCHAIN_PATH="/path/to/your/vcpkg/installation" make

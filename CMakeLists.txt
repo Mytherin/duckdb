@@ -20,6 +20,11 @@ if(POLICY CMP0063)
   cmake_policy(SET CMP0063 NEW)
 endif()
 
+# set VCPKG target directory if we are running with a merged manifest
+if (${USE_MERGED_VCPKG_MANIFEST})
+  set(VCPKG_MANIFEST_DIR "${CMAKE_CURRENT_BINARY_DIR}" CACHE PATH "vcpkg manifest directory")
+endif()
+
 project(DuckDB)
 
 find_package(Threads REQUIRED)
@@ -1421,7 +1426,7 @@ if(${EXTENSION_CONFIG_BUILD})
 
   add_custom_target(
           duckdb_merge_vcpkg_manifests ALL
-          COMMAND  ${Python3_EXECUTABLE} scripts/merge_vcpkg_deps.py ${VCPKG_PATHS} ${EXT_NAMES}
+          COMMAND  ${Python3_EXECUTABLE} scripts/merge_vcpkg_deps.py ${CMAKE_CURRENT_BINARY_DIR} ${VCPKG_PATHS} ${EXT_NAMES}
           WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
           COMMENT Generates a shared vcpkg manifest from the individual extensions)
   string(REPLACE ";"  ", " VCPKG_NAMES_COMMAS "${VCPKG_NAMES}")

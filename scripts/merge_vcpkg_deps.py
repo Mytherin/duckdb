@@ -1,4 +1,5 @@
 import json
+import os
 import sys
 
 # Pass vcpkg.json files to merge their dependencies and produce a single vcpkg.json with their
@@ -24,7 +25,10 @@ def prefix_overlay_ports(overlay_ports, path_to_vcpkg_json):
     return map(prefix_overlay_port, overlay_ports)
 
 
-for file in sys.argv[1:]:
+basedir = sys.argv[1]
+vcpkg_file = os.path.join(basedir, 'vcpkg.json')
+
+for file in sys.argv[2:]:
     f = open(file)
     data = json.load(f)
 
@@ -80,8 +84,25 @@ data['vcpkg-configuration']['registries'] = [
 ]
 
 # Print output
-print("Writing to 'build/extension_configuration/vcpkg.json': ")
+print(f"Writing to '{vcpkg_file}': ")
 print(data["dependencies"])
 
-with open('build/extension_configuration/vcpkg.json', 'w', encoding='utf-8') as f:
+with open(vcpkg_file, 'w', encoding='utf-8') as f:
     json.dump(data, f, ensure_ascii=False, indent=4)
+
+preserved_files = ['extensions.csv', 'vcpkg.json', '_deps']
+
+
+def remove_all_files(dir, root=True):
+    files = os.listdir(dir)
+    for file in files:
+        if root and file in preserved_files:
+            continue
+        full_path = os.path.join(dir, file)
+        if os.path.isfile(full_path):
+            os.remove(full_path)
+        elif os.path.isdir(full_path):
+            remove_all_files(full_path, False)
+
+
+remove_all_files(basedir)

@@ -5,8 +5,15 @@ opt: release
 unit: unittest
 
 EXTENSION_CONFIG_STEP ?=
+ifdef BUILD_EXTENSIONS
+	USE_MERGED_VCPKG_MANIFEST=1
+endif
+ifdef CORE_EXTENSIONS
+	USE_MERGED_VCPKG_MANIFEST=1
+endif
+EXTENSION_CONFIG_COMMAND = cmake $(GENERATOR) $(FORCE_COLOR) ${CMAKE_VARS} -DEXTENSION_CONFIG_BUILD=TRUE -DVCPKG_BUILD=1 -DCMAKE_BUILD_TYPE=Debug ../.. && cmake --build . --config RelWithDebInfo
 ifdef USE_MERGED_VCPKG_MANIFEST
-	EXTENSION_CONFIG_STEP = build/extension_configuration/vcpkg.json
+	EXTENSION_CONFIG_STEP = ${EXTENSION_CONFIG_COMMAND} &&
 endif
 
 GENERATOR ?=
@@ -309,7 +316,12 @@ ifneq ("${VCPKG_TARGET_TRIPLET}", "")
 	CMAKE_VARS_BUILD:=${CMAKE_VARS_BUILD} -DVCPKG_TARGET_TRIPLET='${VCPKG_TARGET_TRIPLET}'
 endif
 ifeq (${USE_MERGED_VCPKG_MANIFEST}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DVCPKG_MANIFEST_DIR='${PROJ_DIR}build/extension_configuration'
+	CMAKE_VARS:=${CMAKE_VARS} -DUSE_MERGED_VCPKG_MANIFEST=1
+endif
+ifdef EXTENSION_DEPENDENCY_DIR
+	CMAKE_VARS:=${CMAKE_VARS} -DEXTENSION_DEPENDENCY_DIR='${EXTENSION_DEPENDENCY_DIR}'
+else
+	CMAKE_VARS:=${CMAKE_VARS} -DEXTENSION_DEPENDENCY_DIR='${PROJ_DIR}build/deps'
 endif
 
 ifneq ("${LTO}", "")
@@ -336,42 +348,46 @@ clean:
 clean-python:
 	tools/pythonpkg/clean.sh
 
-debug: ${EXTENSION_CONFIG_STEP}
+debug:
 	mkdir -p ./build/debug && \
 	cd build/debug && \
+	${EXTENSION_CONFIG_STEP} \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DDEBUG_MOVE=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build . --config Debug
 
-release: ${EXTENSION_CONFIG_STEP}
+release:
 	mkdir -p ./build/release && \
 	cd build/release && \
+	${EXTENSION_CONFIG_STEP} \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DCMAKE_BUILD_TYPE=Release ../.. && \
 	cmake --build . --config Release
 
-wasm_mvp: ${EXTENSION_CONFIG_STEP}
+wasm_mvp:
 	mkdir -p ./build/wasm_mvp && \
 	emcmake cmake $(GENERATOR) -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_EXTENSIONS_ONLY=1 -Bbuild/wasm_mvp -DCMAKE_CXX_FLAGS="-DDUCKDB_CUSTOM_PLATFORM=wasm_mvp" -DDUCKDB_EXPLICIT_PLATFORM="wasm_mvp" ${COMMON_CMAKE_VARS} ${TOOLCHAIN_FLAGS} && \
 	emmake make -j8 -Cbuild/wasm_mvp
 
-wasm_eh: ${EXTENSION_CONFIG_STEP}
+wasm_eh:
 	mkdir -p ./build/wasm_eh && \
 	emcmake cmake $(GENERATOR) -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_EXTENSIONS_ONLY=1 -Bbuild/wasm_eh -DCMAKE_CXX_FLAGS="-fwasm-exceptions -DWEBDB_FAST_EXCEPTIONS=1 -DDUCKDB_CUSTOM_PLATFORM=wasm_eh" -DDUCKDB_EXPLICIT_PLATFORM="wasm_eh" ${COMMON_CMAKE_VARS} ${TOOLCHAIN_FLAGS} && \
 	emmake make -j8 -Cbuild/wasm_eh
 
-wasm_threads: ${EXTENSION_CONFIG_STEP}
+wasm_threads:
 	mkdir -p ./build/wasm_threads && \
 	emcmake cmake $(GENERATOR) -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_EXTENSIONS_ONLY=1 -Bbuild/wasm_threads -DCMAKE_CXX_FLAGS="-fwasm-exceptions -DWEBDB_FAST_EXCEPTIONS=1 -DWITH_WASM_THREADS=1 -DWITH_WASM_SIMD=1 -DWITH_WASM_BULK_MEMORY=1 -DDUCKDB_CUSTOM_PLATFORM=wasm_threads -pthread" -DDUCKDB_EXPLICIT_PLATFORM="wasm_threads" ${COMMON_CMAKE_VARS} -DUSE_WASM_THREADS=1 -DCMAKE_C_FLAGS="-pthread" ${TOOLCHAIN_FLAGS} && \
 	emmake make -j8 -Cbuild/wasm_threads
 
-cldebug: ${EXTENSION_CONFIG_STEP}
+cldebug:
 	mkdir -p ./build/cldebug && \
 	cd build/cldebug && \
+	${EXTENSION_CONFIG_STEP} \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DBUILD_PYTHON=1 -DENABLE_SANITIZER=0 -DENABLE_UBSAN=0 -DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build . --config Debug
 
 clreldebug:
 	mkdir -p ./build/clreldebug && \
 	cd build/clreldebug && \
+	${EXTENSION_CONFIG_STEP} \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} -DBUILD_PYTHON=1 -DBUILD_FTS_EXTENSION=1 -DENABLE_SANITIZER=0 -DENABLE_UBSAN=0 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
 	cmake --build . --config RelWithDebInfo
 
@@ -380,11 +396,10 @@ extension_configuration: build/extension_configuration/vcpkg.json
 extension/extension_config_local.cmake:
 	touch extension/extension_config_local.cmake
 
-build/extension_configuration/vcpkg.json: extension/extension_config_local.cmake extension/extension_config.cmake
-	mkdir -p ./build/extension_configuration && \
+build/extension_configuration/vcpkg.json:
+	mkdir -p build/extension_configuration && \
 	cd build/extension_configuration && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${CMAKE_VARS} -DEXTENSION_CONFIG_BUILD=TRUE -DVCPKG_BUILD=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
-	cmake --build . --config RelWithDebInfo
+  	${EXTENSION_CONFIG_COMMAND}
 
 unittest: debug
 	build/debug/test/unittest
@@ -412,15 +427,17 @@ docs:
 doxygen: docs
 	open build/docs/html/index.html
 
-reldebug: ${EXTENSION_CONFIG_STEP}
+reldebug:
 	mkdir -p ./build/reldebug && \
 	cd build/reldebug && \
+	${EXTENSION_CONFIG_STEP} \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
 	cmake --build . --config RelWithDebInfo
 
-relassert: ${EXTENSION_CONFIG_STEP}
+relassert:
 	mkdir -p ./build/relassert && \
 	cd build/relassert && \
+	${EXTENSION_CONFIG_STEP} \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DFORCE_ASSERT=1 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
 	cmake --build . --config RelWithDebInfo
 
