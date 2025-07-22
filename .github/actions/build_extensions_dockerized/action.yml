@@ -68,6 +68,7 @@ runs:
           echo "DUCKDB_PLATFORM=${{ inputs.duckdb_arch }}" >> docker_env.txt
           echo "OVERRIDE_GIT_DESCRIBE=${{ inputs.override_git_describe }}" >> docker_env.txt
           echo "LINUX_CI_IN_DOCKER=1" >> docker_env.txt
+          echo "BUILD_ALL_EXT=1" >> docker_env.txt
           echo "BUILD_COMPLETE_EXTENSION_SET=${{ inputs.build_complete_extensions_set }}" >> docker_env.txt
 
       - name: Generate timestamp for Ccache entry

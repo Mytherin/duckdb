@@ -92,6 +92,7 @@ jobs:
         env:
           VCPKG_TOOLCHAIN_PATH: /home/runner/work/duckdb/duckdb/vcpkg/scripts/buildsystems/vcpkg.cmake
           WASM_EXTENSIONS: 1
+          BUILD_ALL_EXT: 1
         run: |
           make ${{ matrix.duckdb_arch }}
 
