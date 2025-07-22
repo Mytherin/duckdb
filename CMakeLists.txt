@@ -203,20 +203,6 @@ elseif(${ENABLE_SANITIZER})
   endif()
 endif()
 
-if (${DISABLE_VPTR_SANITIZER})
-else()
-  if(APPLE AND CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
-    if("${CMAKE_CXX_COMPILER_VERSION}" VERSION_GREATER 14.0)
-      message(
-        WARNING
-          "Not disabling vptr sanitizer on M1 Macbook - set DISABLE_VPTR_SANITIZER manually if you run into issues with false positives in the sanitizer"
-      )
-    else()
-    set(DISABLE_VPTR_SANITIZER TRUE)
-    endif()
-  endif()
-endif()
-
 if(${ENABLE_UBSAN})
   if(${ENABLE_THREAD_SANITIZER})
     message(
