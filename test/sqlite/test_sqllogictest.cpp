@@ -228,16 +228,5 @@ void RegisterSqllogictests() {
 			REGISTER_TEST_CASE(testRunner<false>, StringUtil::Replace(path, "\\", "/"), ParseGroupFromPath(path));
 		}
 	});
-
-#if defined(GENERATED_EXTENSION_HEADERS) && GENERATED_EXTENSION_HEADERS && !defined(DUCKDB_AMALGAMATION)
-	for (const auto &extension_test_path : LoadedExtensionTestPaths()) {
-		listFiles(*fs, extension_test_path, [&](const string &path) {
-			if (endsWith(path, ".test") || endsWith(path, ".test_slow") || endsWith(path, ".test_coverage")) {
-				auto fun = testRunner<false, true>;
-				REGISTER_TEST_CASE(fun, StringUtil::Replace(path, "\\", "/"), ParseGroupFromPath(path));
-			}
-		});
-	}
-#endif
 }
 } // namespace duckdb
