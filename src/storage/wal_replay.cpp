@@ -283,11 +283,13 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(AttachedDatabase &databa
 	// first deserialize the WAL to look for a checkpoint flag
 	// if there is a checkpoint flag, we might have already flushed the contents of the WAL to disk
 	ReplayState checkpoint_state(database, *con.context);
+	idx_t successful_offset = 0;
 	try {
 		while (true) {
 			// read the current entry (deserialize only)
 			auto deserializer = WriteAheadLogDeserializer::Open(checkpoint_state, reader, true);
 			if (deserializer.ReplayEntry()) {
+				successful_offset = reader.offset;
 				// check if the file is exhausted
 				if (reader.Finished()) {
 					// we finished reading the file: break
@@ -321,21 +323,12 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(AttachedDatabase &databa
 	// replay the WAL
 	// note that everything is wrapped inside a try/catch block here
 	// there can be errors in WAL replay because of a corrupt WAL file
-	idx_t successful_offset = 0;
 	bool all_succeeded = false;
 	try {
-		while (true) {
+		while (reader.offset < successful_offset) {
 			// read the current entry
 			auto deserializer = WriteAheadLogDeserializer::Open(state, reader);
 			if (deserializer.ReplayEntry()) {
-				con.Commit();
-
-				// Commit any outstanding indexes.
-				for (auto &info : state.replay_index_infos) {
-					info.index_list.get().AddIndex(std::move(info.index));
-				}
-				state.replay_index_infos.clear();
-
 				successful_offset = reader.offset;
 				// check if the file is exhausted
 				if (reader.Finished()) {
@@ -343,10 +336,14 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(AttachedDatabase &databa
 					all_succeeded = true;
 					break;
 				}
-				con.BeginTransaction();
-				MetaTransaction::Get(*con.context).ModifyDatabase(database);
 			}
 		}
+		con.Commit();
+		// Commit any outstanding indexes.
+		for (auto &info : state.replay_index_infos) {
+			info.index_list.get().AddIndex(std::move(info.index));
+		}
+		state.replay_index_infos.clear();
 	} catch (std::exception &ex) { // LCOV_EXCL_START
 		// exception thrown in WAL replay: rollback
 		con.Query("ROLLBACK");
