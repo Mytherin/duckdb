@@ -180,16 +180,12 @@ public:
 		                  state_p.wal_version);
 	}
 
-	bool ReplayEntry() {
+	WALType ReplayEntry() {
 		deserializer.Begin();
 		auto wal_type = deserializer.ReadProperty<WALType>(100, "wal_type");
-		if (wal_type == WALType::WAL_FLUSH) {
-			deserializer.End();
-			return true;
-		}
 		ReplayEntry(wal_type);
 		deserializer.End();
-		return false;
+		return wal_type;
 	}
 
 	bool DeserializeOnly() {
@@ -276,6 +272,9 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(AttachedDatabase &databa
 		return nullptr;
 	}
 
+	bool has_insert = false;
+	bool has_delete_or_update = false;
+
 	con.BeginTransaction();
 	MetaTransaction::Get(*con.context).ModifyDatabase(database);
 
@@ -290,7 +289,8 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(AttachedDatabase &databa
 		while (true) {
 			// read the current entry (deserialize only)
 			auto deserializer = WriteAheadLogDeserializer::Open(checkpoint_state, reader, true);
-			if (deserializer.ReplayEntry()) {
+			auto wal_type = deserializer.ReplayEntry();
+			if (wal_type == WALType::WAL_FLUSH) {
 				successful_offset = reader.CurrentOffset();
 				// check if the file is exhausted
 				if (reader.Finished()) {
@@ -298,6 +298,12 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(AttachedDatabase &databa
 					all_succeeded = true;
 					break;
 				}
+			}
+			if (wal_type == WALType::INSERT_TUPLE) {
+				has_insert = true;
+			}
+			if (wal_type == WALType::DELETE_TUPLE || wal_type == WALType::UPDATE_TUPLE) {
+				has_delete_or_update = true;
 			}
 		}
 	} catch (std::exception &ex) { // LCOV_EXCL_START
@@ -316,6 +322,7 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(AttachedDatabase &databa
 			return nullptr;
 		}
 	}
+	bool require_new_transaction = has_insert && has_delete_or_update;
 
 	// we need to recover from the WAL: actually set up the replay state
 	ReplayState state(database, *con.context);
@@ -330,14 +337,26 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(AttachedDatabase &databa
 		while (reader.CurrentOffset() < successful_offset && !reader.Finished()) {
 			// read the current entry
 			auto deserializer = WriteAheadLogDeserializer::Open(state, reader);
-			deserializer.ReplayEntry();
+			if (deserializer.ReplayEntry() == WALType::WAL_FLUSH && require_new_transaction) {
+				con.Commit();
+				// Commit any outstanding indexes.
+				for (auto &info : state.replay_index_infos) {
+					info.index_list.get().AddIndex(std::move(info.index));
+				}
+				state.replay_index_infos.clear();
+
+				con.BeginTransaction();
+				MetaTransaction::Get(*con.context).ModifyDatabase(database);
+			}
 		}
-		con.Commit();
-		// Commit any outstanding indexes.
-		for (auto &info : state.replay_index_infos) {
-			info.index_list.get().AddIndex(std::move(info.index));
+		if (!require_new_transaction) {
+			con.Commit();
+			// Commit any outstanding indexes.
+			for (auto &info : state.replay_index_infos) {
+				info.index_list.get().AddIndex(std::move(info.index));
+			}
+			state.replay_index_infos.clear();
 		}
-		state.replay_index_infos.clear();
 	} catch (...) {
 		// exception thrown in WAL replay: rollback
 		con.Query("ROLLBACK");
@@ -431,6 +450,9 @@ void WriteAheadLogDeserializer::ReplayEntry(WALType entry_type) {
 		break;
 	case WALType::DROP_TYPE:
 		ReplayDropType();
+		break;
+	case WALType::WAL_FLUSH:
+		// nothing to do
 		break;
 	default:
 		throw InternalException("Invalid WAL entry type!");
