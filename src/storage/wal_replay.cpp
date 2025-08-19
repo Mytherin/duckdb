@@ -284,21 +284,24 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(AttachedDatabase &databa
 	// if there is a checkpoint flag, we might have already flushed the contents of the WAL to disk
 	ReplayState checkpoint_state(database, *con.context);
 	idx_t successful_offset = 0;
+	bool all_succeeded = false;
+	ErrorData error;
 	try {
 		while (true) {
 			// read the current entry (deserialize only)
 			auto deserializer = WriteAheadLogDeserializer::Open(checkpoint_state, reader, true);
 			if (deserializer.ReplayEntry()) {
-				successful_offset = reader.offset;
+				successful_offset = reader.CurrentOffset();
 				// check if the file is exhausted
 				if (reader.Finished()) {
 					// we finished reading the file: break
+					all_succeeded = true;
 					break;
 				}
 			}
 		}
 	} catch (std::exception &ex) { // LCOV_EXCL_START
-		ErrorData error(ex);
+		error = ErrorData(ex);
 		// ignore serialization exceptions - they signal a torn WAL
 		if (error.Type() != ExceptionType::SERIALIZATION) {
 			error.Throw("Failure while replaying WAL file \"" + wal_path + "\": ");
@@ -323,20 +326,11 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(AttachedDatabase &databa
 	// replay the WAL
 	// note that everything is wrapped inside a try/catch block here
 	// there can be errors in WAL replay because of a corrupt WAL file
-	bool all_succeeded = false;
 	try {
-		while (reader.offset < successful_offset) {
+		while (reader.CurrentOffset() < successful_offset && !reader.Finished()) {
 			// read the current entry
 			auto deserializer = WriteAheadLogDeserializer::Open(state, reader);
-			if (deserializer.ReplayEntry()) {
-				successful_offset = reader.offset;
-				// check if the file is exhausted
-				if (reader.Finished()) {
-					// we finished reading the file: break
-					all_succeeded = true;
-					break;
-				}
-			}
+			deserializer.ReplayEntry();
 		}
 		con.Commit();
 		// Commit any outstanding indexes.
@@ -344,21 +338,16 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(AttachedDatabase &databa
 			info.index_list.get().AddIndex(std::move(info.index));
 		}
 		state.replay_index_infos.clear();
-	} catch (std::exception &ex) { // LCOV_EXCL_START
-		// exception thrown in WAL replay: rollback
-		con.Query("ROLLBACK");
-		ErrorData error(ex);
-		// serialization failure means a truncated WAL
-		// these failures are ignored unless abort_on_wal_failure is true
-		// other failures always result in an error
-		if (config.options.abort_on_wal_failure || error.Type() != ExceptionType::SERIALIZATION) {
-			error.Throw("Failure while replaying WAL file \"" + wal_path + "\": ");
-		}
 	} catch (...) {
 		// exception thrown in WAL replay: rollback
 		con.Query("ROLLBACK");
 		throw;
 	} // LCOV_EXCL_STOP
+	if (config.options.abort_on_wal_failure && error.HasError()) {
+		// if we got here and had a replay error we encountered a torn WAL
+		// if abort_on_wal_failure is true throw anyway
+		error.Throw("Failure while replaying WAL file \"" + wal_path + "\": ");
+	}
 	auto init_state = all_succeeded ? WALInitState::UNINITIALIZED : WALInitState::UNINITIALIZED_REQUIRES_TRUNCATE;
 	return make_uniq<WriteAheadLog>(database, wal_path, successful_offset, init_state);
 }
