@@ -274,6 +274,7 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(AttachedDatabase &databa
 
 	bool has_insert = false;
 	bool has_delete_or_update = false;
+	bool has_alter = false;
 
 	con.BeginTransaction();
 	MetaTransaction::Get(*con.context).ModifyDatabase(database);
@@ -305,6 +306,9 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(AttachedDatabase &databa
 			if (wal_type == WALType::DELETE_TUPLE || wal_type == WALType::UPDATE_TUPLE) {
 				has_delete_or_update = true;
 			}
+			if (wal_type == WALType::ALTER_INFO) {
+				has_alter = true;
+			}
 		}
 	} catch (std::exception &ex) { // LCOV_EXCL_START
 		error = ErrorData(ex);
@@ -322,7 +326,7 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(AttachedDatabase &databa
 			return nullptr;
 		}
 	}
-	bool require_new_transaction = has_insert && has_delete_or_update;
+	bool require_new_transaction = (has_insert && has_delete_or_update) || has_alter;
 
 	// we need to recover from the WAL: actually set up the replay state
 	ReplayState state(database, *con.context);
