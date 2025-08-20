@@ -25,6 +25,7 @@ string getDBName(idx_t i) {
 const idx_t dbCount = 10;
 const idx_t workerCount = 40;
 const idx_t iterationCount = 100;
+atomic<bool> success;
 
 void execQuery(Connection &conn, const string &query) {
 	auto result = conn.Query(query);
@@ -33,7 +34,7 @@ void execQuery(Connection &conn, const string &query) {
 		Printer::Print(result->GetError());
 	}
 	if (result->HasError()) {
-		FAIL();
+		success = false;
 	}
 }
 
@@ -135,6 +136,7 @@ TEST_CASE("Run a concurrent ATTACH scenario", "[attach]") {
 	execQuery(initConn, "SET default_block_size = '16384'");
 	execQuery(initConn, "SET storage_compatibility_version = 'v1.3.2'");
 
+	success = true;
 	std::vector<thread> workers;
 	for (int i = 0; i < workerCount; i++) {
 		auto conn = make_uniq<Connection>(db);
@@ -143,5 +145,8 @@ TEST_CASE("Run a concurrent ATTACH scenario", "[attach]") {
 
 	for (auto &worker : workers) {
 		worker.join();
+	}
+	if (!success) {
+		FAIL();
 	}
 }
