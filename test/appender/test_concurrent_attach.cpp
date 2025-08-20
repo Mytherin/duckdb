@@ -28,10 +28,12 @@ const idx_t iterationCount = 100;
 atomic<bool> success;
 
 void execQuery(Connection &conn, const string &query) {
+	Printer::Print("START RUNNING " + query);
 	auto result = conn.Query(query);
 	if (result->HasError()) {
-		Printer::Print(query);
 		Printer::Print(result->GetError());
+	} else {
+		Printer::Print("SUCCESS RUNNING " + query);
 	}
 	if (result->HasError()) {
 		success = false;
@@ -133,8 +135,8 @@ TEST_CASE("Run a concurrent ATTACH scenario", "[attach]") {
 
 	execQuery(initConn, "SET catalog_error_max_schemas = '0'");
 	execQuery(initConn, "SET threads = '1'");
-	execQuery(initConn, "SET default_block_size = '16384'");
-	execQuery(initConn, "SET storage_compatibility_version = 'v1.3.2'");
+//	execQuery(initConn, "SET default_block_size = '16384'");
+//	execQuery(initConn, "SET storage_compatibility_version = 'v1.3.2'");
 
 	success = true;
 	std::vector<thread> workers;
