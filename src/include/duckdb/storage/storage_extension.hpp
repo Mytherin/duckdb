@@ -31,10 +31,14 @@ typedef unique_ptr<Catalog> (*attach_function_t)(optional_ptr<StorageExtensionIn
 typedef unique_ptr<TransactionManager> (*create_transaction_manager_t)(optional_ptr<StorageExtensionInfo> storage_info,
                                                                        AttachedDatabase &db, Catalog &catalog);
 
+typedef void (*pre_attach_t)(ClientContext &context, AttachInfo &info, AttachOptions &options);
+
 class StorageExtension {
 public:
-	attach_function_t attach;
-	create_transaction_manager_t create_transaction_manager;
+	attach_function_t attach = nullptr;
+	create_transaction_manager_t create_transaction_manager = nullptr;
+	//! Called prior to an explicit ATTACH statement
+	pre_attach_t pre_attach = nullptr;
 
 	//! Additional info passed to the various storage functions
 	shared_ptr<StorageExtensionInfo> storage_info;

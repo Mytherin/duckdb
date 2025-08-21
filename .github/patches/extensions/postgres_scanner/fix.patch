@@ -1,3 +1,49 @@
+diff --git a/src/postgres_storage.cpp b/src/postgres_storage.cpp
+index cfff746..4c42f2e 100644
+--- a/src/postgres_storage.cpp
++++ b/src/postgres_storage.cpp
+@@ -54,9 +54,41 @@ static unique_ptr<TransactionManager> PostgresCreateTransactionManager(optional_
+ 	return make_uniq<PostgresTransactionManager>(db, postgres_catalog);
+ }
+ 
++string ExtractDatabaseName(const string &connection_string) {
++	// find dbname=.... to use as database name
++	auto position = StringUtil::Find(connection_string, "dbname=");
++	if (!position.IsValid()) {
++		return string();
++	}
++	auto start_pos = position.GetIndex() + 7;
++	idx_t end_pos;
++	for(end_pos = start_pos; end_pos < connection_string.size() && !StringUtil::CharacterIsSpace(connection_string[end_pos]); ++end_pos) {
++	}
++	return connection_string.substr(start_pos, end_pos - start_pos);
++}
++
++void PostgresPreAttach(ClientContext &context, AttachInfo &info, AttachOptions &attach_options) {
++	if (!info.name.empty()) {
++		// explicit name provided by the user
++		return;
++	}
++	string attach_path = info.path;
++	for (auto &entry : attach_options.options) {
++		auto lower_name = StringUtil::Lower(entry.first);
++		if (lower_name == "secret") {
++			// if a secret name is provided - use the secret name
++			info.name = entry.second.ToString();
++			return;
++		}
++	}
++	// try to use supplied database name as the default name for the attached database
++	info.name = ExtractDatabaseName(info.path);
++}
++
+ PostgresStorageExtension::PostgresStorageExtension() {
+ 	attach = PostgresAttach;
+ 	create_transaction_manager = PostgresCreateTransactionManager;
++	pre_attach = PostgresPreAttach;
+ }
+ 
+ } // namespace duckdb
 diff --git a/src/storage/postgres_insert.cpp b/src/storage/postgres_insert.cpp
 index fcd7109..77a3372 100644
 --- a/src/storage/postgres_insert.cpp
@@ -11,3 +57,61 @@ index fcd7109..77a3372 100644
  		throw BinderException("ON CONFLICT clause not yet supported for insertion into Postgres table");
  	}
  
+diff --git a/test/sql/storage/attach_defaults.test b/test/sql/storage/attach_defaults.test
+index b753cc1..369f6af 100644
+--- a/test/sql/storage/attach_defaults.test
++++ b/test/sql/storage/attach_defaults.test
+@@ -10,31 +10,31 @@ statement ok
+ PRAGMA enable_verification
+ 
+ statement ok
+-ATTACH 'dbname=postgresscanner' AS s1 (TYPE POSTGRES)
++ATTACH 'dbname=postgresscanner' (TYPE POSTGRES)
+ 
+ statement ok
+-CREATE OR REPLACE TABLE s1.test(i INTEGER DEFAULT 42, j INTEGER);
++CREATE OR REPLACE TABLE postgresscanner.test(i INTEGER DEFAULT 42, j INTEGER);
+ 
+ statement ok
+-INSERT INTO s1.test (i) VALUES (3)
++INSERT INTO postgresscanner.test (i) VALUES (3)
+ 
+ statement ok
+-INSERT INTO s1.test (j) VALUES (84)
++INSERT INTO postgresscanner.test (j) VALUES (84)
+ 
+ query II
+-SELECT * FROM s1.test
++SELECT * FROM postgresscanner.test
+ ----
+ 3	NULL
+ 42	84
+ 
+ statement ok
+-INSERT INTO s1.test (j, i) VALUES (1, 10)
++INSERT INTO postgresscanner.test (j, i) VALUES (1, 10)
+ 
+ statement ok
+-INSERT INTO s1.test (i, j) VALUES (100, 1000)
++INSERT INTO postgresscanner.test (i, j) VALUES (100, 1000)
+ 
+ query II
+-SELECT * FROM s1.test
++SELECT * FROM postgresscanner.test
+ ----
+ 3	NULL
+ 42	84
+@@ -42,11 +42,11 @@ SELECT * FROM s1.test
+ 100	1000
+ 
+ statement error
+-INSERT INTO s1.test (zzz) VALUES (3)
++INSERT INTO postgresscanner.test (zzz) VALUES (3)
+ ----
+ does not have a column with name "zzz"
+ 
+ statement error
+-INSERT INTO s1.test (j, j, j) VALUES (1, 2, 3)
++INSERT INTO postgresscanner.test (j, j, j) VALUES (1, 2, 3)
+ ----
+ Duplicate column name "j"
