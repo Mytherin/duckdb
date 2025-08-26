@@ -27,6 +27,7 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 	if (options.db_type.empty()) {
 		DBPathAndType::ExtractExtensionPrefix(path, options.db_type);
 	}
+	bool has_explicit_name = !name.empty();
 	if (!options.db_type.empty()) {
 		auto extension_name = ExtensionHelper::ApplyExtensionAlias(options.db_type);
 
@@ -39,6 +40,9 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 	if (name.empty()) {
 		auto &fs = FileSystem::GetFileSystem(context.client);
 		name = AttachedDatabase::ExtractDatabaseName(path, fs);
+	}
+	if (!has_explicit_name && AttachedDatabase::NameIsReserved(name)) {
+		name += "_db";
 	}
 
 	// check ATTACH IF NOT EXISTS

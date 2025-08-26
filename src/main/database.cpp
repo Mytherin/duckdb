@@ -173,6 +173,16 @@ unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(ClientCont
 		if (entry == config.storage_extensions.end()) {
 			throw BinderException("Unrecognized storage type \"%s\"", options.db_type);
 		}
+		if (entry->second->pre_attach) {
+			auto original_name = std::move(info.name);
+			info.name = string();
+			entry->second->pre_attach(context, info, options);
+			if (info.name.empty()) {
+				info.name = std::move(original_name);
+			} else if (AttachedDatabase::NameIsReserved(info.name)) {
+				info.name += "_db";
+			}
+		}
 
 		if (entry->second->attach != nullptr && entry->second->create_transaction_manager != nullptr) {
 			// Use the storage extension to create the initial database.
