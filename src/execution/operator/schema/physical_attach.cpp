@@ -27,10 +27,10 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 	if (options.db_type.empty()) {
 		DBPathAndType::ExtractExtensionPrefix(path, options.db_type);
 	}
-	auto &db_manager = DatabaseManager::Get(context.client);
-	db_manager.GetDatabaseType(context.client, *info, config, options);
 	if (!options.db_type.empty()) {
 		auto extension_name = ExtensionHelper::ApplyExtensionAlias(options.db_type);
+
+		DatabaseManager::AutoLoadStorageExtension(context.client, config, extension_name);
 		auto entry = config.storage_extensions.find(extension_name);
 		if (entry != config.storage_extensions.end() && entry->second->pre_attach) {
 			entry->second->pre_attach(context.client, *info, options);
@@ -42,6 +42,7 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 	}
 
 	// check ATTACH IF NOT EXISTS
+	auto &db_manager = DatabaseManager::Get(context.client);
 	if (info->on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT ||
 	    info->on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 		// constant-time lookup in the catalog for the db name
@@ -72,6 +73,8 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 		}
 	}
 
+	// Get the database type and attach the database.
+	db_manager.GetDatabaseType(context.client, *info, config, options);
 	// Attach the database.
 	auto attached_db = db_manager.AttachDatabase(context.client, *info, options);
 

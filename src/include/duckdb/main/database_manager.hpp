@@ -66,6 +66,8 @@ public:
 	//! necessary. We can only grab the file handle, if it is not yet held, even for uncommitted changes. Thus, we have
 	//! to lock for this operation.
 	void GetDatabaseType(ClientContext &context, AttachInfo &info, const DBConfig &config, AttachOptions &options);
+	//! Auto-load a storage extension for the given database type, if it is not yet loaded
+	static void AutoLoadStorageExtension(ClientContext &context, const DBConfig &config, const string &db_type);
 	//! Scans the catalog set and adds each committed database entry, and each database entry of the current
 	//! transaction, to a vector holding AttachedDatabase references
 	vector<reference<AttachedDatabase>> GetDatabases(ClientContext &context,
