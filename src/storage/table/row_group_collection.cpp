@@ -134,6 +134,7 @@ RowGroup *RowGroupCollection::GetRowGroup(int64_t index) {
 
 void RowGroupCollection::Verify() {
 #ifdef DEBUG
+	throw InternalException("Verify");
 	idx_t current_total_rows = 0;
 	row_groups->Verify();
 	for (auto &row_group : row_groups->Segments()) {
