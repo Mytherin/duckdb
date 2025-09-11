@@ -27,6 +27,11 @@ statement error
 SELECT one(NULL)
 ----
 
+statement error
+DROP MACRO TABLE one
+----
+"DROP MACRO one"
+
 statement ok
 DROP MACRO one;
 

@@ -80,6 +80,17 @@ CREATE  MACRO gm(m) as TABLE SELECT * FROM  greek_tbl WHERE cmp(name,m);
 statement ok
 SELECT * FROM  gm('^m');
 
+# try to use regular DROP MACRO for table macro - this should recommend DROP MACRO TABLE
+statement error
+DROP MACRO xt
+----
+DROP MACRO TABLE
+
+statement error
+DROP MACRO xtzz
+----
+does not exist!
+
 # create a scalar macro with same name as table macro
 statement ok
 CREATE MACRO xt(a,b) as a+b;

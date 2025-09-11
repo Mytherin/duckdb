@@ -40,10 +40,35 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 			// mark catalog as accessed
 			properties.RegisterDBRead(*catalog, context);
 		}
+		auto on_not_found = stmt.info->if_not_found;
+		bool is_macro =
+		    stmt.info->type == CatalogType::MACRO_ENTRY || stmt.info->type == CatalogType::TABLE_MACRO_ENTRY;
+		if (is_macro && on_not_found == OnEntryNotFound::THROW_EXCEPTION) {
+			on_not_found = OnEntryNotFound::RETURN_NULL;
+		}
 		EntryLookupInfo entry_lookup(stmt.info->type, stmt.info->name);
-		auto entry =
-		    Catalog::GetEntry(context, stmt.info->catalog, stmt.info->schema, entry_lookup, stmt.info->if_not_found);
+		auto entry = Catalog::GetEntry(context, stmt.info->catalog, stmt.info->schema, entry_lookup, on_not_found);
 		if (!entry) {
+			if (is_macro && stmt.info->if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
+				// we are trying to drop either a macro or a table macro, but none was found
+				// check if the other option exists
+				bool is_scalar_macro = stmt.info->type == CatalogType::MACRO_ENTRY;
+				auto other_macro_type = is_scalar_macro ? CatalogType::TABLE_MACRO_ENTRY : CatalogType::MACRO_ENTRY;
+				EntryLookupInfo other_lookup(other_macro_type, stmt.info->name);
+				entry = Catalog::GetEntry(context, stmt.info->catalog, stmt.info->schema, other_lookup,
+				                          OnEntryNotFound::RETURN_NULL);
+				if (entry) {
+					// we found the other entry - suggest the other drop method
+					throw CatalogException("%s with name \"%s\" does not exist - but it exists as a %s\nDid you mean "
+					                       "to use \"DROP MACRO %s%s\"?",
+					                       CatalogTypeToString(stmt.info->type), stmt.info->name,
+					                       CatalogTypeToString(other_macro_type), is_scalar_macro ? "TABLE " : "",
+					                       stmt.info->name);
+				}
+				// also does not exist as the other macro type - perform the original look-up to throw the exception
+				entry = Catalog::GetEntry(context, stmt.info->catalog, stmt.info->schema, entry_lookup,
+				                          OnEntryNotFound::THROW_EXCEPTION);
+			}
 			break;
 		}
 		if (entry->internal) {
