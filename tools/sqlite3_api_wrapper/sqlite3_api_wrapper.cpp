@@ -34,6 +34,7 @@ using namespace duckdb;
 using namespace std;
 
 extern "C" {
+void sqlite3_fast_shutdown(sqlite3 *db);
 void sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, const char *null_value, int columnar,
                            char thousands, char decimal_sep, int large_number_rendering,
                            duckdb::BaseResultRenderer *renderer);
@@ -253,6 +254,16 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 		db->con->context->ProcessError(db->last_error, query);
 		return SQLITE_ERROR;
 	}
+}
+
+void sqlite3_fast_shutdown(sqlite3 *db) {
+	if (!db) {
+		return;
+	}
+#ifndef DEBUG
+	// avoid setting this in debug mode, because it trips up leak sanitizers
+	db->db->instance->config.options.fast_leaky_shutdown = true;
+#endif
 }
 
 void sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, const char *null_value, int columnar,

@@ -130,6 +130,24 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 	}
 }
 
+struct DataTableLeaker {
+	explicit DataTableLeaker(shared_ptr<DataTable> table_p) : table(std::move(table_p)) {
+	}
+
+	shared_ptr<DataTable> table;
+};
+
+DuckTableEntry::~DuckTableEntry() {
+	auto &config = DBConfig::GetConfig(catalog.GetDatabase());
+	if (config.options.fast_leaky_shutdown) {
+		// intentionally leak the storage
+		try {
+			new DataTableLeaker(storage);
+		} catch (...) {
+		}
+	}
+}
+
 unique_ptr<BaseStatistics> DuckTableEntry::GetStatistics(ClientContext &context, column_t column_id) {
 	if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
 		return nullptr;

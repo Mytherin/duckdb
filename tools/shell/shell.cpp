@@ -1595,6 +1595,7 @@ columnar_end:
 }
 
 extern "C" {
+extern void sqlite3_fast_shutdown(sqlite3 *db);
 extern void sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, const char *null_value,
                                   int columns, char thousands, char decimal, int large_number_rendering,
                                   duckdb::BaseResultRenderer *renderer);
@@ -5232,6 +5233,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 	}
 	data.SetTableName(0);
 	if (data.db) {
+		sqlite3_fast_shutdown(data.db);
 		close_db(data.db);
 	}
 	find_home_dir(1);
