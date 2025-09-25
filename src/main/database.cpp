@@ -91,10 +91,12 @@ DatabaseInstance::~DatabaseInstance() {
 	buffer_manager.reset();
 
 	// flush allocations and disable the background thread
-	if (Allocator::SupportsFlush() && config.options.shutdown_mode != ShutdownMode::FAST_LEAKY) {
-		Allocator::FlushAll();
+	if (config.options.shutdown_mode != ShutdownMode::FAST_LEAKY) {
+		if (Allocator::SupportsFlush()) {
+			Allocator::FlushAll();
+		}
+		Allocator::SetBackgroundThreads(false);
 	}
-	Allocator::SetBackgroundThreads(false);
 	// after all destruction is complete clear the cache entry
 	config.db_cache_entry.reset();
 }
