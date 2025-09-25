@@ -85,6 +85,13 @@ protected:
 	SerializationCompatibility() = default;
 };
 
+enum class ShutdownMode {
+	STANDARD,
+	//! A fast leaky shutdown leaks a bunch of memory on purpose
+	// This should generally only be used if the process is exited immediately after
+	FAST_LEAKY
+};
+
 struct DBConfigOptions {
 	//! Database file path. May be empty for in-memory mode
 	string database_path;
@@ -219,9 +226,8 @@ struct DBConfigOptions {
 #endif
 	//! Whether to pin threads to cores (linux only, default AUTOMATIC: on when there are more than 64 cores)
 	ThreadPinMode pin_threads = ThreadPinMode::AUTO;
-	//! Whether or not to do a fast (leaky) shutdown
-	//! This leaks a bunch of memory on purpose, but speeds up the shutdown process, especially for large databases
-	bool fast_leaky_shutdown = false;
+	// How to shut down the database
+	ShutdownMode shutdown_mode = ShutdownMode::STANDARD;
 
 	bool operator==(const DBConfigOptions &other) const;
 };

@@ -139,7 +139,7 @@ struct DataTableLeaker {
 
 DuckTableEntry::~DuckTableEntry() {
 	auto &config = DBConfig::GetConfig(catalog.GetDatabase());
-	if (config.options.fast_leaky_shutdown) {
+	if (config.options.shutdown_mode == ShutdownMode::FAST_LEAKY) {
 		// intentionally leak the storage
 		try {
 			new DataTableLeaker(storage);

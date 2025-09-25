@@ -262,7 +262,7 @@ void sqlite3_fast_shutdown(sqlite3 *db) {
 	}
 #ifndef DEBUG
 	// avoid setting this in debug mode, because it trips up leak sanitizers
-	db->db->instance->config.options.fast_leaky_shutdown = true;
+	db->db->instance->config.options.shutdown_mode = ShutdownMode::FAST_LEAKY;
 #endif
 }
 
