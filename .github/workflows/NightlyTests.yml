@@ -351,6 +351,8 @@ jobs:
       - name: Start Minio
         shell: bash
         run: |
+          git clone https://github.com/duckdb/duckdb-httpfs
+          cd duckdb-httpfs
           sudo ./scripts/install_s3_test_server.sh
           ./scripts/generate_presigned_url.sh
           source ./scripts/run_s3_test_server.sh
