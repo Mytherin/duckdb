@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/stable/common.hpp"
 #include "duckdb/stable/cast_function.hpp"
 #include "duckdb/stable/logical_type.hpp"
 #include "duckdb/stable/scalar_function.hpp"

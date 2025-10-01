@@ -19,14 +19,20 @@ class ExpressionState;
 
 template <class T>
 struct ResultValue {
+	ResultValue() = default;
+	ResultValue(T val_p) : val(val_p), is_null(false) {
+	} // NOLINT: allow implicit conversion
+	ResultValue(nullptr_t) : is_null(true) {
+	} // NOLINT: allow implicit conversion
+
 	T val;
 	bool is_null = false;
 };
 
 template <class INPUT_TYPE>
 struct PrimitiveTypeState {
-	INPUT_TYPE *data;
-	uint64_t *validity;
+	INPUT_TYPE *data = nullptr;
+	uint64_t *validity = nullptr;
 
 	void PrepareVector(Vector &input, idx_t count) {
 		data = reinterpret_cast<INPUT_TYPE *>(duckdb_vector_get_data(input.c_vec()));
@@ -48,6 +54,13 @@ struct PrimitiveType {
 	static void ConstructType(STRUCT_STATE &state, idx_t r, ARG_TYPE &output) {
 		output = state.data[r];
 	}
+	static void SetNull(Vector &result, STRUCT_STATE &result_state, idx_t i) {
+		if (!result_state.validity) {
+			duckdb_vector_ensure_validity_writable(result.c_vec());
+			result_state.validity = duckdb_vector_get_validity(result.c_vec());
+		}
+		duckdb_validity_set_row_invalid(result_state.validity, i);
+	}
 	static void AssignResult(Vector &result, idx_t r, ARG_TYPE result_val) {
 		auto result_data = reinterpret_cast<INPUT_TYPE *>(duckdb_vector_get_data(result.c_vec()));
 		result_data[r] = result_val;
@@ -64,7 +77,7 @@ struct StructTypeStateTernary {
 	typename A_TYPE::STRUCT_STATE a_state;
 	typename B_TYPE::STRUCT_STATE b_state;
 	typename C_TYPE::STRUCT_STATE c_state;
-	uint64_t *validity;
+	uint64_t *validity = nullptr;
 
 	void PrepareVector(Vector &input, idx_t count) {
 		Vector a_vector(duckdb_struct_vector_get_child(input.c_vec(), 0));
@@ -94,27 +107,43 @@ struct StructTypeTernary {
 		B_TYPE::ConstructType(state.b_state, r, output.b_val);
 		C_TYPE::ConstructType(state.c_state, r, output.c_val);
 	}
+	static void SetNull(Vector &result, STRUCT_STATE &result_state, idx_t r) {
+		if (!result_state.validity) {
+			duckdb_vector_ensure_validity_writable(result.c_vec());
+			result_state.validity = duckdb_vector_get_validity(result.c_vec());
+		}
+		duckdb_validity_set_row_invalid(result_state.validity, r);
+
+		auto a_child = result.GetChild(0);
+		auto b_child = result.GetChild(1);
+		auto c_child = result.GetChild(2);
+		A_TYPE::SetNull(a_child, result_state.a_state, r);
+		B_TYPE::SetNull(b_child, result_state.b_state, r);
+		C_TYPE::SetNull(c_child, result_state.c_state, r);
+	}
+	static void AssignResult(Vector &result, idx_t r, ARG_TYPE result_val) {
+		auto a_child = result.GetChild(0);
+		A_TYPE::AssignResult(a_child, r, result_val.a_val);
+
+		auto b_child = result.GetChild(1);
+		B_TYPE::AssignResult(b_child, r, result_val.b_val);
+
+		auto c_child = result.GetChild(2);
+		C_TYPE::AssignResult(c_child, r, result_val.c_val);
+	}
 };
 
 class GenericExecutor {
 public:
-	static void SetNull(Vector &result, uint64_t *&result_validity, idx_t i) {
-		if (!result_validity) {
-			duckdb_vector_ensure_validity_writable(result.c_vec());
-			result_validity = duckdb_vector_get_validity(result.c_vec());
-		}
-		duckdb_validity_set_row_invalid(result_validity, i);
-	}
-
 	template <class A_TYPE, class RESULT_TYPE, class FUNC>
 	void ExecuteUnary(Vector &input, Vector &result, idx_t count, FUNC fun) {
 		typename A_TYPE::STRUCT_STATE a_state;
 		a_state.PrepareVector(input, count);
 
-		uint64_t *result_validity = nullptr;
+		typename RESULT_TYPE::STRUCT_STATE result_state;
 		for (idx_t r = 0; r < count; r++) {
 			if (!duckdb_validity_row_is_valid(a_state.validity, r)) {
-				SetNull(result, result_validity, r);
+				RESULT_TYPE::SetNull(result, result_state, r);
 				continue;
 			}
 			typename A_TYPE::ARG_TYPE a_val;
@@ -130,7 +159,7 @@ public:
 				continue;
 			}
 			if (result_value.is_null) {
-				SetNull(result, result_validity, r);
+				RESULT_TYPE::SetNull(result, result_state, r);
 				continue;
 			}
 			RESULT_TYPE::AssignResult(result, r, result_value.val);

@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include "duckdb.h"
-#include <algorithm>
+#include "duckdb/stable/common.hpp"
 
 namespace duckdb_stable {
 
@@ -41,6 +40,10 @@ public:
 public:
 	duckdb_logical_type c_type() {
 		return type;
+	}
+
+	duckdb_type id() {
+		return duckdb_get_type_id(type);
 	}
 
 	void SetAlias(const char *name) {

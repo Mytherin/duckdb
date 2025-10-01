@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include "duckdb.h"
-#include "duckdb/stable/logical_type.hpp"
+#include "duckdb/stable/common.hpp"
 #include <string>
 #include <vector>
 
