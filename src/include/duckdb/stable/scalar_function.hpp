@@ -21,7 +21,7 @@ class Vector;
 
 class CScalarFunction {
 public:
-	CScalarFunction(duckdb_scalar_function function)  : function(function) {
+	CScalarFunction(duckdb_scalar_function function) : function(function) {
 	}
 	~CScalarFunction() {
 		if (function) {
@@ -60,7 +60,7 @@ public:
 	CScalarFunction CreateFunction(const char *name_override = nullptr) {
 		auto scalar_function = duckdb_create_scalar_function();
 		duckdb_scalar_function_set_name(scalar_function, name_override ? name_override : Name());
-		for(auto &arg : Arguments()) {
+		for (auto &arg : Arguments()) {
 			duckdb_scalar_function_add_parameter(scalar_function, arg.c_type());
 		}
 		duckdb_scalar_function_set_return_type(scalar_function, ReturnType().c_type());
@@ -94,4 +94,4 @@ private:
 	duckdb_scalar_function_set set;
 };
 
-}
+} // namespace duckdb_stable

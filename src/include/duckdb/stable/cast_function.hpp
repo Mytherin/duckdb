@@ -20,4 +20,4 @@ public:
 	virtual duckdb_cast_function_t GetFunction() = 0;
 };
 
-}
+} // namespace duckdb_stable

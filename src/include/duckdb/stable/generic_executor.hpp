@@ -10,18 +10,18 @@
 
 #include "duckdb/stable/common.hpp"
 #include "duckdb/stable/data_chunk.hpp"
+#include "duckdb/stable/string_type.hpp"
 #include "duckdb/stable/vector.hpp"
 #include <functional>
 
 namespace duckdb_stable {
 class ExpressionState;
 
-template<class T>
+template <class T>
 struct ResultValue {
 	T val;
-	bool is_null;
+	bool is_null = false;
 };
-
 
 template <class INPUT_TYPE>
 struct PrimitiveTypeState {
@@ -53,6 +53,11 @@ struct PrimitiveType {
 		result_data[r] = result_val;
 	}
 };
+
+template <>
+void PrimitiveType<string_t>::AssignResult(Vector &result, idx_t r, ARG_TYPE result_val) {
+	duckdb_vector_assign_string_element_len(result.c_vec(), r, result_val.GetData(), result_val.GetSize());
+}
 
 template <class A_TYPE, class B_TYPE, class C_TYPE>
 struct StructTypeStateTernary {
@@ -107,7 +112,7 @@ public:
 		a_state.PrepareVector(input, count);
 
 		uint64_t *result_validity = nullptr;
-		for(idx_t r = 0; r < count; r++) {
+		for (idx_t r = 0; r < count; r++) {
 			if (!duckdb_validity_row_is_valid(a_state.validity, r)) {
 				SetNull(result, result_validity, r);
 				continue;
@@ -118,7 +123,7 @@ public:
 			ResultValue<typename RESULT_TYPE::ARG_TYPE> result_value;
 			try {
 				result_value = fun(a_val);
-			} catch(std::exception &ex) {
+			} catch (std::exception &ex) {
 				if (!SetError(ex.what(), r, result)) {
 					return;
 				}
@@ -150,6 +155,7 @@ public:
 	bool Success() override {
 		return success;
 	}
+
 protected:
 	bool SetError(const char *error_message, idx_t r, Vector &result) override {
 		duckdb_cast_function_set_row_error(info, error_message, r, result.c_vec());
@@ -166,4 +172,4 @@ private:
 	bool success = true;
 };
 
-}
+} // namespace duckdb_stable

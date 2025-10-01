@@ -64,11 +64,12 @@ public:
 		return LogicalType(DUCKDB_TYPE_HUGEINT);
 	}
 	static LogicalType STRUCT(LogicalType *child_types, const char **child_names, idx_t n) {
-		return LogicalType(duckdb_create_struct_type(reinterpret_cast<duckdb_logical_type *>(child_types), child_names, n));
+		return LogicalType(
+		    duckdb_create_struct_type(reinterpret_cast<duckdb_logical_type *>(child_types), child_names, n));
 	}
 
 private:
 	duckdb_logical_type type;
 };
 
-}
+} // namespace duckdb_stable

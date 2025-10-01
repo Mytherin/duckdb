@@ -15,7 +15,8 @@ namespace duckdb_stable {
 
 class Vector {
 public:
-	Vector(duckdb_vector vec_p, bool owning = false) : vec(vec_p), owning(owning) {}
+	Vector(duckdb_vector vec_p, bool owning = false) : vec(vec_p), owning(owning) {
+	}
 	~Vector() {
 		if (vec && owning) {
 			duckdb_destroy_vector(&vec);
@@ -31,4 +32,4 @@ private:
 	bool owning;
 };
 
-}
+} // namespace duckdb_stable

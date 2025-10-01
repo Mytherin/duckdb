@@ -17,14 +17,15 @@ namespace duckdb_stable {
 
 class ExtensionLoader {
 public:
-	ExtensionLoader(duckdb_connection con, duckdb_extension_info info,
-							struct duckdb_extension_access *access) : connection(con), info(info), access(access) {}
+	ExtensionLoader(duckdb_connection con, duckdb_extension_info info, struct duckdb_extension_access *access)
+	    : connection(con), info(info), access(access) {
+	}
 
 public:
 	bool LoadExtension() {
 		try {
 			Load();
-		} catch(std::exception &ex) {
+		} catch (std::exception &ex) {
 			std::string error = std::string("Failed to load extension: ") + ex.what();
 			access->set_error(info, error.c_str());
 			return false;
@@ -81,4 +82,4 @@ protected:
 	struct duckdb_extension_access *access;
 };
 
-}
+} // namespace duckdb_stable
