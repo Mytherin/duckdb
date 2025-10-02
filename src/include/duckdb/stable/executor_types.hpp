@@ -122,12 +122,17 @@ struct StructTypeTernary {
 
 template<class T>
 LogicalType TemplateToType() {
-	static_assert(false, "");
+	static_assert(false, "Missing type in TemplateToType");
 }
 
 template<>
 LogicalType TemplateToType<string_t>() {
 	return LogicalType::VARCHAR();
+}
+
+template<>
+LogicalType TemplateToType<PrimitiveType<bool>>() {
+	return LogicalType::BOOLEAN();
 }
 
 template<>
