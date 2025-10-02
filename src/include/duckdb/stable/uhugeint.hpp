@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/stable/common.hpp"
+#include "duckdb/stable/format.hpp"
 
 namespace duckdb_stable {
 
@@ -128,5 +129,14 @@ public:
 private:
 	duckdb_uhugeint value;
 };
+
+template<>
+FormatValue FormatValue::CreateFormatValue(uhugeint_t val) {
+	if (val.upper() == 0) {
+		return FormatValue(val.lower());
+	}
+	// FIXME: format big numbers
+	return FormatValue("UHUGEINT");
+}
 
 } // namespace duckdb_stable
