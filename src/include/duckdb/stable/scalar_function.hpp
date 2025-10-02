@@ -96,11 +96,12 @@ private:
 	duckdb_scalar_function_set set;
 };
 
-template<class OP, class INPUT_TYPE_T, class RETURN_TYPE_T>
+template<class OP, class INPUT_TYPE_T, class RETURN_TYPE_T, class STATIC_T = void>
 class UnaryFunction : public ScalarFunction {
 public:
 	using INPUT_TYPE = INPUT_TYPE_T;
 	using RESULT_TYPE = RETURN_TYPE_T;
+	using STATIC_DATA = STATIC_T;
 
 	LogicalType ReturnType() const override {
 		return TemplateToType<RESULT_TYPE>();
@@ -110,6 +111,7 @@ public:
 		arguments.push_back(TemplateToType<INPUT_TYPE>());
 		return arguments;
 	}
+	template<class STATIC_DATA_TYPE>
 	static void ExecuteUnary(duckdb_function_info info, duckdb_data_chunk input, duckdb_vector output) {
 		FunctionExecutor executor(info);
 		DataChunk chunk(input);
@@ -123,8 +125,21 @@ public:
 			[&](const typename INPUT_TYPE::ARG_TYPE &input) { return OP::Operation(input, static_data); });
 	}
 
+	template<>
+	void ExecuteUnary<void>(duckdb_function_info info, duckdb_data_chunk input, duckdb_vector output) {
+		FunctionExecutor executor(info);
+		DataChunk chunk(input);
+		auto input_vec = chunk.GetVector(0);
+		Vector output_vec(output);
+		auto count = chunk.Size();
+
+		executor.ExecuteUnary<INPUT_TYPE, RESULT_TYPE>(
+			input_vec, output_vec, count,
+			[&](const typename INPUT_TYPE::ARG_TYPE &input) { return OP::Operation(input); });
+	}
+
 	duckdb_scalar_function_t GetFunction() const override {
-		return ExecuteUnary;
+		return ExecuteUnary<STATIC_DATA>;
 	}
 };
 

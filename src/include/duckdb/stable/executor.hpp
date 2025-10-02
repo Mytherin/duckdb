@@ -101,7 +101,7 @@ public:
 
 public:
 	bool Success() override {
-		return true;
+		return success;
 	}
 
 	duckdb_function_info c_info() {
@@ -110,10 +110,14 @@ public:
 
 protected:
 	bool SetError(const char *error_message, idx_t r, Vector &result) override {
-		throw std::runtime_error(error_message);
+		duckdb_scalar_function_set_error(info, error_message);
+		success = false;
+		return false;
 	}
 
 private:
 	duckdb_function_info info;
+	bool success = true;
 };
+
 } // namespace duckdb_stable

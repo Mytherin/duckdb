@@ -134,4 +134,9 @@ LogicalType TemplateToType<PrimitiveType<string_t>>() {
 	return LogicalType::VARCHAR();
 }
 
+template<>
+LogicalType TemplateToType<PrimitiveType<uint8_t>>() {
+	return LogicalType::UTINYINT();
+}
+
 } // namespace duckdb_stable
