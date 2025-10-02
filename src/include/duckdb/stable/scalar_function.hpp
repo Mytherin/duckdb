@@ -96,7 +96,7 @@ private:
 	duckdb_scalar_function_set set;
 };
 
-template<class OP, class INPUT_TYPE_T, class RETURN_TYPE_T, class STATIC_T = void>
+template <class OP, class INPUT_TYPE_T, class RETURN_TYPE_T, class STATIC_T = void>
 class UnaryFunction : public ScalarFunction {
 public:
 	using INPUT_TYPE = INPUT_TYPE_T;
@@ -111,7 +111,7 @@ public:
 		arguments.push_back(TemplateToType<INPUT_TYPE>());
 		return arguments;
 	}
-	template<class STATIC_DATA_TYPE>
+	template <class STATIC_DATA_TYPE>
 	static void ExecuteUnary(duckdb_function_info info, duckdb_data_chunk input, duckdb_vector output) {
 		FunctionExecutor executor(info);
 		DataChunk chunk(input);
@@ -121,11 +121,11 @@ public:
 
 		typename OP::STATIC_DATA static_data;
 		executor.ExecuteUnary<INPUT_TYPE, RESULT_TYPE>(
-			input_vec, output_vec, count,
-			[&](const typename INPUT_TYPE::ARG_TYPE &input) { return OP::Operation(input, static_data); });
+		    input_vec, output_vec, count,
+		    [&](const typename INPUT_TYPE::ARG_TYPE &input) { return OP::Operation(input, static_data); });
 	}
 
-	template<>
+	template <>
 	void ExecuteUnary<void>(duckdb_function_info info, duckdb_data_chunk input, duckdb_vector output) {
 		FunctionExecutor executor(info);
 		DataChunk chunk(input);
@@ -134,8 +134,8 @@ public:
 		auto count = chunk.Size();
 
 		executor.ExecuteUnary<INPUT_TYPE, RESULT_TYPE>(
-			input_vec, output_vec, count,
-			[&](const typename INPUT_TYPE::ARG_TYPE &input) { return OP::Operation(input); });
+		    input_vec, output_vec, count,
+		    [&](const typename INPUT_TYPE::ARG_TYPE &input) { return OP::Operation(input); });
 	}
 
 	duckdb_scalar_function_t GetFunction() const override {
@@ -143,7 +143,7 @@ public:
 	}
 };
 
-template<class OP, class A_TYPE_T, class B_TYPE_T, class RETURN_TYPE_T, class STATIC_T = void>
+template <class OP, class A_TYPE_T, class B_TYPE_T, class RETURN_TYPE_T, class STATIC_T = void>
 class BinaryFunction : public ScalarFunction {
 public:
 	using A_TYPE = A_TYPE_T;
@@ -161,7 +161,7 @@ public:
 		return arguments;
 	}
 
-	template<class STATIC_DATA_TYPE>
+	template <class STATIC_DATA_TYPE>
 	static void ExecuteBinary(duckdb_function_info info, duckdb_data_chunk input, duckdb_vector output) {
 		FunctionExecutor executor(info);
 		DataChunk chunk(input);
@@ -172,11 +172,13 @@ public:
 
 		typename OP::STATIC_DATA static_data;
 		executor.ExecuteBinary<A_TYPE, B_TYPE, RESULT_TYPE>(
-			a_vec, b_vec, output_vec, count,
-			[&](const typename A_TYPE::ARG_TYPE &a_val, const typename B_TYPE::ARG_TYPE &b_val) { return OP::Operation(a_val, b_val, static_data); });
+		    a_vec, b_vec, output_vec, count,
+		    [&](const typename A_TYPE::ARG_TYPE &a_val, const typename B_TYPE::ARG_TYPE &b_val) {
+			    return OP::Operation(a_val, b_val, static_data);
+		    });
 	}
 
-	template<>
+	template <>
 	void ExecuteBinary<void>(duckdb_function_info info, duckdb_data_chunk input, duckdb_vector output) {
 		FunctionExecutor executor(info);
 		DataChunk chunk(input);
@@ -186,8 +188,10 @@ public:
 		auto count = chunk.Size();
 
 		executor.ExecuteBinary<A_TYPE, B_TYPE, RESULT_TYPE>(
-			a_vec, b_vec, output_vec, count,
-			[&](const typename A_TYPE::ARG_TYPE &a_val, const typename B_TYPE::ARG_TYPE &b_val) { return OP::Operation(a_val, b_val); });
+		    a_vec, b_vec, output_vec, count,
+		    [&](const typename A_TYPE::ARG_TYPE &a_val, const typename B_TYPE::ARG_TYPE &b_val) {
+			    return OP::Operation(a_val, b_val);
+		    });
 	}
 
 	duckdb_scalar_function_t GetFunction() const override {

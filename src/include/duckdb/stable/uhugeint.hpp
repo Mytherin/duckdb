@@ -15,13 +15,15 @@ namespace duckdb_stable {
 class uhugeint_t {
 public:
 	uhugeint_t() = default;
-	uhugeint_t(duckdb_uhugeint value_p) : value(value_p) {}
-	uhugeint_t(const uhugeint_t &other) : value(other.value) {}
+	uhugeint_t(duckdb_uhugeint value_p) : value(value_p) {
+	}
+	uhugeint_t(const uhugeint_t &other) : value(other.value) {
+	}
 	uhugeint_t(uint64_t upper, uint64_t lower) {
 		value.lower = lower;
 		value.upper = upper;
 	}
-	uhugeint_t(uint64_t input) {  // NOLINT: allow implicit conversion from smaller unsigned integers
+	uhugeint_t(uint64_t input) { // NOLINT: allow implicit conversion from smaller unsigned integers
 		value.lower = (uint64_t)input;
 		value.upper = 0;
 	}
@@ -115,10 +117,12 @@ public:
 		return !(rhs > *this);
 	}
 	uhugeint_t operator+(const uhugeint_t &rhs) const {
-		return uhugeint_t(value.upper + rhs.value.upper + ((value.lower + rhs.value.lower) < value.lower), value.lower + rhs.value.lower);
+		return uhugeint_t(value.upper + rhs.value.upper + ((value.lower + rhs.value.lower) < value.lower),
+		                  value.lower + rhs.value.lower);
 	}
 	uhugeint_t operator-(const uhugeint_t &rhs) const {
-		return uhugeint_t(value.upper - rhs.value.upper - ((value.lower - rhs.value.lower) > value.lower), value.lower - rhs.value.lower);
+		return uhugeint_t(value.upper - rhs.value.upper - ((value.lower - rhs.value.lower) > value.lower),
+		                  value.lower - rhs.value.lower);
 	}
 
 private:

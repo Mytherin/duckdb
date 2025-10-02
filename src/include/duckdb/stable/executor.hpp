@@ -69,7 +69,8 @@ public:
 
 		typename RESULT_TYPE::STRUCT_STATE result_state;
 		for (idx_t r = 0; r < count; r++) {
-			if (!duckdb_validity_row_is_valid(a_state.validity, r) || !duckdb_validity_row_is_valid(b_state.validity, r)) {
+			if (!duckdb_validity_row_is_valid(a_state.validity, r) ||
+			    !duckdb_validity_row_is_valid(b_state.validity, r)) {
 				RESULT_TYPE::SetNull(result, result_state, r);
 				continue;
 			}

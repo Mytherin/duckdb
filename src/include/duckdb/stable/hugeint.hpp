@@ -16,13 +16,15 @@ namespace duckdb_stable {
 class hugeint_t {
 public:
 	hugeint_t() = default;
-	hugeint_t(duckdb_hugeint value_p) : value(value_p) {}
-	hugeint_t(const hugeint_t &other) : value(other.value) {}
+	hugeint_t(duckdb_hugeint value_p) : value(value_p) {
+	}
+	hugeint_t(const hugeint_t &other) : value(other.value) {
+	}
 	hugeint_t(int64_t upper, uint64_t lower) {
 		value.lower = lower;
 		value.upper = upper;
 	}
-	hugeint_t(int64_t input) {  // NOLINT: allow implicit conversion from smaller integers
+	hugeint_t(int64_t input) { // NOLINT: allow implicit conversion from smaller integers
 		value.lower = (uint64_t)input;
 		value.upper = (input < 0) * -1;
 	}
@@ -90,9 +92,9 @@ public:
 		} else {
 			// RHS is negative: check for overflow
 			if (lhs.value.upper > std::numeric_limits<int64_t>::min() &&
-				lhs.value.upper - 1 >= (std::numeric_limits<int64_t>::max() + rhs.value.upper + underflow)) {
+			    lhs.value.upper - 1 >= (std::numeric_limits<int64_t>::max() + rhs.value.upper + underflow)) {
 				return false;
-				}
+			}
 			lhs.value.upper = lhs.value.upper - (rhs.value.upper + underflow);
 		}
 		lhs.value.lower -= rhs.value.lower;
@@ -132,10 +134,12 @@ public:
 		return !(rhs > *this);
 	}
 	hugeint_t operator+(const hugeint_t &rhs) const {
-		return hugeint_t(value.upper + rhs.value.upper + ((value.lower + rhs.value.lower) < value.lower), value.lower + rhs.value.lower);
+		return hugeint_t(value.upper + rhs.value.upper + ((value.lower + rhs.value.lower) < value.lower),
+		                 value.lower + rhs.value.lower);
 	}
 	hugeint_t operator-(const hugeint_t &rhs) const {
-		return hugeint_t(value.upper - rhs.value.upper - ((value.lower - rhs.value.lower) > value.lower), value.lower - rhs.value.lower);
+		return hugeint_t(value.upper - rhs.value.upper - ((value.lower - rhs.value.lower) > value.lower),
+		                 value.lower - rhs.value.lower);
 	}
 
 private:

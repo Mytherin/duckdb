@@ -23,13 +23,12 @@ public:
 	virtual duckdb_cast_function_t GetFunction() = 0;
 };
 
-template<class OP, class SOURCE_T, class TARGET_T, class STATIC_T = void>
+template <class OP, class SOURCE_T, class TARGET_T, class STATIC_T = void>
 class StandardCastFunction : public CastFunction {
 public:
 	using SOURCE_TYPE = SOURCE_T;
 	using TARGET_TYPE = TARGET_T;
 	using STATIC_DATA = STATIC_T;
-
 
 	LogicalType SourceType() override {
 		return TemplateToType<SOURCE_TYPE>();
@@ -39,28 +38,29 @@ public:
 		return TemplateToType<TARGET_TYPE>();
 	}
 
-	template<class STATIC_DATA_TYPE>
+	template <class STATIC_DATA_TYPE>
 	static bool TemplatedCastFunction(duckdb_function_info info, idx_t count, duckdb_vector input,
-									  duckdb_vector output) {
+	                                  duckdb_vector output) {
 		CastExecutor executor(info);
 		Vector input_vec(input);
 		Vector output_vec(output);
 
 		STATIC_DATA static_data;
 		executor.ExecuteUnary<SOURCE_TYPE, TARGET_TYPE>(
-			input_vec, output_vec, count,
-			[&](const typename SOURCE_TYPE::ARG_TYPE &input) { return OP::Cast(input, static_data); });
+		    input_vec, output_vec, count,
+		    [&](const typename SOURCE_TYPE::ARG_TYPE &input) { return OP::Cast(input, static_data); });
 		return executor.Success();
 	}
 
-	template<>
-	bool TemplatedCastFunction<void>(duckdb_function_info info, idx_t count, duckdb_vector input, duckdb_vector output) {
+	template <>
+	bool TemplatedCastFunction<void>(duckdb_function_info info, idx_t count, duckdb_vector input,
+	                                 duckdb_vector output) {
 		CastExecutor executor(info);
 		Vector input_vec(input);
 		Vector output_vec(output);
 
 		executor.ExecuteUnary<SOURCE_TYPE, TARGET_TYPE>(
-			input_vec, output_vec, count, [&](const typename SOURCE_TYPE::ARG_TYPE &input) { return OP::Cast(input); });
+		    input_vec, output_vec, count, [&](const typename SOURCE_TYPE::ARG_TYPE &input) { return OP::Cast(input); });
 		return executor.Success();
 	}
 
