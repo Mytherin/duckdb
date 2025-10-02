@@ -10,6 +10,7 @@
 
 #include "duckdb/stable/common.hpp"
 #include "duckdb/stable/data_chunk.hpp"
+#include "duckdb/stable/hugeint.hpp"
 #include "duckdb/stable/string_type.hpp"
 #include "duckdb/stable/vector.hpp"
 
@@ -137,6 +138,11 @@ LogicalType TemplateToType<PrimitiveType<string_t>>() {
 template<>
 LogicalType TemplateToType<PrimitiveType<uint8_t>>() {
 	return LogicalType::UTINYINT();
+}
+
+template<>
+LogicalType TemplateToType<PrimitiveType<hugeint_t>>() {
+	return LogicalType::HUGEINT();
 }
 
 } // namespace duckdb_stable

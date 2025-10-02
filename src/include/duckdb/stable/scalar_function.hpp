@@ -143,4 +143,39 @@ public:
 	}
 };
 
+template<class OP, class A_TYPE_T, class B_TYPE_T, class RETURN_TYPE_T>
+class BinaryFunction : public ScalarFunction {
+public:
+	using A_TYPE = A_TYPE_T;
+	using B_TYPE = B_TYPE_T;
+	using RESULT_TYPE = RETURN_TYPE_T;
+
+	LogicalType ReturnType() const override {
+		return TemplateToType<RESULT_TYPE>();
+	}
+	std::vector<LogicalType> Arguments() const override {
+		std::vector<LogicalType> arguments;
+		arguments.push_back(TemplateToType<A_TYPE>());
+		arguments.push_back(TemplateToType<B_TYPE>());
+		return arguments;
+	}
+
+	static void ExecuteBinary(duckdb_function_info info, duckdb_data_chunk input, duckdb_vector output) {
+		FunctionExecutor executor(info);
+		DataChunk chunk(input);
+		auto a_vec = chunk.GetVector(0);
+		auto b_vec = chunk.GetVector(1);
+		Vector output_vec(output);
+		auto count = chunk.Size();
+
+		executor.ExecuteBinary<A_TYPE, B_TYPE, RESULT_TYPE>(
+			a_vec, b_vec, output_vec, count,
+			[&](const typename A_TYPE::ARG_TYPE &a_val, const typename B_TYPE::ARG_TYPE &b_val) { return OP::Operation(a_val, b_val); });
+	}
+
+	duckdb_scalar_function_t GetFunction() const override {
+		return ExecuteBinary;
+	}
+};
+
 } // namespace duckdb_stable
