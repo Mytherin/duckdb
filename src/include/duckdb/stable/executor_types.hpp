@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/stable/generic_executor.hpp
+// duckdb/stable/executor_types.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,22 +12,8 @@
 #include "duckdb/stable/data_chunk.hpp"
 #include "duckdb/stable/string_type.hpp"
 #include "duckdb/stable/vector.hpp"
-#include <functional>
 
 namespace duckdb_stable {
-class ExpressionState;
-
-template <class T>
-struct ResultValue {
-	ResultValue() = default;
-	ResultValue(T val_p) : val(val_p), is_null(false) {
-	} // NOLINT: allow implicit conversion
-	ResultValue(nullptr_t) : is_null(true) {
-	} // NOLINT: allow implicit conversion
-
-	T val;
-	bool is_null = false;
-};
 
 template <class INPUT_TYPE>
 struct PrimitiveTypeState {
@@ -133,72 +119,19 @@ struct StructTypeTernary {
 	}
 };
 
-class GenericExecutor {
-public:
-	template <class A_TYPE, class RESULT_TYPE, class FUNC>
-	void ExecuteUnary(Vector &input, Vector &result, idx_t count, FUNC fun) {
-		typename A_TYPE::STRUCT_STATE a_state;
-		a_state.PrepareVector(input, count);
+template<class T>
+LogicalType TemplateToType() {
+	static_assert(false, "");
+}
 
-		typename RESULT_TYPE::STRUCT_STATE result_state;
-		for (idx_t r = 0; r < count; r++) {
-			if (!duckdb_validity_row_is_valid(a_state.validity, r)) {
-				RESULT_TYPE::SetNull(result, result_state, r);
-				continue;
-			}
-			typename A_TYPE::ARG_TYPE a_val;
-			A_TYPE::ConstructType(a_state, r, a_val);
+template<>
+LogicalType TemplateToType<string_t>() {
+	return LogicalType::VARCHAR();
+}
 
-			ResultValue<typename RESULT_TYPE::ARG_TYPE> result_value;
-			try {
-				result_value = fun(a_val);
-			} catch (std::exception &ex) {
-				if (!SetError(ex.what(), r, result)) {
-					return;
-				}
-				continue;
-			}
-			if (result_value.is_null) {
-				RESULT_TYPE::SetNull(result, result_state, r);
-				continue;
-			}
-			RESULT_TYPE::AssignResult(result, r, result_value.val);
-		}
-	}
-
-	virtual bool Success() {
-		return true;
-	}
-
-protected:
-	virtual bool SetError(const char *error_message, idx_t r, Vector &result) = 0;
-};
-
-class CastExecutor : public GenericExecutor {
-public:
-	CastExecutor(duckdb_function_info info_p) : info(info_p) {
-		cast_mode = duckdb_cast_function_get_cast_mode(info);
-	}
-
-public:
-	bool Success() override {
-		return success;
-	}
-
-protected:
-	bool SetError(const char *error_message, idx_t r, Vector &result) override {
-		duckdb_cast_function_set_row_error(info, error_message, r, result.c_vec());
-		if (cast_mode == DUCKDB_CAST_TRY) {
-			return true;
-		}
-		success = false;
-		return false;
-	}
-
-private:
-	duckdb_function_info info;
-	duckdb_cast_mode cast_mode;
-	bool success = true;
-};
+template<>
+LogicalType TemplateToType<PrimitiveType<string_t>>() {
+	return LogicalType::VARCHAR();
+}
 
 } // namespace duckdb_stable

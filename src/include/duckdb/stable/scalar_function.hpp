@@ -9,6 +9,9 @@
 #pragma once
 
 #include "duckdb/stable/common.hpp"
+#include "duckdb/stable/logical_type.hpp"
+#include "duckdb/stable/executor_types.hpp"
+#include "duckdb/stable/executor.hpp"
 #include <string>
 #include <vector>
 
@@ -91,6 +94,38 @@ public:
 private:
 	std::string name;
 	duckdb_scalar_function_set set;
+};
+
+template<class OP, class INPUT_TYPE_T, class RETURN_TYPE_T>
+class UnaryFunction : public ScalarFunction {
+public:
+	using INPUT_TYPE = INPUT_TYPE_T;
+	using RESULT_TYPE = RETURN_TYPE_T;
+
+	LogicalType ReturnType() const override {
+		return TemplateToType<RESULT_TYPE>();
+	}
+	std::vector<LogicalType> Arguments() const override {
+		std::vector<LogicalType> arguments;
+		arguments.push_back(TemplateToType<INPUT_TYPE>());
+		return arguments;
+	}
+	static void ExecuteUnary(duckdb_function_info info, duckdb_data_chunk input, duckdb_vector output) {
+		FunctionExecutor executor(info);
+		DataChunk chunk(input);
+		auto input_vec = chunk.GetVector(0);
+		Vector output_vec(output);
+		auto count = chunk.Size();
+
+		typename OP::STATIC_DATA static_data;
+		executor.ExecuteUnary<INPUT_TYPE, RESULT_TYPE>(
+			input_vec, output_vec, count,
+			[&](const typename INPUT_TYPE::ARG_TYPE &input) { return OP::Operation(input, static_data); });
+	}
+
+	duckdb_scalar_function_t GetFunction() const override {
+		return ExecuteUnary;
+	}
 };
 
 } // namespace duckdb_stable

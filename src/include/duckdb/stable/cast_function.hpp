@@ -10,7 +10,7 @@
 
 #include "duckdb/stable/common.hpp"
 #include "duckdb/stable/logical_type.hpp"
-#include "duckdb/stable/generic_executor.hpp"
+#include "duckdb/stable/executor.hpp"
 #include "duckdb/stable/vector.hpp"
 
 namespace duckdb_stable {
