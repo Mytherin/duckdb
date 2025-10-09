@@ -166,11 +166,11 @@ void QueryNode::AddDistinct() {
 	modifiers.push_back(make_uniq<DistinctModifier>());
 }
 
-CommonTableExpressionMap QueryNode::SerializeCommonTableExpressionMap() const {
-	return CommonTableExpressionMap();
+void QueryNode::LegacyInsertCTE(string ctename, unique_ptr<CommonTableExpressionInfo> cte_info) {
+	cte_map.map.insert(std::move(ctename), std::move(cte_info));
 }
 
-void QueryNode::UnpackLegacyCTEs(unique_ptr<QueryNode> &node, CommonTableExpressionMap &cte_map) {
+void QueryNode::UnpackLegacyCTEs(CommonTableExpressionMap cte_map, unique_ptr<QueryNode> &node) {
 	if (cte_map.map.empty()) {
 		return;
 	}

@@ -75,6 +75,9 @@ public:
 	virtual void Serialize(Serializer &serializer) const;
 	static unique_ptr<QueryNode> Deserialize(Deserializer &deserializer);
 
+	//! Insert a legacy CTE - should only be used when serializing to old database versions
+	void LegacyInsertCTE(string ctename, unique_ptr<CommonTableExpressionInfo> cte_info);
+
 protected:
 	//! Copy base QueryNode properties from another expression to this one,
 	//! used in Copy method
@@ -98,8 +101,10 @@ public:
 	}
 
 protected:
-	CommonTableExpressionMap SerializeCommonTableExpressionMap() const;
-	static void UnpackLegacyCTEs(unique_ptr<QueryNode> &node, CommonTableExpressionMap &cte_map);
+	//! Legacy CTE map - used only for backwards compatibility in (de)serialization
+	CommonTableExpressionMap cte_map;
+
+	static void UnpackLegacyCTEs(CommonTableExpressionMap cte_map, unique_ptr<QueryNode> &node);
 };
 
 } // namespace duckdb

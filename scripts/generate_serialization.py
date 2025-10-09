@@ -234,7 +234,8 @@ def get_deserialize_element_template(
     # read_method = 'ReadProperty'
     assignment = '.' if pointer_type == 'none' else '->'
     default_argument = '' if default_value is None else f', {get_default_argument(default_value)}'
-    if status == MemberVariableStatus.DELETED:
+    ignore_deleted_property = status == MemberVariableStatus.DELETED and default_value is None
+    if ignore_deleted_property:
         template = template.replace(', result{assignment}{property_name}', '').replace(
             'ReadProperty', 'ReadDeletedProperty'
         )
@@ -250,7 +251,8 @@ def get_deserialize_element_template(
         property_type=property_type,
         assignment=assignment,
     )
-    if status == MemberVariableStatus.DELETED:
+
+    if ignore_deleted_property:
         template = template.replace(f'auto {property_name} = ', '')
     return template
 
@@ -300,6 +302,8 @@ supported_member_entries = [
     'deserialize_property',
     'base',
     'default',
+    'serialize_default',
+    'deserialize_default',
     'status',
     'version',
 ]
@@ -327,8 +331,10 @@ class MemberVariable:
         self.name = entry['name']
         self.type = entry['type']
         self.base = None
-        self.has_default = False
-        self.default = None
+        self.has_serialize_default = False
+        self.has_deserialize_default = False
+        self.serialize_default = None
+        self.deserialize_default = None
         self.status: MemberVariableStatus = MemberVariableStatus.EXISTING
         self.version: str = 'v0.10.2'
         if 'property' in entry:
@@ -344,13 +350,24 @@ class MemberVariable:
         if 'deserialize_property' in entry:
             self.deserialize_property = entry['deserialize_property']
         if 'default' in entry:
-            self.has_default = True
-            self.default = entry['default']
+            self.has_serialize_default = True
+            self.has_deserialize_default = True
+            self.serialize_default = entry['default']
+            self.deserialize_default = entry['default']
+        if 'serialize_default' in entry:
+            self.has_serialize_default = True
+            self.serialize_default = entry['serialize_default']
+        if 'deserialize_default' in entry:
+            self.has_deserialize_default = True
+            self.deserialize_default = entry['deserialize_default']
         if 'status' in entry:
             self.status = parse_status(entry['status'])
-        if self.default is None:
+        if self.serialize_default is None:
             # default default
-            self.has_default = has_default_by_default(self.type)
+            self.has_serialize_default = has_default_by_default(self.type)
+        if self.deserialize_default is None:
+            # default default
+            self.has_deserialize_default = has_default_by_default(self.type)
         if 'base' in entry:
             self.base = entry['base']
         for key in entry.keys():
@@ -375,7 +392,6 @@ supported_serialize_entries = [
     'set_parameters',
     'includes',
     'finalize_deserialization',
-    'skipped_members',
 ]
 
 
@@ -391,7 +407,6 @@ class SerializableClass:
         self.set_parameters = []
         self.pointer_type = 'unique_ptr'
         self.constructor: Optional[List[str]] = None
-        self.skipped_members: Optional[List[str]] = None
         self.constructor_method = None
         self.members: Optional[List[MemberVariable]] = None
         self.custom_implementation = False
@@ -417,8 +432,6 @@ class SerializableClass:
             if not isinstance(self.constructor, list):
                 print(f"constructor for {self.name}, must be of type [], but is of type {str(type(self.constructor))}")
                 exit(1)
-        if 'skipped_members' in entry:
-            self.skipped_members = entry['skipped_members']
         if 'constructor_method' in entry:
             self.constructor_method = entry['constructor_method']
             if self.constructor is not None:
@@ -478,8 +491,8 @@ class SerializableClass:
             property_key,
             property_id,
             property_type,
-            entry.has_default,
-            entry.default,
+            entry.has_deserialize_default,
+            entry.deserialize_default,
             entry.status,
             pointer_type,
         )
@@ -489,7 +502,7 @@ class SerializableClass:
         property_id = entry.id
         property_key = entry.name
         property_type = replace_pointer(entry.type)
-        default_value = entry.default
+        default_value = entry.serialize_default
 
         assignment = '.' if self.pointer_type == 'none' else '->'
         default_argument = '' if default_value is None else f', {get_default_argument(default_value)}'
@@ -498,7 +511,7 @@ class SerializableClass:
         template = SERIALIZE_ELEMENT_FORMAT
         if entry.status != MemberVariableStatus.EXISTING and not conditional_serialization:
             template = "\t/* [Deleted] ({property_type}) \"{property_name}\" */\n"
-        elif entry.has_default:
+        elif entry.has_serialize_default:
             template = template.replace('WriteProperty', 'WritePropertyWithDefault')
         serialization_code = template.format(
             property_name=property_name,
@@ -551,11 +564,6 @@ def generate_base_class_code(base_class: SerializableClass):
     expressions = [x for x in base_class.children.items()]
     expressions = sorted(expressions, key=lambda x: x[0])
 
-    skipped_members = set()
-    if base_class.skipped_members is not None:
-        for skipped_entry in base_class.skipped_members:
-            skipped_members.add(skipped_entry)
-
     # set parameters
     for entry in base_class.set_parameters:
         base_class_deserialize += SET_DESERIALIZE_PARAMETER_FORMAT.format(
@@ -604,8 +612,6 @@ def generate_base_class_code(base_class: SerializableClass):
 
     for entry in assign_entries:
         if entry.status != MemberVariableStatus.EXISTING:
-            continue
-        if entry.name in skipped_members:
             continue
         move = False
         if entry.type in MOVE_LIST or is_container(entry.type) or is_pointer(entry.type):
@@ -726,8 +732,8 @@ def generate_class_code(class_entry: SerializableClass):
                 entry.name,
                 entry.id,
                 type_name,
-                entry.has_default,
-                entry.default,
+                entry.has_deserialize_default,
+                entry.deserialize_default,
                 entry.status,
                 class_entry.pointer_type,
             )

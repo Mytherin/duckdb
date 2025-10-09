@@ -20,12 +20,13 @@
         "id": 102,
         "name": "cte_map",
         "type": "CommonTableExpressionMap",
-        "serialize_property": "SerializeCommonTableExpressionMap()"
+        "status": "deleted",
+        "version": "v1.5.0",
+        "deserialize_default": "CommonTableExpressionMap()"
       }
     ],
-    "skipped_members": ["cte_map"],
     "finalize_deserialization": [
-      "UnpackLegacyCTEs(result, cte_map);"
+      "UnpackLegacyCTEs(std::move(cte_map), result);"
     ]
   },
   {
@@ -177,7 +178,8 @@
       {
         "id": 202,
         "name": "child",
-        "type": "QueryNode*"
+        "type": "QueryNode*",
+        "serialize_property": "SerializeCTEChild(serializer)"
       },
       {
         "id": 203,

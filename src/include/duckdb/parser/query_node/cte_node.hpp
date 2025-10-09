@@ -46,6 +46,8 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<QueryNode> Deserialize(Deserializer &source);
 
+	unique_ptr<QueryNode> SerializeCTEChild(Serializer &serializer) const;
+
 private:
 	static string CTEToString(const QueryNode &node);
 };

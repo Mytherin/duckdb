@@ -1,6 +1,7 @@
 #include "duckdb/parser/query_node/cte_node.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
 
 namespace duckdb {
 
@@ -89,6 +90,29 @@ unique_ptr<QueryNode> CTENode::Copy() const {
 	result->materialized = materialized;
 	this->CopyProperties(*result);
 	return std::move(result);
+}
+
+unique_ptr<QueryNode> CTENode::SerializeCTEChild(Serializer &serializer) const {
+	if (serializer.ShouldSerialize(7)) {
+		// we can directly serialize the child for newer storage versions
+		// FIXME: this copy is wasteful
+		return child->Copy();
+	}
+	// for older storage versions we need to add this CTE node to the cte_map
+	auto child_copy = child->Copy();
+	reference<QueryNode> current(*child_copy);
+	while (current.get().type == QueryNodeType::CTE_NODE) {
+		auto &cte_node = current.get().Cast<CTENode>();
+		current = *cte_node.child;
+	}
+	auto cte_info = make_uniq<CommonTableExpressionInfo>();
+	cte_info->aliases = aliases;
+	auto select_stmt = make_uniq<SelectStatement>();
+	select_stmt->node = query->Copy();
+	cte_info->query = std::move(select_stmt);
+	cte_info->materialized = materialized;
+	current.get().LegacyInsertCTE(ctename, std::move(cte_info));
+	return child_copy;
 }
 
 } // namespace duckdb
