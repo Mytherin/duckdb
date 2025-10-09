@@ -72,11 +72,19 @@ bool CTENode::Equals(const QueryNode *other_p) const {
 		return true;
 	}
 	auto &other = other_p->Cast<CTENode>();
-
+	if (other.ctename != ctename) {
+		return false;
+	}
+	if (other.aliases != aliases) {
+		return false;
+	}
 	if (!query->Equals(other.query.get())) {
 		return false;
 	}
 	if (!child->Equals(other.child.get())) {
+		return false;
+	}
+	if (other.materialized != materialized) {
 		return false;
 	}
 	return true;

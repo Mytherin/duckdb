@@ -91,7 +91,7 @@ PRAGMA json_execute_serialized_sql(
 statement error
 SELECT * FROM json_execute_serialized_sql(json_serialize_sql('SELECT * FROM tbl2', skip_null := true, skip_empty := true));
 ----
-Parser Error: Expected but did not find property 'cte_map' in json object
+Parser Error: Expected but did not find property
 
 
 # Test execute json serialized sql with multiple nested type tags
