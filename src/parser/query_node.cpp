@@ -1,13 +1,7 @@
 #include "duckdb/parser/query_node.hpp"
 
-#include "duckdb/parser/query_node/select_node.hpp"
-#include "duckdb/parser/query_node/set_operation_node.hpp"
-#include "duckdb/parser/query_node/recursive_cte_node.hpp"
-#include "duckdb/parser/query_node/cte_node.hpp"
-#include "duckdb/common/limits.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/transformer.hpp"
 
 namespace duckdb {
 
@@ -170,6 +164,17 @@ void QueryNode::AddDistinct() {
 		}
 	}
 	modifiers.push_back(make_uniq<DistinctModifier>());
+}
+
+CommonTableExpressionMap QueryNode::SerializeCommonTableExpressionMap() const {
+	return CommonTableExpressionMap();
+}
+
+void QueryNode::UnpackLegacyCTEs(unique_ptr<QueryNode> &node, CommonTableExpressionMap &cte_map) {
+	if (cte_map.map.empty()) {
+		return;
+	}
+	node = Transformer::TransformMaterializedCTE(cte_map, std::move(node));
 }
 
 } // namespace duckdb

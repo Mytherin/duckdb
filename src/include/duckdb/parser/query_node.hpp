@@ -96,6 +96,10 @@ public:
 		}
 		return reinterpret_cast<const TARGET &>(*this);
 	}
+
+protected:
+	CommonTableExpressionMap SerializeCommonTableExpressionMap() const;
+	static void UnpackLegacyCTEs(unique_ptr<QueryNode> &node, CommonTableExpressionMap &cte_map);
 };
 
 } // namespace duckdb

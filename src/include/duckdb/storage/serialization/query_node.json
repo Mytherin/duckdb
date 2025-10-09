@@ -20,8 +20,12 @@
         "id": 102,
         "name": "cte_map",
         "type": "CommonTableExpressionMap",
-        "status": "deleted"
+        "serialize_property": "SerializeCommonTableExpressionMap()"
       }
+    ],
+    "skipped_members": ["cte_map"],
+    "finalize_deserialization": [
+      "UnpackLegacyCTEs(result, cte_map);"
     ]
   },
   {

@@ -375,6 +375,7 @@ supported_serialize_entries = [
     'set_parameters',
     'includes',
     'finalize_deserialization',
+    'skipped_members',
 ]
 
 
@@ -390,6 +391,7 @@ class SerializableClass:
         self.set_parameters = []
         self.pointer_type = 'unique_ptr'
         self.constructor: Optional[List[str]] = None
+        self.skipped_members: Optional[List[str]] = None
         self.constructor_method = None
         self.members: Optional[List[MemberVariable]] = None
         self.custom_implementation = False
@@ -415,6 +417,8 @@ class SerializableClass:
             if not isinstance(self.constructor, list):
                 print(f"constructor for {self.name}, must be of type [], but is of type {str(type(self.constructor))}")
                 exit(1)
+        if 'skipped_members' in entry:
+            self.skipped_members = entry['skipped_members']
         if 'constructor_method' in entry:
             self.constructor_method = entry['constructor_method']
             if self.constructor is not None:
@@ -547,6 +551,11 @@ def generate_base_class_code(base_class: SerializableClass):
     expressions = [x for x in base_class.children.items()]
     expressions = sorted(expressions, key=lambda x: x[0])
 
+    skipped_members = set()
+    if base_class.skipped_members is not None:
+        for skipped_entry in base_class.skipped_members:
+            skipped_members.add(skipped_entry)
+
     # set parameters
     for entry in base_class.set_parameters:
         base_class_deserialize += SET_DESERIALIZE_PARAMETER_FORMAT.format(
@@ -595,6 +604,8 @@ def generate_base_class_code(base_class: SerializableClass):
 
     for entry in assign_entries:
         if entry.status != MemberVariableStatus.EXISTING:
+            continue
+        if entry.name in skipped_members:
             continue
         move = False
         if entry.type in MOVE_LIST or is_container(entry.type) or is_pointer(entry.type):
