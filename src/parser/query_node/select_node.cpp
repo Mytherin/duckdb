@@ -16,7 +16,6 @@ string SelectNode::ToString() const {
 		return from_table->ToString();
 	}
 	string result;
-	result = cte_map.ToString();
 	result += "SELECT ";
 
 	// search for a distinct modifier

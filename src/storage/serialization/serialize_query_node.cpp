@@ -12,13 +12,13 @@ namespace duckdb {
 void QueryNode::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<QueryNodeType>(100, "type", type);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ResultModifier>>>(101, "modifiers", modifiers);
-	serializer.WriteProperty<CommonTableExpressionMap>(102, "cte_map", cte_map);
+	/* [Deleted] (CommonTableExpressionMap) "cte_map" */
 }
 
 unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &deserializer) {
 	auto type = deserializer.ReadProperty<QueryNodeType>(100, "type");
 	auto modifiers = deserializer.ReadPropertyWithDefault<vector<unique_ptr<ResultModifier>>>(101, "modifiers");
-	auto cte_map = deserializer.ReadProperty<CommonTableExpressionMap>(102, "cte_map");
+	deserializer.ReadDeletedProperty<CommonTableExpressionMap>(102, "cte_map");
 	unique_ptr<QueryNode> result;
 	switch (type) {
 	case QueryNodeType::CTE_NODE:
@@ -37,7 +37,6 @@ unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &deserializer) {
 		throw SerializationException("Unsupported type for deserialization of QueryNode!");
 	}
 	result->modifiers = std::move(modifiers);
-	result->cte_map = std::move(cte_map);
 	return result;
 }
 

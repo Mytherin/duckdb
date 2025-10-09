@@ -124,9 +124,10 @@ unique_ptr<SelectStatement> Transformer::TransformRecursiveCTE(duckdb_libpgquery
 		auto &result = select->node->Cast<RecursiveCTENode>();
 		result.ctename = string(cte.ctename);
 		result.union_all = stmt.all;
+		CommonTableExpressionMap cte_map;
 		if (stmt.withClause) {
 			auto with_clause = PGPointerCast<duckdb_libpgquery::PGWithClause>(stmt.withClause);
-			TransformCTE(*with_clause, result.cte_map);
+			TransformCTE(*with_clause, cte_map);
 		}
 		result.left = TransformSelectNode(*stmt.larg);
 		result.right = TransformSelectNode(*stmt.rarg);
@@ -134,6 +135,7 @@ unique_ptr<SelectStatement> Transformer::TransformRecursiveCTE(duckdb_libpgquery
 		for (auto &key : info.key_targets) {
 			result.key_targets.emplace_back(key->Copy());
 		}
+		select->node = TransformMaterializedCTE(cte_map, std::move(select->node));
 		break;
 	}
 	case duckdb_libpgquery::PG_SETOP_EXCEPT:

@@ -10,7 +10,6 @@ SetOperationNode::SetOperationNode() : QueryNode(QueryNodeType::SET_OPERATION_NO
 
 string SetOperationNode::ToString() const {
 	string result;
-	result = cte_map.ToString();
 	result += "(" + children[0]->ToString() + ") ";
 
 	for (idx_t i = 1; i < children.size(); i++) {

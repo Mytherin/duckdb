@@ -45,6 +45,9 @@ public:
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<QueryNode> Deserialize(Deserializer &source);
+
+private:
+	static string CTEToString(const QueryNode &node);
 };
 
 } // namespace duckdb

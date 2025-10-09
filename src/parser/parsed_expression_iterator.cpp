@@ -312,10 +312,6 @@ void ParsedExpressionIterator::EnumerateQueryNodeChildren(
 	if (!node.modifiers.empty()) {
 		EnumerateQueryNodeModifiers(node, expr_callback);
 	}
-
-	for (auto &kv : node.cte_map.map) {
-		EnumerateQueryNodeChildren(*kv.second->query->node, expr_callback, ref_callback);
-	}
 }
 
 void ParsedExpressionIterator::VisitExpressionClass(

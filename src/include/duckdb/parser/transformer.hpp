@@ -48,7 +48,7 @@ class Transformer {
 
 	struct CreatePivotEntry {
 		string enum_name;
-		unique_ptr<SelectNode> base;
+		unique_ptr<QueryNode> base;
 		unique_ptr<ParsedExpression> column;
 		unique_ptr<QueryNode> subquery;
 		bool has_parameters;
@@ -94,7 +94,7 @@ private:
 	void SetParam(const string &name, idx_t index, PreparedParamType type);
 	bool GetParam(const string &name, idx_t &index, PreparedParamType type);
 
-	void AddPivotEntry(string enum_name, unique_ptr<SelectNode> source, unique_ptr<ParsedExpression> column,
+	void AddPivotEntry(string enum_name, unique_ptr<QueryNode> source, unique_ptr<ParsedExpression> column,
 	                   unique_ptr<QueryNode> subquery, bool has_parameters);
 	unique_ptr<SQLStatement> GenerateCreateEnumStmt(unique_ptr<CreatePivotEntry> entry);
 	bool HasPivotEntries();
@@ -304,7 +304,8 @@ private:
 	string TransformAlias(duckdb_libpgquery::PGAlias *root, vector<string> &column_name_alias);
 	vector<string> TransformStringList(duckdb_libpgquery::PGList *list);
 	void TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, CommonTableExpressionMap &cte_map);
-	static unique_ptr<QueryNode> TransformMaterializedCTE(unique_ptr<QueryNode> root);
+	static unique_ptr<QueryNode> TransformMaterializedCTE(CommonTableExpressionMap &cte_map,
+	                                                      unique_ptr<QueryNode> root);
 	unique_ptr<SelectStatement> TransformRecursiveCTE(duckdb_libpgquery::PGCommonTableExpr &node,
 	                                                  CommonTableExpressionInfo &info);
 

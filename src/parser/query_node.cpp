@@ -143,45 +143,12 @@ bool QueryNode::Equals(const QueryNode *other) const {
 			return false;
 		}
 	}
-	// WITH clauses (CTEs)
-	if (cte_map.map.size() != other->cte_map.map.size()) {
-		return false;
-	}
-
-	for (auto &entry : cte_map.map) {
-		auto other_entry = other->cte_map.map.find(entry.first);
-		if (other_entry == other->cte_map.map.end()) {
-			return false;
-		}
-
-		if (entry.second->aliases != other->cte_map.map.at(entry.first)->aliases) {
-			return false;
-		}
-		if (!ParsedExpression::ListEquals(entry.second->key_targets, other_entry->second->key_targets)) {
-			return false;
-		}
-		if (!entry.second->query->Equals(*other->cte_map.map.at(entry.first)->query)) {
-			return false;
-		}
-	}
 	return other->type == type;
 }
 
 void QueryNode::CopyProperties(QueryNode &other) const {
 	for (auto &modifier : modifiers) {
 		other.modifiers.push_back(modifier->Copy());
-	}
-	for (auto &kv : cte_map.map) {
-		auto kv_info = make_uniq<CommonTableExpressionInfo>();
-		for (auto &al : kv.second->aliases) {
-			kv_info->aliases.push_back(al);
-		}
-		for (auto &key : kv.second->key_targets) {
-			kv_info->key_targets.push_back(key->Copy());
-		}
-		kv_info->query = unique_ptr_cast<SQLStatement, SelectStatement>(kv.second->query->Copy());
-		kv_info->materialized = kv.second->materialized;
-		other.cte_map.map[kv.first] = std::move(kv_info);
 	}
 }
 

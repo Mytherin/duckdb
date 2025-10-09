@@ -19,7 +19,7 @@
 
 namespace duckdb {
 
-void Transformer::AddPivotEntry(string enum_name, unique_ptr<SelectNode> base, unique_ptr<ParsedExpression> column,
+void Transformer::AddPivotEntry(string enum_name, unique_ptr<QueryNode> base, unique_ptr<ParsedExpression> column,
                                 unique_ptr<QueryNode> subquery, bool has_parameters) {
 	if (parent) {
 		parent->AddPivotEntry(std::move(enum_name), std::move(base), std::move(column), std::move(subquery),
@@ -74,28 +74,37 @@ unique_ptr<SQLStatement> Transformer::GenerateCreateEnumStmt(unique_ptr<CreatePi
 	// generate the query that will result in the enum creation
 	unique_ptr<QueryNode> subselect;
 	if (!entry->subquery) {
-		auto select_node = std::move(entry->base);
+		auto base_node = std::move(entry->base);
+		reference<QueryNode> base_node_ref(*base_node);
+		while (base_node_ref.get().type == QueryNodeType::CTE_NODE) {
+			base_node_ref = *base_node_ref.get().Cast<CTENode>().child;
+		}
+		if (base_node_ref.get().type != QueryNodeType::SELECT_NODE) {
+			throw InternalException("Expected a Select Node while binding pivot");
+		}
+		auto &select_node = base_node_ref.get().Cast<SelectNode>();
+
 		auto columnref = entry->column->Copy();
 		auto cast = make_uniq<CastExpression>(LogicalType::VARCHAR, std::move(columnref));
-		select_node->select_list.push_back(std::move(cast));
+		select_node.select_list.push_back(std::move(cast));
 
 		auto is_not_null =
 		    make_uniq<OperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, std::move(entry->column));
-		select_node->where_clause = std::move(is_not_null);
+		select_node.where_clause = std::move(is_not_null);
 
 		// order by the column
-		select_node->modifiers.push_back(make_uniq<DistinctModifier>());
+		select_node.modifiers.push_back(make_uniq<DistinctModifier>());
 		auto modifier = make_uniq<OrderModifier>();
 		modifier->orders.emplace_back(OrderType::ASCENDING, OrderByNullType::ORDER_DEFAULT,
 		                              make_uniq<ConstantExpression>(Value::INTEGER(1)));
-		select_node->modifiers.push_back(std::move(modifier));
-		subselect = std::move(select_node);
+		select_node.modifiers.push_back(std::move(modifier));
+		subselect = std::move(base_node);
 	} else {
 		subselect = std::move(entry->subquery);
 	}
 
 	auto select = make_uniq<SelectStatement>();
-	select->node = TransformMaterializedCTE(std::move(subselect));
+	select->node = std::move(subselect);
 	info->query = std::move(select);
 	info->type = LogicalType::INVALID;
 
@@ -142,10 +151,11 @@ unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PG
 	auto next_param_count = ParamCount();
 	bool has_parameters = next_param_count > current_param_count;
 
+	CommonTableExpressionMap cte_map;
 	auto select_node = make_uniq<SelectNode>();
 	// handle the CTEs
 	if (select.withClause) {
-		TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(select.withClause), select_node->cte_map);
+		TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(select.withClause), cte_map);
 	}
 	if (!pivot->columns) {
 		// no pivot columns - not actually a pivot
@@ -184,9 +194,12 @@ unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PG
 		auto enum_name = "__pivot_enum_" + UUID::ToString(UUID::GenerateRandomUUID());
 
 		auto new_select = make_uniq<SelectNode>();
-		ExtractCTEsRecursive(new_select->cte_map);
+		CommonTableExpressionMap new_select_cte_map;
+		ExtractCTEsRecursive(new_select_cte_map);
 		new_select->from_table = source->Copy();
-		AddPivotEntry(enum_name, std::move(new_select), col.pivot_expressions[0]->Copy(), std::move(col.subquery),
+
+		auto pivot_entry = TransformMaterializedCTE(new_select_cte_map, std::move(new_select));
+		AddPivotEntry(enum_name, std::move(pivot_entry), col.pivot_expressions[0]->Copy(), std::move(col.subquery),
 		              has_parameters);
 		col.pivot_enum = enum_name;
 	}
@@ -217,7 +230,7 @@ unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PG
 	// transform order by/limit modifiers
 	TransformModifiers(select, *select_node);
 
-	return std::move(select_node);
+	return TransformMaterializedCTE(cte_map, std::move(select_node));
 }
 
 } // namespace duckdb

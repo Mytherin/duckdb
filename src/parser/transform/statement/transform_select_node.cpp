@@ -100,6 +100,7 @@ unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PG
 	D_ASSERT(stmt.type == duckdb_libpgquery::T_PGSelectStmt);
 	auto stack_checker = StackCheck();
 
+	CommonTableExpressionMap cte_map;
 	unique_ptr<QueryNode> node;
 
 	switch (stmt.op) {
@@ -107,7 +108,7 @@ unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PG
 		node = make_uniq<SelectNode>();
 		auto &result = node->Cast<SelectNode>();
 		if (stmt.withClause) {
-			TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(stmt.withClause), node->cte_map);
+			TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(stmt.withClause), cte_map);
 		}
 		if (stmt.windowClause) {
 			for (auto window_ele = stmt.windowClause->head; window_ele != nullptr; window_ele = window_ele->next) {
@@ -174,7 +175,7 @@ unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PG
 		node = make_uniq<SetOperationNode>();
 		auto &result = node->Cast<SetOperationNode>();
 		if (stmt.withClause) {
-			TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(stmt.withClause), result.cte_map);
+			TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(stmt.withClause), cte_map);
 		}
 		TransformSetOperationChildren(stmt, result);
 
@@ -206,7 +207,7 @@ unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PG
 
 	TransformModifiers(stmt, *node);
 
-	return node;
+	return TransformMaterializedCTE(cte_map, std::move(node));
 }
 
 } // namespace duckdb

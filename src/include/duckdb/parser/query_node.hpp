@@ -57,8 +57,6 @@ public:
 	QueryNodeType type;
 	//! The set of result modifiers associated with this query node
 	vector<unique_ptr<ResultModifier>> modifiers;
-	//! CTEs (used by SelectNode and SetOperationNode)
-	CommonTableExpressionMap cte_map;
 
 public:
 	//! Convert the query node to a string

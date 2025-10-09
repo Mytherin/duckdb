@@ -6,7 +6,6 @@ namespace duckdb {
 
 string RecursiveCTENode::ToString() const {
 	string result;
-	result = cte_map.ToString();
 	result += "(" + left->ToString() + ")";
 	result += " UNION ";
 	if (union_all) {

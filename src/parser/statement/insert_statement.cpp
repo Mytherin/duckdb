@@ -182,9 +182,6 @@ optional_ptr<ExpressionListRef> InsertStatement::GetValuesList() const {
 	if (node.where_clause || node.qualify || node.having) {
 		return nullptr;
 	}
-	if (!node.cte_map.map.empty()) {
-		return nullptr;
-	}
 	if (!node.groups.grouping_sets.empty()) {
 		return nullptr;
 	}

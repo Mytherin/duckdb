@@ -62,7 +62,6 @@ BoundStatement QueryRelation::Bind(Binder &binder) {
 	auto &replacements = binder.GetReplacementScans();
 	if (first_bind) {
 		auto &query_node = *select_stmt->node;
-		auto &cte_map = query_node.cte_map;
 		vector<unique_ptr<CTENode>> materialized_ctes;
 		for (auto &kv : replacements) {
 			auto &name = kv.first;
@@ -74,25 +73,15 @@ BoundStatement QueryRelation::Bind(Binder &binder) {
 				continue;
 			}
 
-			auto select = make_uniq<SelectStatement>();
 			auto select_node = make_uniq<SelectNode>();
 			select_node->select_list.push_back(make_uniq<StarExpression>());
 			select_node->from_table = std::move(tableref);
-			select->node = std::move(select_node);
-
-			auto cte_info = make_uniq<CommonTableExpressionInfo>();
-			cte_info->query = std::move(select);
-
-			cte_map.map[name] = std::move(cte_info);
 
 			// We can not rely on CTE inlining anymore, so we need to add a materialized CTE node
 			// to the query node to ensure that the CTE exists
-			auto &cte_entry = cte_map.map[name];
 			auto mat_cte = make_uniq<CTENode>();
 			mat_cte->ctename = name;
-			mat_cte->query = cte_entry->query->node->Copy();
-			mat_cte->aliases = cte_entry->aliases;
-			mat_cte->materialized = cte_entry->materialized;
+			mat_cte->query = std::move(select_node);
 			materialized_ctes.push_back(std::move(mat_cte));
 		}
 
@@ -100,7 +89,6 @@ BoundStatement QueryRelation::Bind(Binder &binder) {
 		while (!materialized_ctes.empty()) {
 			unique_ptr<CTENode> node_result;
 			node_result = std::move(materialized_ctes.back());
-			node_result->cte_map = root->cte_map.Copy();
 			node_result->child = std::move(root);
 			root = std::move(node_result);
 			materialized_ctes.pop_back();
