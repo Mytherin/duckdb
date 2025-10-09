@@ -22,11 +22,12 @@
         "type": "CommonTableExpressionMap",
         "status": "deleted",
         "version": "v1.5.0",
+        "property": "legacy_cte_map",
         "deserialize_default": "CommonTableExpressionMap()"
       }
     ],
     "finalize_deserialization": [
-      "UnpackLegacyCTEs(std::move(cte_map), result);"
+      "UnpackLegacyCTEs(std::move(legacy_cte_map), result);"
     ]
   },
   {

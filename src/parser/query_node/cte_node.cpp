@@ -2,6 +2,7 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/query_node/recursive_cte_node.hpp"
 
 namespace duckdb {
 
