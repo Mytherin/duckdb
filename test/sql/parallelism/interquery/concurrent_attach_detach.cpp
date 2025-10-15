@@ -3,12 +3,22 @@
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "test_helpers.hpp"
 
 #include <unordered_set>
 #include <thread>
 
 using namespace duckdb;
+
+enum class AttachTaskType {
+	CREATE_TABLE,
+	LOOKUP,
+	APPEND,
+	APPLY_CHANGES,
+	DESCRIBE_TABLE,
+	CHECKPOINT
+};
 
 namespace {
 
@@ -53,6 +63,14 @@ struct DBInfo {
 
 DBInfo db_infos[db_count];
 
+struct AttachTask {
+	AttachTaskType type;
+	duckdb::optional_idx db_id;
+	duckdb::optional_idx tbl_id;
+	std::vector<idx_t> ids;
+	bool actual_describe = false;
+};
+
 struct AttachWorker {
 public:
 	AttachWorker(DuckDB &db, idx_t worker_id, vector<string> &logs) : conn(db), worker_id(worker_id), logs(logs) {
@@ -65,14 +83,15 @@ public:
 	void Work();
 
 private:
-	void createTbl(const idx_t db_id);
-	void lookup(const idx_t db_id);
-	void append_internal(const idx_t db_id, const idx_t tbl_id, const vector<idx_t> &ids);
-	void append(const idx_t db_id);
-	void delete_internal(const idx_t db_id, const idx_t tbl_id, const vector<idx_t> &ids);
-	void apply_changes(const idx_t db_id);
-	void describe_tbl(const idx_t db_id);
-	void checkpoint_db(const idx_t db_id);
+	AttachTask RandomTask();
+	void createTbl(AttachTask &task);
+	void lookup(AttachTask &task);
+	void append_internal(AttachTask &task);
+	void append(AttachTask &task);
+	void delete_internal(AttachTask &task);
+	void apply_changes(AttachTask &task);
+	void describe_tbl(AttachTask &task);
+	void checkpoint_db(AttachTask &task);
 	void addLog(const string &msg) {
 		logs.push_back(msg);
 	}
@@ -117,7 +136,8 @@ public:
 
 DBPoolMgr db_pool;
 
-void AttachWorker::createTbl(const idx_t db_id) {
+void AttachWorker::createTbl(AttachTask &task) {
+	auto db_id = task.db_id.GetIndex();
 	lock_guard<mutex> lock(db_infos[db_id].mu);
 	auto tbl_id = db_infos[db_id].table_count;
 	db_infos[db_id].tables.emplace_back(TableInfo {nr_initial_rows});
@@ -142,18 +162,13 @@ void AttachWorker::createTbl(const idx_t db_id) {
 	execQuery(insert_sql);
 }
 
-void AttachWorker::lookup(const idx_t db_id) {
-	unique_lock<mutex> lock(db_infos[db_id].mu);
-	auto max_tbl_id = db_infos[db_id].table_count;
-
-	if (max_tbl_id == 0) {
-		lock.unlock();
+void AttachWorker::lookup(AttachTask &task) {
+	if (!task.tbl_id.IsValid()) {
 		return;
 	}
-
-	auto tbl_id = std::rand() % max_tbl_id;
+	auto db_id = task.db_id.GetIndex();
+	auto tbl_id = task.tbl_id.GetIndex();
 	auto expected_max_val = db_infos[db_id].tables[tbl_id].size - 1;
-	lock.unlock();
 
 	// Run the query.
 	auto table_name = getDBName(db_id) + ".tbl_" + to_string(tbl_id);
@@ -161,7 +176,7 @@ void AttachWorker::lookup(const idx_t db_id) {
 	addLog("q: " + query);
 	auto result = execQuery(query);
 	if (result->RowCount() == 0) {
-		Printer::PrintF("FAILURE - No rows returned from query");
+		addLog("FAILURE - No rows returned from query");
 		success = false;
 	}
 	if (!CHECK_COLUMN(result, 0, {Value::UBIGINT(expected_max_val)})) {
@@ -184,7 +199,9 @@ void AttachWorker::lookup(const idx_t db_id) {
 	}
 }
 
-void AttachWorker::append_internal(const idx_t db_id, const idx_t tbl_id, const vector<idx_t> &ids) {
+void AttachWorker::append_internal(AttachTask &task) {
+	auto db_id = task.db_id.GetIndex();
+	auto tbl_id = task.tbl_id.GetIndex();
 	auto tbl_str = "tbl_" + to_string(tbl_id);
 	// set appender
 	addLog("db: " + getDBName(db_id) + "; table: " + tbl_str + "; append rows");
@@ -219,8 +236,8 @@ void AttachWorker::append_internal(const idx_t db_id, const idx_t tbl_id, const 
 		auto &entry_varchar = data_struct_entries[1];
 		auto data_struct_varchar = FlatVector::GetData<string_t>(*entry_varchar);
 
-		for (idx_t i = 0; i < ids.size(); i++) {
-			auto row_idx = ids[i];
+		for (idx_t i = 0; i < task.ids.size(); i++) {
+			auto row_idx = task.ids[i];
 			data_ubigint[i] = row_idx;
 			data_varchar[i] = StringVector::AddString(col_varchar, to_string(row_idx));
 			data_ts[i] = timestamp_t {static_cast<int64_t>(1000 * (row_idx))};
@@ -228,7 +245,7 @@ void AttachWorker::append_internal(const idx_t db_id, const idx_t tbl_id, const 
 			data_struct_varchar[i] = StringVector::AddString(*entry_varchar, to_string(row_idx));
 		}
 
-		chunk.SetCardinality(ids.size());
+		chunk.SetCardinality(task.ids.size());
 		appender.AppendDataChunk(chunk);
 		appender.Close();
 
@@ -243,27 +260,28 @@ void AttachWorker::append_internal(const idx_t db_id, const idx_t tbl_id, const 
 	}
 }
 
-void AttachWorker::append(const idx_t db_id) {
-	lock_guard<mutex> lock(db_infos[db_id].mu);
-	auto max_tbl_id = db_infos[db_id].table_count;
-	if (max_tbl_id == 0) {
+void AttachWorker::append(AttachTask &task) {
+	if (!task.tbl_id.IsValid()) {
 		return;
 	}
-
-	auto tbl_id = std::rand() % max_tbl_id;
+	auto db_id = task.db_id.GetIndex();
+	auto tbl_id = task.tbl_id.GetIndex();
+	lock_guard<mutex> lock(db_infos[db_id].mu);
 	auto current_num_rows = db_infos[db_id].tables[tbl_id].size;
 	idx_t append_count = STANDARD_VECTOR_SIZE;
 
-	vector<idx_t> ids;
 	for (idx_t i = 0; i < append_count; i++) {
-		ids.push_back(current_num_rows + i);
+		task.ids.push_back(current_num_rows + i);
 	}
 
-	append_internal(db_id, tbl_id, ids);
+	append_internal(task);
 	db_infos[db_id].tables[tbl_id].size += append_count;
 }
 
-void AttachWorker::delete_internal(const idx_t db_id, const idx_t tbl_id, const vector<idx_t> &ids) {
+void AttachWorker::delete_internal(AttachTask &task) {
+	auto db_id = task.db_id.GetIndex();
+	auto tbl_id = task.tbl_id.GetIndex();
+	auto &ids = task.ids;
 	auto tbl_str = "tbl_" + to_string(tbl_id);
 
 	string delete_list;
@@ -280,44 +298,29 @@ void AttachWorker::delete_internal(const idx_t db_id, const idx_t tbl_id, const 
 	execQuery(delete_sql);
 }
 
-void AttachWorker::apply_changes(const idx_t db_id) {
-	lock_guard<mutex> lock(db_infos[db_id].mu);
-	auto max_tbl_id = db_infos[db_id].table_count;
-	if (max_tbl_id == 0) {
+void AttachWorker::apply_changes(AttachTask &task) {
+	if (!task.tbl_id.IsValid()) {
 		return;
 	}
-	// select a random table to delete from
-	auto tbl_id = std::rand() % max_tbl_id;
+	auto db_id = task.db_id.GetIndex();
+	auto tbl_id = task.tbl_id.GetIndex();
+	lock_guard<mutex> lock(db_infos[db_id].mu);
 	// select some random tuples to apply changes to
 	auto current_num_rows = db_infos[db_id].tables[tbl_id].size;
-	idx_t delete_count = std::rand() % (STANDARD_VECTOR_SIZE / 3);
-	if (delete_count == 0) {
-		delete_count = 1;
-	}
-	unordered_set<idx_t> unique_ids;
-	for (idx_t i = 0; i < delete_count; i++) {
-		unique_ids.insert(std::rand() % current_num_rows);
-	}
-	vector<idx_t> ids;
-	for (auto &id : unique_ids) {
-		ids.push_back(id);
-	}
 	execQuery("BEGIN");
-	delete_internal(db_id, tbl_id, ids);
-	append_internal(db_id, tbl_id, ids);
+	delete_internal(task);
+	append_internal(task);
 	execQuery("COMMIT");
 }
 
-void AttachWorker::describe_tbl(const idx_t db_id) {
-	unique_lock<mutex> lock(db_infos[db_id].mu);
-	auto max_tbl_id = db_infos[db_id].table_count;
-	if (max_tbl_id == 0) {
+void AttachWorker::describe_tbl(AttachTask &task) {
+	if (!task.tbl_id.IsValid()) {
 		return;
 	}
-	auto tbl_id = std::rand() % max_tbl_id;
+	auto db_id = task.db_id.GetIndex();
+	auto tbl_id = task.tbl_id.GetIndex();
 	auto tbl_str = "tbl_" + to_string(tbl_id);
-	lock.unlock();
-	auto actual_describe = std::rand() % 2 == 0;
+	auto actual_describe = task.actual_describe;
 	string describe_sql;
 	if (actual_describe) {
 		describe_sql = StringUtil::Format("DESCRIBE %s.%s.%s", getDBName(db_id), DEFAULT_SCHEMA, tbl_str);
@@ -329,12 +332,78 @@ void AttachWorker::describe_tbl(const idx_t db_id) {
 	execQuery(describe_sql);
 }
 
-void AttachWorker::checkpoint_db(const idx_t db_id) {
+void AttachWorker::checkpoint_db(AttachTask &task) {
+	auto db_id = task.db_id.GetIndex();
 	unique_lock<mutex> lock(db_infos[db_id].mu);
 	string checkpoint_sql = "CHECKPOINT " + getDBName(db_id);
 	addLog("q: " + checkpoint_sql);
 	// checkpoint can fail, we don't care
 	conn.Query(checkpoint_sql);
+}
+
+optional_idx GetRandomTable(idx_t db_id) {
+	lock_guard<mutex> lock(db_infos[db_id].mu);
+	auto max_tbl_id = db_infos[db_id].table_count;
+
+	if (max_tbl_id == 0) {
+		return optional_idx();
+	}
+
+	return std::rand() % max_tbl_id;
+}
+
+AttachTask AttachWorker::RandomTask() {
+	AttachTask result;
+	idx_t scenario_id = std::rand() % 10;
+	result.db_id = std::rand() % db_count;
+	auto db_id = result.db_id.GetIndex();
+	switch (scenario_id) {
+	case 0:
+		result.type = AttachTaskType::CREATE_TABLE;
+		result.tbl_id = GetRandomTable(db_id);
+		break;
+	case 1:
+		result.type = AttachTaskType::LOOKUP;
+		result.tbl_id = GetRandomTable(db_id);
+		break;
+	case 2:
+		result.type = AttachTaskType::APPEND;
+		result.tbl_id = GetRandomTable(db_id);
+		break;
+	case 3:
+		result.type = AttachTaskType::APPLY_CHANGES;
+		result.tbl_id = GetRandomTable(db_id);
+		if (result.tbl_id.IsValid()) {
+			auto tbl_id = result.tbl_id.GetIndex();
+			auto current_num_rows = db_infos[db_id].tables[tbl_id].size;
+			idx_t delete_count = std::rand() % (STANDARD_VECTOR_SIZE / 3);
+			if (delete_count == 0) {
+				delete_count = 1;
+			}
+
+			unordered_set<idx_t> unique_ids;
+			for (idx_t i = 0; i < delete_count; i++) {
+				unique_ids.insert(std::rand() % current_num_rows);
+			}
+			for(auto &id : unique_ids) {
+				result.ids.push_back(id);
+			}
+		}
+		break;
+	case 4:
+	case 5:
+	case 6:
+	case 7:
+	case 8:
+		result.type = AttachTaskType::DESCRIBE_TABLE;
+		result.tbl_id = GetRandomTable(db_id);
+		result.actual_describe = std::rand() % 2 == 0;
+		break;
+	default:
+		result.type = AttachTaskType::CHECKPOINT;
+		break;
+	}
+	return result;
 }
 
 void AttachWorker::Work() {
@@ -344,40 +413,35 @@ void AttachWorker::Work() {
 		}
 
 		try {
-			idx_t scenario_id = std::rand() % 10;
-			idx_t db_id = std::rand() % db_count;
+			auto task = RandomTask();
 
-			db_pool.addWorker(*this, db_id);
+			db_pool.addWorker(*this, task.db_id.GetIndex());
 
-			switch (scenario_id) {
-			case 0:
-				createTbl(db_id);
+			switch (task.type) {
+			case AttachTaskType::CREATE_TABLE:
+				createTbl(task);
 				break;
-			case 1:
-				lookup(db_id);
+			case AttachTaskType::LOOKUP:
+				lookup(task);
 				break;
-			case 2:
-				append(db_id);
+			case AttachTaskType::APPEND:
+				append(task);
 				break;
-			case 3:
-				apply_changes(db_id);
+			case AttachTaskType::APPLY_CHANGES:
+				apply_changes(task);
 				break;
-			case 4:
-			case 5:
-			case 6:
-			case 7:
-			case 8:
-				describe_tbl(db_id);
+			case AttachTaskType::DESCRIBE_TABLE:
+				describe_tbl(task);
 				break;
-			case 9:
-				checkpoint_db(db_id);
+			case AttachTaskType::CHECKPOINT:
+				checkpoint_db(task);
 				break;
 			default:
-				addLog("invalid scenario: " + to_string(scenario_id));
+				addLog("invalid task type");
 				success = false;
 				return;
 			}
-			db_pool.removeWorker(*this, db_id);
+			db_pool.removeWorker(*this, task.db_id.GetIndex());
 
 		} catch (const std::exception &e) {
 			addLog("Caught exception when running iterations: " + string(e.what()));
