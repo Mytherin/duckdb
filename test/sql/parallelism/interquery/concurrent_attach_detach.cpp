@@ -65,6 +65,7 @@ struct AttachTask {
 	AttachTaskType type;
 	duckdb::optional_idx db_id;
 	duckdb::optional_idx tbl_id;
+	duckdb::optional_idx tbl_size;
 	std::vector<idx_t> ids;
 	bool actual_describe = false;
 };
@@ -103,7 +104,7 @@ private:
 	void apply_changes(AttachTask &task);
 	void describe_tbl(AttachTask &task);
 	void checkpoint_db(AttachTask &task);
-	duckdb::optional_idx GetRandomTable(idx_t db_id);
+	void GetRandomTable(AttachTask &task);
 	void addLog(const string &msg) {
 		logs.push_back(msg);
 	}
@@ -174,8 +175,7 @@ void AttachWorker::lookup(AttachTask &task) {
 	}
 	auto db_id = task.db_id.GetIndex();
 	auto tbl_id = task.tbl_id.GetIndex();
-	auto &db_infos = db_pool.db_infos;
-	auto expected_max_val = db_infos[db_id].tables[tbl_id].size - 1;
+	auto expected_max_val = task.tbl_size.GetIndex() - 1;
 
 	// Run the query.
 	auto table_name = getDBName(db_id) + ".tbl_" + to_string(tbl_id);
@@ -348,16 +348,18 @@ void AttachWorker::checkpoint_db(AttachTask &task) {
 	conn.Query(checkpoint_sql);
 }
 
-optional_idx AttachWorker::GetRandomTable(idx_t db_id) {
+void AttachWorker::GetRandomTable(AttachTask &task) {
 	auto &db_infos = db_pool.db_infos;
+	auto db_id = task.db_id.GetIndex();
 	lock_guard<mutex> lock(db_infos[db_id].mu);
 	auto max_tbl_id = db_infos[db_id].table_count;
 
 	if (max_tbl_id == 0) {
-		return optional_idx();
+		return;
 	}
 
-	return std::rand() % max_tbl_id;
+	task.tbl_id = std::rand() % max_tbl_id;
+	task.tbl_size = db_infos[db_id].tables[task.tbl_id.GetIndex()].size;
 }
 
 AttachTask AttachWorker::RandomTask() {
@@ -365,27 +367,24 @@ AttachTask AttachWorker::RandomTask() {
 	idx_t scenario_id = std::rand() % 10;
 	result.db_id = std::rand() % db_count;
 	auto db_id = result.db_id.GetIndex();
-	auto &db_infos = db_pool.db_infos;
 	switch (scenario_id) {
 	case 0:
 		result.type = AttachTaskType::CREATE_TABLE;
-		result.tbl_id = GetRandomTable(db_id);
+		GetRandomTable(result);
 		break;
 	case 1:
 		result.type = AttachTaskType::LOOKUP;
-		result.tbl_id = GetRandomTable(db_id);
+		GetRandomTable(result);
 		break;
 	case 2:
 		result.type = AttachTaskType::APPEND;
-		result.tbl_id = GetRandomTable(db_id);
+		GetRandomTable(result);
 		break;
 	case 3:
 		result.type = AttachTaskType::APPLY_CHANGES;
-		result.tbl_id = GetRandomTable(db_id);
+		GetRandomTable(result);
 		if (result.tbl_id.IsValid()) {
-			lock_guard<mutex> lock(db_infos[db_id].mu);
-			auto tbl_id = result.tbl_id.GetIndex();
-			auto current_num_rows = db_infos[db_id].tables[tbl_id].size;
+			auto current_num_rows = result.tbl_size.GetIndex();
 			idx_t delete_count = std::rand() % (STANDARD_VECTOR_SIZE / 3);
 			if (delete_count == 0) {
 				delete_count = 1;
@@ -406,7 +405,7 @@ AttachTask AttachWorker::RandomTask() {
 	case 7:
 	case 8:
 		result.type = AttachTaskType::DESCRIBE_TABLE;
-		result.tbl_id = GetRandomTable(db_id);
+		GetRandomTable(result);
 		result.actual_describe = std::rand() % 2 == 0;
 		break;
 	default:
