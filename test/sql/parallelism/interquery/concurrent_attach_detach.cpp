@@ -61,8 +61,6 @@ struct DBInfo {
 	vector<TableInfo> tables;
 };
 
-DBInfo db_infos[db_count];
-
 struct AttachTask {
 	AttachTaskType type;
 	duckdb::optional_idx db_id;
@@ -71,9 +69,22 @@ struct AttachTask {
 	bool actual_describe = false;
 };
 
+struct AttachWorker;
+
+class DBPoolMgr {
+public:
+	mutex mu;
+	map<idx_t, idx_t> m;
+
+	void addWorker(AttachWorker &worker, const idx_t i);
+	void removeWorker(AttachWorker &worker, const idx_t i);
+
+	DBInfo db_infos[db_count];
+};
+
 struct AttachWorker {
 public:
-	AttachWorker(DuckDB &db, idx_t worker_id, vector<string> &logs) : conn(db), worker_id(worker_id), logs(logs) {
+	AttachWorker(DuckDB &db, idx_t worker_id, vector<string> &logs, DBPoolMgr &db_pool) : conn(db), worker_id(worker_id), logs(logs), db_pool(db_pool) {
 	}
 
 public:
@@ -92,6 +103,7 @@ private:
 	void apply_changes(AttachTask &task);
 	void describe_tbl(AttachTask &task);
 	void checkpoint_db(AttachTask &task);
+	duckdb::optional_idx GetRandomTable(idx_t db_id);
 	void addLog(const string &msg) {
 		logs.push_back(msg);
 	}
@@ -100,44 +112,38 @@ public:
 	Connection conn;
 	idx_t worker_id;
 	vector<string> &logs;
+	DBPoolMgr &db_pool;
 };
 
-class DBPoolMgr {
-public:
-	mutex mu;
-	map<idx_t, idx_t> m;
+void DBPoolMgr::addWorker(AttachWorker &worker, const idx_t i) {
+	lock_guard<mutex> lock(mu);
 
-	void addWorker(AttachWorker &worker, const idx_t i) {
-		lock_guard<mutex> lock(mu);
+	if (m.find(i) != m.end()) {
+		m[i]++;
+		return;
+	}
+	m[i] = 1;
 
-		if (m.find(i) != m.end()) {
-			m[i]++;
-			return;
-		}
-		m[i] = 1;
+	string query = "ATTACH '" + getDBPath(i) + "'";
+	worker.execQuery(query);
+}
 
-		string query = "ATTACH '" + getDBPath(i) + "'";
-		worker.execQuery(query);
+void DBPoolMgr::removeWorker(AttachWorker &worker, const idx_t i) {
+	lock_guard<mutex> lock(mu);
+
+	m[i]--;
+	if (m[i] != 0) {
+		return;
 	}
 
-	void removeWorker(AttachWorker &worker, const idx_t i) {
-		lock_guard<mutex> lock(mu);
-
-		m[i]--;
-		if (m[i] != 0) {
-			return;
-		}
-
-		m.erase(i);
-		string query = "DETACH " + getDBName(i);
-		worker.execQuery(query);
-	}
-};
-
-DBPoolMgr db_pool;
+	m.erase(i);
+	string query = "DETACH " + getDBName(i);
+	worker.execQuery(query);
+}
 
 void AttachWorker::createTbl(AttachTask &task) {
 	auto db_id = task.db_id.GetIndex();
+	auto &db_infos = db_pool.db_infos;
 	lock_guard<mutex> lock(db_infos[db_id].mu);
 	auto tbl_id = db_infos[db_id].table_count;
 	db_infos[db_id].tables.emplace_back(TableInfo {nr_initial_rows});
@@ -168,6 +174,7 @@ void AttachWorker::lookup(AttachTask &task) {
 	}
 	auto db_id = task.db_id.GetIndex();
 	auto tbl_id = task.tbl_id.GetIndex();
+	auto &db_infos = db_pool.db_infos;
 	auto expected_max_val = db_infos[db_id].tables[tbl_id].size - 1;
 
 	// Run the query.
@@ -266,6 +273,7 @@ void AttachWorker::append(AttachTask &task) {
 	}
 	auto db_id = task.db_id.GetIndex();
 	auto tbl_id = task.tbl_id.GetIndex();
+	auto &db_infos = db_pool.db_infos;
 	lock_guard<mutex> lock(db_infos[db_id].mu);
 	auto current_num_rows = db_infos[db_id].tables[tbl_id].size;
 	idx_t append_count = STANDARD_VECTOR_SIZE;
@@ -303,6 +311,7 @@ void AttachWorker::apply_changes(AttachTask &task) {
 		return;
 	}
 	auto db_id = task.db_id.GetIndex();
+	auto &db_infos = db_pool.db_infos;
 	lock_guard<mutex> lock(db_infos[db_id].mu);
 	execQuery("BEGIN");
 	delete_internal(task);
@@ -331,6 +340,7 @@ void AttachWorker::describe_tbl(AttachTask &task) {
 
 void AttachWorker::checkpoint_db(AttachTask &task) {
 	auto db_id = task.db_id.GetIndex();
+	auto &db_infos = db_pool.db_infos;
 	unique_lock<mutex> lock(db_infos[db_id].mu);
 	string checkpoint_sql = "CHECKPOINT " + getDBName(db_id);
 	addLog("q: " + checkpoint_sql);
@@ -338,7 +348,8 @@ void AttachWorker::checkpoint_db(AttachTask &task) {
 	conn.Query(checkpoint_sql);
 }
 
-optional_idx GetRandomTable(idx_t db_id) {
+optional_idx AttachWorker::GetRandomTable(idx_t db_id) {
+	auto &db_infos = db_pool.db_infos;
 	lock_guard<mutex> lock(db_infos[db_id].mu);
 	auto max_tbl_id = db_infos[db_id].table_count;
 
@@ -354,6 +365,7 @@ AttachTask AttachWorker::RandomTask() {
 	idx_t scenario_id = std::rand() % 10;
 	result.db_id = std::rand() % db_count;
 	auto db_id = result.db_id.GetIndex();
+	auto &db_infos = db_pool.db_infos;
 	switch (scenario_id) {
 	case 0:
 		result.type = AttachTaskType::CREATE_TABLE;
@@ -371,6 +383,7 @@ AttachTask AttachWorker::RandomTask() {
 		result.type = AttachTaskType::APPLY_CHANGES;
 		result.tbl_id = GetRandomTable(db_id);
 		if (result.tbl_id.IsValid()) {
+			lock_guard<mutex> lock(db_infos[db_id].mu);
 			auto tbl_id = result.tbl_id.GetIndex();
 			auto current_num_rows = db_infos[db_id].tables[tbl_id].size;
 			idx_t delete_count = std::rand() % (STANDARD_VECTOR_SIZE / 3);
@@ -457,34 +470,38 @@ void workUnit(std::unique_ptr<AttachWorker> worker) {
 }
 
 TEST_CASE("Run a concurrent ATTACH/DETACH scenario", "[interquery][.]") {
-	test_dir_path = TestDirectoryPath();
+	for(idx_t it_idx = 0; it_idx < 1; it_idx++) {
+		test_dir_path = TestDirectoryPath();
+		// Printer::PrintF("Iteration %d", it_idx);
+		DBPoolMgr db_pool;
+		DuckDB db(nullptr);
+		Connection init_conn(db);
 
-	DuckDB db(nullptr);
-	Connection init_conn(db);
+		execQuery(init_conn, "SET catalog_error_max_schemas = '0'");
+		execQuery(init_conn, "SET threads = '1'");
+		execQuery(init_conn, "SET storage_compatibility_version = 'latest'");
+		execQuery(init_conn, "CALL enable_logging()");
+		execQuery(init_conn, "PRAGMA enable_profiling='no_output'");
 
-	execQuery(init_conn, "SET catalog_error_max_schemas = '0'");
-	execQuery(init_conn, "SET threads = '1'");
-	execQuery(init_conn, "SET storage_compatibility_version = 'latest'");
-	execQuery(init_conn, "CALL enable_logging()");
-	execQuery(init_conn, "PRAGMA enable_profiling='no_output'");
-
-	logging.resize(worker_count);
-	vector<std::thread> workers;
-	for (idx_t i = 0; i < worker_count; i++) {
-		auto worker = make_uniq<AttachWorker>(db, i, logging[i]);
-		workers.emplace_back(workUnit, std::move(worker));
-	}
-
-	for (auto &worker : workers) {
-		worker.join();
-	}
-	if (!success) {
-		for (idx_t worker_id = 0; worker_id < logging.size(); worker_id++) {
-			for (auto &log : logging[worker_id]) {
-				Printer::PrintF("thread %d; %s", worker_id, log);
-			}
+		logging.resize(worker_count);
+		vector<std::thread> workers;
+		for (idx_t i = 0; i < worker_count; i++) {
+			auto worker = make_uniq<AttachWorker>(db, i, logging[i], db_pool);
+			workers.emplace_back(workUnit, std::move(worker));
 		}
-		FAIL();
+
+		for (auto &worker : workers) {
+			worker.join();
+		}
+		if (!success) {
+			for (idx_t worker_id = 0; worker_id < logging.size(); worker_id++) {
+				for (auto &log : logging[worker_id]) {
+					Printer::PrintF("thread %d; %s", worker_id, log);
+				}
+			}
+			FAIL();
+		}
+		ClearTestDirectory();
 	}
 }
 
