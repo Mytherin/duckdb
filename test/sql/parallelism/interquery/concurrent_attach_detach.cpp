@@ -96,7 +96,7 @@ private:
 		logs.push_back(msg);
 	}
 
-private:
+public:
 	Connection conn;
 	idx_t worker_id;
 	vector<string> &logs;
@@ -303,10 +303,7 @@ void AttachWorker::apply_changes(AttachTask &task) {
 		return;
 	}
 	auto db_id = task.db_id.GetIndex();
-	auto tbl_id = task.tbl_id.GetIndex();
 	lock_guard<mutex> lock(db_infos[db_id].mu);
-	// select some random tuples to apply changes to
-	auto current_num_rows = db_infos[db_id].tables[tbl_id].size;
 	execQuery("BEGIN");
 	delete_internal(task);
 	append_internal(task);
