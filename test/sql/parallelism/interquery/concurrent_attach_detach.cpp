@@ -11,14 +11,7 @@
 
 using namespace duckdb;
 
-enum class AttachTaskType {
-	CREATE_TABLE,
-	LOOKUP,
-	APPEND,
-	APPLY_CHANGES,
-	DESCRIBE_TABLE,
-	CHECKPOINT
-};
+enum class AttachTaskType { CREATE_TABLE, LOOKUP, APPEND, APPLY_CHANGES, DESCRIBE_TABLE, CHECKPOINT };
 
 namespace {
 
@@ -85,7 +78,8 @@ public:
 
 struct AttachWorker {
 public:
-	AttachWorker(DuckDB &db, idx_t worker_id, vector<string> &logs, DBPoolMgr &db_pool) : conn(db), worker_id(worker_id), logs(logs), db_pool(db_pool) {
+	AttachWorker(DuckDB &db, idx_t worker_id, vector<string> &logs, DBPoolMgr &db_pool)
+	    : conn(db), worker_id(worker_id), logs(logs), db_pool(db_pool) {
 	}
 
 public:
@@ -394,7 +388,7 @@ AttachTask AttachWorker::RandomTask() {
 			for (idx_t i = 0; i < delete_count; i++) {
 				unique_ids.insert(std::rand() % current_num_rows);
 			}
-			for(auto &id : unique_ids) {
+			for (auto &id : unique_ids) {
 				result.ids.push_back(id);
 			}
 		}
@@ -469,39 +463,36 @@ void workUnit(std::unique_ptr<AttachWorker> worker) {
 }
 
 TEST_CASE("Run a concurrent ATTACH/DETACH scenario", "[interquery][.]") {
-	for(idx_t it_idx = 0; it_idx < 1; it_idx++) {
-		test_dir_path = TestDirectoryPath();
-		// Printer::PrintF("Iteration %d", it_idx);
-		DBPoolMgr db_pool;
-		DuckDB db(nullptr);
-		Connection init_conn(db);
+	test_dir_path = TestDirectoryPath();
+	DBPoolMgr db_pool;
+	DuckDB db(nullptr);
+	Connection init_conn(db);
 
-		execQuery(init_conn, "SET catalog_error_max_schemas = '0'");
-		execQuery(init_conn, "SET threads = '1'");
-		execQuery(init_conn, "SET storage_compatibility_version = 'latest'");
-		execQuery(init_conn, "CALL enable_logging()");
-		execQuery(init_conn, "PRAGMA enable_profiling='no_output'");
+	execQuery(init_conn, "SET catalog_error_max_schemas = '0'");
+	execQuery(init_conn, "SET threads = '1'");
+	execQuery(init_conn, "SET storage_compatibility_version = 'latest'");
+	execQuery(init_conn, "CALL enable_logging()");
+	execQuery(init_conn, "PRAGMA enable_profiling='no_output'");
 
-		logging.resize(worker_count);
-		vector<std::thread> workers;
-		for (idx_t i = 0; i < worker_count; i++) {
-			auto worker = make_uniq<AttachWorker>(db, i, logging[i], db_pool);
-			workers.emplace_back(workUnit, std::move(worker));
-		}
-
-		for (auto &worker : workers) {
-			worker.join();
-		}
-		if (!success) {
-			for (idx_t worker_id = 0; worker_id < logging.size(); worker_id++) {
-				for (auto &log : logging[worker_id]) {
-					Printer::PrintF("thread %d; %s", worker_id, log);
-				}
-			}
-			FAIL();
-		}
-		ClearTestDirectory();
+	logging.resize(worker_count);
+	vector<std::thread> workers;
+	for (idx_t i = 0; i < worker_count; i++) {
+		auto worker = make_uniq<AttachWorker>(db, i, logging[i], db_pool);
+		workers.emplace_back(workUnit, std::move(worker));
 	}
+
+	for (auto &worker : workers) {
+		worker.join();
+	}
+	if (!success) {
+		for (idx_t worker_id = 0; worker_id < logging.size(); worker_id++) {
+			for (auto &log : logging[worker_id]) {
+				Printer::PrintF("thread %d; %s", worker_id, log);
+			}
+		}
+		FAIL();
+	}
+	ClearTestDirectory();
 }
 
 } // anonymous namespace
