@@ -1021,16 +1021,22 @@ bool RowGroup::HasUnloadedDeletes() const {
 }
 
 vector<MetaBlockPointer> RowGroup::GetColumnPointers() {
-	if (has_metadata_blocks) {
-		// we have the column metadata from the file itself - no need to deserialize metadata to fetch it
-		// read if from "column_pointers" and "extra_metadata_blocks"
-		auto result = column_pointers;
-		for (auto &block_pointer : extra_metadata_blocks) {
-			result.emplace_back(block_pointer, 0);
-		}
-		return result;
-	}
 	vector<MetaBlockPointer> result;
+	// if (has_metadata_blocks) {
+	// 	// we have the column metadata from the file itself - no need to deserialize metadata to fetch it
+	// 	// read if from "column_pointers" and "extra_metadata_blocks"
+	// 	for(auto block : column_pointers) {
+	// 		block.offset = 0;
+	// 		if (std::find(result.begin(), result.end(), block) != result.end()) {
+	// 			continue;
+	// 		}
+	// 		result.push_back(block);
+	// 	}
+	// 	for (auto &block_pointer : extra_metadata_blocks) {
+	// 		result.emplace_back(block_pointer, 0);
+	// 	}
+	// 	return result;
+	// }
 	if (column_pointers.empty()) {
 		// no pointers
 		return result;
@@ -1061,6 +1067,56 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 		// re-use previous metadata
 		RowGroupWriteData result;
 		result.existing_pointers = GetColumnPointers();
+		if (has_metadata_blocks) {
+			vector<MetaBlockPointer> stored_blocks;
+			for(auto block : column_pointers) {
+				block.offset = 0;
+				if (std::find(stored_blocks.begin(), stored_blocks.end(), block) == stored_blocks.end()) {
+					stored_blocks.push_back(block);
+				}
+			}
+			for (auto &block_pointer : extra_metadata_blocks) {
+				stored_blocks.emplace_back(block_pointer, 0);
+			}
+			for(auto &ptr : result.existing_pointers) {
+				ptr.offset = 0;
+			}
+			for(auto &ptr : stored_blocks) {
+				ptr.offset = 0;
+			}
+			bool equivalent = true;
+			string msg;
+			for(auto &block : stored_blocks) {
+				if (std::find(result.existing_pointers.begin(), result.existing_pointers.end(), block) == result.existing_pointers.end()) {
+					equivalent = false;
+					msg = StringUtil::Format("Block %d exists in extra_metadata_blocks but not in existing pointers", block.block_pointer);
+				}
+			}
+			for(auto &block : result.existing_pointers) {
+				if (std::find(stored_blocks.begin(), stored_blocks.end(), block) == stored_blocks.end()) {
+					equivalent = false;
+					msg = StringUtil::Format("Block %d exists in existing pointers but not in extra_metadata_blocks", block.block_pointer);
+				}
+			}
+			if (!equivalent) {
+				string extra_blocks;
+				for(auto &block : stored_blocks) {
+					if (!extra_blocks.empty()) {
+						extra_blocks += ", ";
+					}
+					extra_blocks += to_string(block.block_pointer);
+				}
+				string existing_blocks;
+				for(auto &block : result.existing_pointers) {
+					if (!existing_blocks.empty()) {
+						existing_blocks += ", ";
+					}
+					existing_blocks += to_string(block.block_pointer);
+				}
+
+				throw InternalException("%s\nStored blocks: %s\nActual blocks: %s\nRow group pointer %d", msg, extra_blocks, existing_blocks, uintptr_t(this));
+			}
+		}
 		return result;
 	}
 	auto &compression_types = writer.GetCompressionTypes();
@@ -1089,6 +1145,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 	row_group_pointer.row_start = start;
 	row_group_pointer.tuple_count = count;
 	if (!write_data.existing_pointers.empty()) {
+		throw InternalException("Re-use metadata state");
 		// we are re-using the previous metadata
 		row_group_pointer.data_pointers = column_pointers;
 		row_group_pointer.has_metadata_blocks = has_metadata_blocks;
@@ -1140,11 +1197,38 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		}
 		// this metadata block is not stored - add it to the extra metadata blocks
 		row_group_pointer.extra_metadata_blocks.push_back(column_pointer.block_pointer);
+		metadata_blocks.insert(column_pointer.block_pointer);
 	}
 	// set up the pointers correctly within this row group for future operations
 	column_pointers = row_group_pointer.data_pointers;
 	has_metadata_blocks = true;
 	extra_metadata_blocks = row_group_pointer.extra_metadata_blocks;
+	string column_metadata_txt;
+	for(auto &metadata : metadata_blocks) {
+		if (!column_metadata_txt.empty()) {
+			column_metadata_txt += ", ";
+		}
+		column_metadata_txt += to_string(metadata);
+	};
+	string extra_metadata_txt;
+	for(auto &metadata : extra_metadata_blocks) {
+		if (!extra_metadata_txt.empty()) {
+			extra_metadata_txt += ", ";
+		}
+		extra_metadata_txt += to_string(metadata);
+	}
+	string data_pointer_txt;
+	for(auto &metadata : row_group_pointer.data_pointers) {
+		if (!data_pointer_txt.empty()) {
+			data_pointer_txt += ", ";
+		}
+		data_pointer_txt += to_string(metadata.block_pointer);
+	}
+	Printer::Print("-- START -- ");
+	Printer::PrintF("Row group pointer: %d", uintptr_t(this));
+	Printer::PrintF("Row group pointers: %s", data_pointer_txt);
+	Printer::PrintF("Extra blocks: %s", extra_metadata_txt);
+	Printer::PrintF("Metadata blocks: %s", column_metadata_txt);
 
 	if (metadata_manager) {
 		row_group_pointer.deletes_pointers = CheckpointDeletes(*metadata_manager);

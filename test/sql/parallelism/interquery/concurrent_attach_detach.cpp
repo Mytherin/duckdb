@@ -464,35 +464,38 @@ void workUnit(std::unique_ptr<AttachWorker> worker) {
 
 TEST_CASE("Run a concurrent ATTACH/DETACH scenario", "[interquery][.]") {
 	test_dir_path = TestDirectoryPath();
-	DBPoolMgr db_pool;
-	DuckDB db(nullptr);
-	Connection init_conn(db);
+	for(idx_t i = 0; i < 100; i++) {
+		Printer::PrintF("Iteration %d", i);
+		DBPoolMgr db_pool;
+		DuckDB db(nullptr);
+		Connection init_conn(db);
 
-	execQuery(init_conn, "SET catalog_error_max_schemas = '0'");
-	execQuery(init_conn, "SET threads = '1'");
-	execQuery(init_conn, "SET storage_compatibility_version = 'latest'");
-	execQuery(init_conn, "CALL enable_logging()");
-	execQuery(init_conn, "PRAGMA enable_profiling='no_output'");
+		execQuery(init_conn, "SET catalog_error_max_schemas = '0'");
+		execQuery(init_conn, "SET threads = '1'");
+		execQuery(init_conn, "SET storage_compatibility_version = 'latest'");
+		execQuery(init_conn, "CALL enable_logging()");
+		execQuery(init_conn, "PRAGMA enable_profiling='no_output'");
 
-	logging.resize(worker_count);
-	vector<std::thread> workers;
-	for (idx_t i = 0; i < worker_count; i++) {
-		auto worker = make_uniq<AttachWorker>(db, i, logging[i], db_pool);
-		workers.emplace_back(workUnit, std::move(worker));
-	}
-
-	for (auto &worker : workers) {
-		worker.join();
-	}
-	if (!success) {
-		for (idx_t worker_id = 0; worker_id < logging.size(); worker_id++) {
-			for (auto &log : logging[worker_id]) {
-				Printer::PrintF("thread %d; %s", worker_id, log);
-			}
+		logging.resize(worker_count);
+		vector<std::thread> workers;
+		for (idx_t i = 0; i < worker_count; i++) {
+			auto worker = make_uniq<AttachWorker>(db, i, logging[i], db_pool);
+			workers.emplace_back(workUnit, std::move(worker));
 		}
-		FAIL();
+
+		for (auto &worker : workers) {
+			worker.join();
+		}
+		if (!success) {
+			for (idx_t worker_id = 0; worker_id < logging.size(); worker_id++) {
+				for (auto &log : logging[worker_id]) {
+					Printer::PrintF("thread %d; %s", worker_id, log);
+				}
+			}
+			FAIL();
+		}
+		ClearTestDirectory();
 	}
-	ClearTestDirectory();
 }
 
 } // anonymous namespace

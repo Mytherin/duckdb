@@ -1133,37 +1133,37 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 
 	// no errors - finalize the row groups
 	// if the table already exists on disk - check if all row groups have stayed the same
-	if (DBConfig::GetSetting<ExperimentalMetadataReuseSetting>(writer.GetDatabase()) && metadata_pointer.IsValid()) {
-		bool table_has_changes = false;
-		for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
-			auto &entry = segments[segment_idx];
-			if (!entry.node) {
-				table_has_changes = true;
-				break;
-			}
-			auto &write_state = checkpoint_state.write_data[segment_idx];
-			if (write_state.existing_pointers.empty()) {
-				table_has_changes = true;
-				break;
-			}
-		}
-		if (!table_has_changes) {
-			// table is unmodified and already exists on disk
-			// we can directly re-use the metadata pointer
-			// mark all blocks associated with row groups as still being in-use
-			auto &metadata_manager = writer.GetMetadataManager();
-			for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
-				auto &entry = segments[segment_idx];
-				auto &row_group = *entry.node;
-				auto &write_state = checkpoint_state.write_data[segment_idx];
-				metadata_manager.ClearModifiedBlocks(write_state.existing_pointers);
-				metadata_manager.ClearModifiedBlocks(row_group.GetDeletesPointers());
-				row_groups->AppendSegment(l, std::move(entry.node));
-			}
-			writer.WriteUnchangedTable(metadata_pointer, total_rows.load());
-			return;
-		}
-	}
+	// if (DBConfig::GetSetting<ExperimentalMetadataReuseSetting>(writer.GetDatabase()) && metadata_pointer.IsValid()) {
+	// 	bool table_has_changes = false;
+	// 	for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
+	// 		auto &entry = segments[segment_idx];
+	// 		if (!entry.node) {
+	// 			table_has_changes = true;
+	// 			break;
+	// 		}
+	// 		auto &write_state = checkpoint_state.write_data[segment_idx];
+	// 		if (write_state.existing_pointers.empty()) {
+	// 			table_has_changes = true;
+	// 			break;
+	// 		}
+	// 	}
+	// 	if (!table_has_changes) {
+	// 		// table is unmodified and already exists on disk
+	// 		// we can directly re-use the metadata pointer
+	// 		// mark all blocks associated with row groups as still being in-use
+	// 		auto &metadata_manager = writer.GetMetadataManager();
+	// 		for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
+	// 			auto &entry = segments[segment_idx];
+	// 			auto &row_group = *entry.node;
+	// 			auto &write_state = checkpoint_state.write_data[segment_idx];
+	// 			metadata_manager.ClearModifiedBlocks(write_state.existing_pointers);
+	// 			metadata_manager.ClearModifiedBlocks(row_group.GetDeletesPointers());
+	// 			row_groups->AppendSegment(l, std::move(entry.node));
+	// 		}
+	// 		writer.WriteUnchangedTable(metadata_pointer, total_rows.load());
+	// 		return;
+	// 	}
+	// }
 
 	idx_t new_total_rows = 0;
 	for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
