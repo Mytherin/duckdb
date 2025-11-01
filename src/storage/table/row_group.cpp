@@ -1022,21 +1022,21 @@ bool RowGroup::HasUnloadedDeletes() const {
 
 vector<MetaBlockPointer> RowGroup::GetColumnPointers() {
 	vector<MetaBlockPointer> result;
-	// if (has_metadata_blocks) {
-	// 	// we have the column metadata from the file itself - no need to deserialize metadata to fetch it
-	// 	// read if from "column_pointers" and "extra_metadata_blocks"
-	// 	for(auto block : column_pointers) {
-	// 		block.offset = 0;
-	// 		if (std::find(result.begin(), result.end(), block) != result.end()) {
-	// 			continue;
-	// 		}
-	// 		result.push_back(block);
-	// 	}
-	// 	for (auto &block_pointer : extra_metadata_blocks) {
-	// 		result.emplace_back(block_pointer, 0);
-	// 	}
-	// 	return result;
-	// }
+	if (has_metadata_blocks) {
+		// we have the column metadata from the file itself - no need to deserialize metadata to fetch it
+		// read if from "column_pointers" and "extra_metadata_blocks"
+		for(auto block : column_pointers) {
+			block.offset = 0;
+			if (std::find(result.begin(), result.end(), block) != result.end()) {
+				continue;
+			}
+			result.push_back(block);
+		}
+		for (auto &block_pointer : extra_metadata_blocks) {
+			result.emplace_back(block_pointer, 0);
+		}
+		return result;
+	}
 	if (column_pointers.empty()) {
 		// no pointers
 		return result;
@@ -1055,8 +1055,28 @@ vector<MetaBlockPointer> RowGroup::GetColumnPointers() {
 	}
 	// for the last column we need to deserialize the column - because we don't know where it stops
 	auto &types = GetCollection().GetTypes();
-	MetadataReader reader(metadata_manager, column_pointers[last_idx], &result);
+	vector<MetaBlockPointer> extra_result;
+	MetadataReader reader(metadata_manager, column_pointers[last_idx], &extra_result);
 	ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), last_idx, start, reader, types[last_idx]);
+
+	string result_txt;
+	for(auto &metadata : result) {
+		if (!result_txt.empty()) {
+			result_txt += ", ";
+		}
+		result_txt += to_string(metadata.block_pointer);
+	};
+	string extra_result_txt;
+	for(auto &metadata : extra_result) {
+		if (!extra_result_txt.empty()) {
+			extra_result_txt += ", ";
+		}
+		extra_result_txt += to_string(metadata.block_pointer);
+	}
+	Printer::PrintF("-- GetColumnPointers() START -- \nRow group pointer: %d\nBlocks found through GetRemainingBlocks: %s\nBlocks found through deserializing last column: %s", uintptr_t(this), result_txt, extra_result_txt);
+
+
+	result.insert(result.end(), extra_result.begin(), extra_result.end());
 	return result;
 }
 
@@ -1145,7 +1165,6 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 	row_group_pointer.row_start = start;
 	row_group_pointer.tuple_count = count;
 	if (!write_data.existing_pointers.empty()) {
-		throw InternalException("Re-use metadata state");
 		// we are re-using the previous metadata
 		row_group_pointer.data_pointers = column_pointers;
 		row_group_pointer.has_metadata_blocks = has_metadata_blocks;
