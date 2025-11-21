@@ -209,7 +209,7 @@ string CheckpointLogType::CreateLog(const AttachedDatabase &db, DataTableInfo &t
 
 string CheckpointLogType::ConstructLogMessage(const AttachedDatabase &db, const CheckpointOptions &options) {
 	string checkpoint_type;
-	switch(options.type) {
+	switch (options.type) {
 	case CheckpointType::CONCURRENT_CHECKPOINT:
 		checkpoint_type = "concurrent checkpoint";
 		break;
@@ -230,11 +230,11 @@ string CheckpointLogType::ConstructLogMessage(const AttachedDatabase &db, const 
 	}
 
 	child_list_t<Value> child_list = {
-		{"database", db.name},
-		{"schema", string()},
-		{"table", string()},
-		{"type", std::move(checkpoint_type)},
-		{"info", Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, std::move(map_keys), std::move(map_values))},
+	    {"database", db.name},
+	    {"schema", string()},
+	    {"table", string()},
+	    {"type", std::move(checkpoint_type)},
+	    {"info", Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, std::move(map_keys), std::move(map_values))},
 	};
 
 	return Value::STRUCT(std::move(child_list)).ToString();
