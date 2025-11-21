@@ -21,6 +21,7 @@ class AttachedDatabase;
 class RowGroup;
 struct DataTableInfo;
 enum class MetricsType : uint8_t;
+struct CheckpointOptions;
 
 //! Log types provide some structure to the formats that the different log messages can have
 //! For now, this holds a type that the VARCHAR value will be auto-cast into.
@@ -130,10 +131,12 @@ public:
 
 	static LogicalType GetLogType();
 
+	//! Begin checkpoint
+	static string ConstructLogMessage(const AttachedDatabase &db, const CheckpointOptions &options);
 	//! Vacuum
 	static string ConstructLogMessage(const AttachedDatabase &db, DataTableInfo &table, idx_t segment_idx,
 	                                  idx_t merge_count, idx_t target_count, idx_t merge_rows, idx_t row_start);
-	//! Checkpoint
+	//! Checkpoint row group
 	static string ConstructLogMessage(const AttachedDatabase &db, DataTableInfo &table, idx_t segment_idx,
 	                                  RowGroup &row_group, idx_t row_group_start);
 

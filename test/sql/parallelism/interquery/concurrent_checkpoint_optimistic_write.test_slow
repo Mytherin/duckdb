@@ -1,0 +1,48 @@
+
+load __TEST_DIR__/concurrent_read_checkpoint_overwrite.db
+
+statement ok
+CREATE TABLE big_tbl AS FROM range(10_000_000) t(i);
+
+statement ok
+CHECKPOINT
+
+restart
+
+statement ok
+SET threads=1
+
+statement ok
+SET checkpoint_threshold='1TB'
+
+mode output_result
+
+statement ok
+CALL enable_logging()
+
+statement ok
+set logging_level='debug'
+
+statement ok
+DELETE FROM big_tbl WHERE i%2=0 OR i//3=0
+
+concurrentloop threadid 0 2
+
+onlyif threadid=0
+statement ok
+CHECKPOINT
+
+onlyif threadid=0
+statement ok
+INSERT INTO big_tbl SELECT random()::BIGINT FROM range(10_000_000);
+
+onlyif threadid>0
+statement ok
+SELECT COUNT(*), SUM(i), SUM(sleep_ms(case when i%943=0 then 1 else 0 end)), SUM(case when i%943=0 then 1 else 0 end) FROM big_tbl
+
+endloop
+
+mode output_result
+
+statement ok
+FROM duckdb_logs();

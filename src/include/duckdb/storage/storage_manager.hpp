@@ -56,6 +56,7 @@ struct CheckpointOptions {
 	CheckpointWALAction wal_action;
 	CheckpointAction action;
 	CheckpointType type;
+	string type_reason;
 };
 
 //! StorageManager is responsible for managing the physical storage of a persistent database.

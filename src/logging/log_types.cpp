@@ -6,6 +6,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
 
@@ -201,6 +202,39 @@ string CheckpointLogType::CreateLog(const AttachedDatabase &db, DataTableInfo &t
 	    {"table", table.GetTableName()},
 	    {"type", op_name},
 	    {"info", Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, std::move(map_keys), std::move(map_values))},
+	};
+
+	return Value::STRUCT(std::move(child_list)).ToString();
+}
+
+string CheckpointLogType::ConstructLogMessage(const AttachedDatabase &db, const CheckpointOptions &options) {
+	string checkpoint_type;
+	switch(options.type) {
+	case CheckpointType::CONCURRENT_CHECKPOINT:
+		checkpoint_type = "concurrent checkpoint";
+		break;
+	case CheckpointType::FULL_CHECKPOINT:
+		checkpoint_type = "full checkpoint";
+		break;
+	case CheckpointType::VACUUM_ONLY:
+		checkpoint_type = "vacuum only";
+		break;
+	default:
+		throw InternalException("Unknown checkpoint type");
+	}
+	vector<Value> map_keys;
+	vector<Value> map_values;
+	if (!options.type_reason.empty()) {
+		map_keys.push_back("type_reason");
+		map_values.push_back(options.type_reason);
+	}
+
+	child_list_t<Value> child_list = {
+		{"database", db.name},
+		{"schema", string()},
+		{"table", string()},
+		{"type", std::move(checkpoint_type)},
+		{"info", Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, std::move(map_keys), std::move(map_values))},
 	};
 
 	return Value::STRUCT(std::move(child_list)).ToString();

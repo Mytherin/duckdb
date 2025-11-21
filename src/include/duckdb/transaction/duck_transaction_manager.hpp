@@ -75,7 +75,7 @@ public:
 protected:
 	struct CheckpointDecision {
 		explicit CheckpointDecision(string reason_p);
-		explicit CheckpointDecision(CheckpointType type);
+		explicit CheckpointDecision(CheckpointType type, string reason_p);
 		~CheckpointDecision();
 
 		bool can_checkpoint;

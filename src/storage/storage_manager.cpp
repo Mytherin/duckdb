@@ -528,6 +528,7 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 				profiler->StartTimer(MetricsType::CHECKPOINT_LATENCY);
 			}
 
+			DUCKDB_LOG(GetDatabase(), CheckpointLogType, GetAttached(), options);
 			// Write the checkpoint.
 			auto checkpointer = CreateCheckpointWriter(context, options);
 			checkpointer->CreateCheckpoint();

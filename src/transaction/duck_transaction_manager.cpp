@@ -93,7 +93,7 @@ DuckTransactionManager::CheckpointDecision::CheckpointDecision(string reason_p)
     : can_checkpoint(false), reason(std::move(reason_p)) {
 }
 
-DuckTransactionManager::CheckpointDecision::CheckpointDecision(CheckpointType type) : can_checkpoint(true), type(type) {
+DuckTransactionManager::CheckpointDecision::CheckpointDecision(CheckpointType type, string reason_p = string()) : can_checkpoint(true), type(type), reason(std::move(reason_p)) {
 }
 
 DuckTransactionManager::CheckpointDecision::~CheckpointDecision() {
@@ -132,6 +132,7 @@ DuckTransactionManager::CanCheckpoint(DuckTransaction &transaction, unique_ptr<S
 			break;
 		}
 	}
+	string reason;
 	if (has_other_transactions) {
 		if (undo_properties.has_updates || undo_properties.has_dropped_entries) {
 			// if we have made updates/catalog changes in this transaction we cannot checkpoint
@@ -164,14 +165,15 @@ DuckTransactionManager::CanCheckpoint(DuckTransaction &transaction, unique_ptr<S
 		}
 		// otherwise - we need to do a concurrent checkpoint
 		checkpoint_type = CheckpointType::CONCURRENT_CHECKPOINT;
+		reason = "Other transactions active - avoid vacuuming";
 	}
 	if (storage_manager.InMemory() && !storage_manager.CompressionIsEnabled()) {
 		if (checkpoint_type == CheckpointType::CONCURRENT_CHECKPOINT) {
 			return CheckpointDecision("Cannot vacuum, and compression is disabled for in-memory table");
 		}
-		return CheckpointDecision(CheckpointType::VACUUM_ONLY);
+		return CheckpointDecision(CheckpointType::VACUUM_ONLY, "in-memory table with compression disabled - can only vacuum");
 	}
-	return CheckpointDecision(checkpoint_type);
+	return CheckpointDecision(checkpoint_type, std::move(reason));
 }
 
 void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
@@ -216,8 +218,8 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 	if (GetLastCommit() > LowestActiveStart()) {
 		// we cannot do a full checkpoint if any transaction needs to read old data
 		options.type = CheckpointType::CONCURRENT_CHECKPOINT;
+		options.type_reason = StringUtil::Format("Transaction with start transaction id %d is active, which needs data that is not part of the last commit (transaction id %d)", LowestActiveStart(), GetLastCommit());
 	}
-
 	storage_manager.CreateCheckpoint(context, options);
 }
 
@@ -357,6 +359,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		CheckpointOptions options;
 		options.action = CheckpointAction::ALWAYS_CHECKPOINT;
 		options.type = checkpoint_decision.type;
+		options.type_reason = std::move(checkpoint_decision.reason);
 		auto &storage_manager = db.GetStorageManager();
 		try {
 			storage_manager.CreateCheckpoint(context, options);
