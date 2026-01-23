@@ -90,6 +90,10 @@ FileType VirtualFileSystem::GetFileType(FileHandle &handle) {
 	return handle.file_system.GetFileType(handle);
 }
 
+optional_idx VirtualFileSystem::GetFileDescriptor(const FileHandle &handle) {
+	return handle.file_system.GetFileDescriptor(handle);
+}
+
 void VirtualFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	handle.file_system.Truncate(handle, new_size);
 }

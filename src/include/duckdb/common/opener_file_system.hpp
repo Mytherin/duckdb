@@ -62,6 +62,9 @@ public:
 	FileType GetFileType(FileHandle &handle) override {
 		return GetFileSystem().GetFileType(handle);
 	}
+	optional_idx GetFileDescriptor(const FileHandle &handle) override {
+		return GetFileSystem().GetFileDescriptor(handle);
+	}
 
 	void Truncate(FileHandle &handle, int64_t new_size) override {
 		GetFileSystem().Truncate(handle, new_size);
