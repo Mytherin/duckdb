@@ -497,11 +497,9 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 		dopen_from = "/proc/self/fd/" + to_string(fd.GetIndex());
 	}
 #endif
-	dopen_from = filename;
 	if (dopen_from.empty()) {
 		dopen_from = filename;
 	}
-	Printer::PrintF("dlopen extension %s", dopen_from.c_str());
 
 	auto lib_hdl = dlopen(dopen_from.c_str(), RTLD_NOW | RTLD_LOCAL);
 	if (!lib_hdl) {
