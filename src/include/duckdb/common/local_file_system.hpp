@@ -46,6 +46,9 @@ public:
 	//! the file
 	void Truncate(FileHandle &handle, int64_t new_size) override;
 
+	//! Retrieve the file descriptor, if we have any
+	optional_idx GetFileDescriptor(const FileHandle &handle) override;
+
 	//! Check if a directory exists
 	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener = nullptr) override;
 	//! Create a directory if it does not exist

@@ -81,6 +81,7 @@ public:
 	DUCKDB_API string ReadLine(QueryContext context);
 	DUCKDB_API bool Trim(idx_t offset_bytes, idx_t length_bytes);
 	DUCKDB_API virtual idx_t GetProgress();
+	DUCKDB_API optional_idx GetFileDescriptor() const;
 	DUCKDB_API virtual FileCompressionType GetFileCompressionType();
 
 	DUCKDB_API bool CanSeek();
@@ -149,6 +150,9 @@ public:
 	//! Excise a range of the file. The OS can drop pages from the page-cache, and the file-system is free to deallocate
 	//! this range (sparse file support). Reads to the range will succeed but will return undefined data.
 	DUCKDB_API virtual bool Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_bytes);
+
+	//! Retrieve the file descriptor, if we have any
+	DUCKDB_API virtual optional_idx GetFileDescriptor(const FileHandle &handle);
 
 	//! Returns the file size of a file handle, returns -1 on error
 	DUCKDB_API virtual int64_t GetFileSize(FileHandle &handle);

@@ -606,6 +606,14 @@ void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	}
 }
 
+optional_idx LocalFileSystem::GetFileDescriptor(const FileHandle &handle) {
+	int fd = handle.Cast<UnixFileHandle>().fd;
+	if (fd >= 0) {
+		return fd;
+	}
+	return optional_idx();
+}
+
 bool LocalFileSystem::DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) {
 	if (!directory.empty()) {
 		auto normalized_dir = NormalizeLocalPath(directory);
@@ -1135,6 +1143,10 @@ void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 		auto error = LocalFileSystem::GetLastErrorAsString();
 		throw IOException("Failure in SetEndOfFile call on file \"%s\": %s", handle.path, error);
 	}
+}
+
+optional_idx LocalFileSystem::GetFileDescriptor(const FileHandle &handle) {
+	return optional_idx();
 }
 
 static DWORD WindowsGetFileAttributes(const string &filename) {

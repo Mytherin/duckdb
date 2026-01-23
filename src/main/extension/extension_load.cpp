@@ -471,6 +471,7 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 
 	auto filebase = fs.ExtractBaseName(filename);
 
+	string dopen_from;
 #ifdef WASM_LOADABLE_EXTENSIONS
 	EM_ASM(
 	    {
@@ -488,10 +489,19 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 		    FS.writeFile(UTF8ToString($1), new Uint8Array(uInt8Array));
 	    },
 	    filename.c_str(), filebase.c_str());
-	auto dopen_from = filebase;
-#else
-	auto dopen_from = filename;
+	dopen_from = filebase;
 #endif
+#ifdef __linux__
+	auto fd = handle->GetFileDescriptor();
+	if (fd.IsValid()) {
+		dopen_from = "/proc/self/fd/" + to_string(fd.GetIndex());
+	}
+#endif
+	dopen_from = filename;
+	if (dopen_from.empty()) {
+		dopen_from = filename;
+	}
+	Printer::PrintF("dlopen extension %s", dopen_from.c_str());
 
 	auto lib_hdl = dlopen(dopen_from.c_str(), RTLD_NOW | RTLD_LOCAL);
 	if (!lib_hdl) {

@@ -437,6 +437,10 @@ bool FileSystem::Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_bytes
 	return false;
 }
 
+optional_idx FileSystem::GetFileDescriptor(const FileHandle &handle) {
+	return optional_idx();
+}
+
 int64_t FileSystem::GetFileSize(FileHandle &handle) {
 	throw NotImplementedException("%s: GetFileSize is not implemented!", GetName());
 }
@@ -828,6 +832,10 @@ void FileHandle::TryAddLogger(FileOpener &opener) {
 
 idx_t FileHandle::GetProgress() {
 	throw NotImplementedException("GetProgress is not implemented for this file handle");
+}
+
+optional_idx FileHandle::GetFileDescriptor() const {
+	return file_system.GetFileDescriptor(*this);
 }
 
 bool FileSystem::IsRemoteFile(const string &path) {
