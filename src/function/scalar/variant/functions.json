@@ -58,5 +58,15 @@
 			"variant"
 		],
 		"type": "scalar_function"
+	},
+	{
+		"name": "parse_variant",
+		"parameters": "string,type",
+		"description": "Parses a string to a variant with the specified internal type.",
+		"example": "parse_variant('42', 'int')",
+		"categories": [
+			"variant"
+		],
+		"type": "scalar_function"
 	}
 ]

@@ -45,4 +45,14 @@ struct VariantTypeofFun {
 	static ScalarFunction GetFunction();
 };
 
+struct ParseVariantFun {
+	static constexpr const char *Name = "parse_variant";
+	static constexpr const char *Parameters = "string,type";
+	static constexpr const char *Description = "Parses a string to a variant with the specified internal type.";
+	static constexpr const char *Example = "parse_variant('42', 'int')";
+	static constexpr const char *Categories = "variant";
+
+	static ScalarFunction GetFunction();
+};
+
 } // namespace duckdb

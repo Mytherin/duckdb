@@ -1,0 +1,39 @@
+# name: test/sql/function/variant/parse_variant.test
+# group: [variant]
+
+query II
+select v, variant_typeof(v) from (select parse_variant('42', 'int') v);
+----
+42	INT32
+
+query IIII
+select v, variant_typeof(v), v.x, v.y from (select parse_variant('{"x": 42, "y": 84}', 'struct(x int, y int)') v);
+----
+{'x': 42, 'y': 84}	OBJECT(x, y)	42	84
+
+# nulls
+query II
+select parse_variant(NULL, 'int'), parse_variant('42', NULL);
+----
+NULL	NULL
+
+# dynamic casting
+statement ok
+CREATE TABLE variant_tbl(variant_value VARCHAR, type VARCHAR);
+
+statement ok
+INSERT INTO variant_tbl VALUES
+	('42', 'INT'),
+	('{"field": "string value"}', 'STRUCT(field VARCHAR)'),
+	('hello world', 'VARCHAR'),
+	('[1, 2, 3]', 'INT[]');
+
+
+query II
+select v, variant_typeof(v)
+FROM (SELECT parse_variant(variant_value, type) v FROM variant_tbl)
+----
+42	INT32
+{'field': string value}	OBJECT(field)
+hello world	VARCHAR
+[1, 2, 3]	ARRAY(3)
