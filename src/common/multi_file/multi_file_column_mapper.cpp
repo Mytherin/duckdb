@@ -520,6 +520,56 @@ ColumnMapResult MapColumnStruct(ClientContext &context, const MultiFileColumnDef
 	return result;
 }
 
+static bool TryPushdownExtract(const MultiFileColumnDefinition &local_column, const ColumnIndex &global_index, ColumnMapResult &result, ColumnIndex &result_index) {
+	// first find "typed_value"
+	optional_idx typed_value_idx;
+	for(idx_t i = 0; i < local_column.children.size(); i++) {
+		if (local_column.children[i].name == "typed_value") {
+			typed_value_idx = i;
+			break;
+		}
+	}
+	if (!typed_value_idx.IsValid()) {
+		// no "typed_value"
+		return false;
+	}
+	// find the field name
+	auto &typed_value = local_column.children[typed_value_idx.GetIndex()];
+	auto &target_field = global_index.GetFieldName();
+	for(idx_t child_idx = 0; child_idx < typed_value.children.size(); child_idx++) {
+		auto &child = typed_value.children[child_idx];
+		if (child.name == target_field) {
+			// found the field! either recurse or push the extract
+			if (global_index.HasChildren()) {
+				throw InternalException("FIXME: recurse");
+			}
+			// found the final field - get the "typed_value"
+			for(idx_t type_idx = 0; type_idx < child.children.size(); type_idx++) {
+				auto &typed_child = child.children[type_idx];
+				if (typed_child.name == "typed_value") {
+					// found the typed value
+					if (typed_child.type != global_index.GetType()) {
+						throw InternalException("Type mismatch in field pushdown");
+					}
+					ColumnIndex typed_value_index(typed_value_idx.GetIndex());
+					ColumnIndex child_index(child_idx);
+					ColumnIndex type_index(type_idx);
+
+					child_index.AddChildIndex(std::move(type_index));
+					typed_value_index.AddChildIndex(std::move(child_index));
+					result_index.AddChildIndex(std::move(typed_value_index));
+	
+					result.local_column = typed_child;
+					return true;
+				}
+			}
+			// no typed_value?
+			return false;
+		}
+	}
+	return false;
+}
+
 static ColumnMapResult MapColumn(ClientContext &context, const MultiFileColumnDefinition &global_column,
                                  const ColumnIndex &global_index,
                                  const vector<MultiFileColumnDefinition> &local_columns, const ColumnMapper &mapper,
@@ -546,6 +596,19 @@ static ColumnMapResult MapColumn(ClientContext &context, const MultiFileColumnDe
 	}
 
 	mapping = make_uniq<MultiFileIndexMapping>(mapping_idx);
+	if (global_index.IsPushdownExtract()) {
+		if (local_column.type.id() != LogicalTypeId::VARIANT) {
+			throw InternalException("Pushdown extract is only supported for variants");
+		}
+		// try to perform the pushdown extract on the type
+		auto local_column_idx = make_uniq<ColumnIndex>(local_id.GetId());
+		if (!TryPushdownExtract(local_column, global_index.GetChildIndex(0), result, *local_column_idx)) {
+			throw InternalException("Failed pushdown extract");
+		}
+		result.column_index = std::move(local_column_idx);
+		result.mapping = std::move(mapping);
+		return result;
+	}
 	if (global_column.children.empty()) {
 		// not a struct - map the column directly
 		result.column_map = Value(local_column.name);
@@ -693,6 +756,9 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 		const auto &global_column =
 		    global_column_reference ? *global_column_reference : global_columns[global_column_id];
 		if (reader.UseCastMap()) {
+			if (global_id.IsPushdownExtract()) {
+				throw InternalException("Pushdown extract is not supported for cast maps");
+			}
 			// reader is responsible for converting types - perform a top-level match only
 			auto entry = mapper.Find(global_column);
 			if (!entry.IsValid()) {

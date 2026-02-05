@@ -664,6 +664,10 @@ public:
 		} while (true);
 	}
 
+	static unique_ptr<BaseStatistics> MultiFileScanStatsExtended(ClientContext &context, TableFunctionGetStatisticsInput &input) {
+		return MultiFileScanStats(context, input.bind_data.get(), input.column_index.GetPrimaryIndex());
+	}
+
 	static unique_ptr<BaseStatistics> MultiFileScanStats(ClientContext &context, const FunctionData *bind_data_p,
 	                                                     column_t column_index) {
 		auto &bind_data = bind_data_p->Cast<MultiFileBindData>();

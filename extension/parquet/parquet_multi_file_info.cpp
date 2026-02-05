@@ -6,6 +6,8 @@
 #include "parquet_crypto.hpp"
 #include "duckdb/function/table_function.hpp"
 
+#include <duckdb/optimizer/remove_unused_columns.hpp>
+
 namespace duckdb {
 
 struct ParquetReadBindData : public TableFunctionData {
@@ -312,6 +314,14 @@ static vector<PartitionStatistics> ParquetGetPartitionStats(ClientContext &conte
 	return result;
 }
 
+static bool ParquetSupportsPushdownExtract(const FunctionData &bind_data_ref, const LogicalIndex &column_idx) {
+	auto &bind_data = bind_data_ref.Cast<MultiFileBindData>();
+	if (bind_data.types[column_idx.index].id() == LogicalTypeId::VARIANT) {
+		return true;
+	}
+	return false;
+}
+
 TableFunctionSet ParquetScanFunction::GetFunctionSet() {
 	MultiFileFunction<ParquetMultiFileInfo> table_function("parquet_scan");
 	table_function.named_parameters["binary_as_string"] = LogicalType::BOOLEAN;
@@ -323,7 +333,7 @@ TableFunctionSet ParquetScanFunction::GetFunctionSet() {
 	table_function.named_parameters["encryption_config"] = LogicalTypeId::ANY;
 	table_function.named_parameters["parquet_version"] = LogicalType::VARCHAR;
 	table_function.named_parameters["can_have_nan"] = LogicalType::BOOLEAN;
-	table_function.statistics = MultiFileFunction<ParquetMultiFileInfo>::MultiFileScanStats;
+	table_function.statistics_extended = MultiFileFunction<ParquetMultiFileInfo>::MultiFileScanStatsExtended;
 	table_function.serialize = ParquetScanSerialize;
 	table_function.deserialize = ParquetScanDeserialize;
 	table_function.get_row_id_columns = ParquetGetRowIdColumns;
@@ -332,6 +342,7 @@ TableFunctionSet ParquetScanFunction::GetFunctionSet() {
 	table_function.filter_pushdown = true;
 	table_function.filter_prune = true;
 	table_function.late_materialization = true;
+	table_function.supports_pushdown_extract = ParquetSupportsPushdownExtract;
 
 	return MultiFileReader::CreateFunctionSet(static_cast<TableFunction>(table_function));
 }
