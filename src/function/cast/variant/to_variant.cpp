@@ -99,6 +99,35 @@ static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParam
 	if (!count) {
 		return true;
 	}
+	if (source.GetType().id() == LogicalTypeId::BIGINT) {
+		// cast to shredded variant
+		auto shredded_type = VariantUtils::ShreddedType(source.GetType());
+		Vector shredded_vector(shredded_type, MaxValue<idx_t>(count, STANDARD_VECTOR_SIZE));
+
+		auto &top_shredded = StructVector::GetEntries(shredded_vector);
+		// NULL out everything in the unshredded part
+		auto &unshredded_child = *top_shredded[0];
+		for (auto &unshredded_entry : StructVector::GetEntries(unshredded_child)) {
+			unshredded_entry->SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(*unshredded_entry, true);
+		}
+		unshredded_child.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(unshredded_child, true);
+		// handle the shredded part
+		auto &shredded_child = *top_shredded[1];
+		auto &shredded_components = StructVector::GetEntries(shredded_child);
+		// untyped_value_index is all NULL
+		auto &untyped_value_index = *shredded_components[0];
+		untyped_value_index.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(untyped_value_index, true);
+
+		// reference the input directly
+		auto &typed_value = *shredded_components[1];
+		typed_value.Reference(source);
+
+		result.Shred(shredded_vector);
+		return true;
+	}
 	DataChunk offsets;
 	offsets.Initialize(Allocator::DefaultAllocator(),
 	                   {LogicalType::UINTEGER, LogicalType::UINTEGER, LogicalType::UINTEGER, LogicalType::UINTEGER},

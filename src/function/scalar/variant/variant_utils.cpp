@@ -6,6 +6,8 @@
 #include "duckdb/common/serializer/varint.hpp"
 #include "duckdb/common/types/variant_visitor.hpp"
 #include "duckdb/function/variant/variant_value_convert.hpp"
+#include "duckdb/common/type_visitor.hpp"
+#include "duckdb/function/variant/variant_shredding.hpp"
 
 namespace duckdb {
 
@@ -349,6 +351,13 @@ bool VariantUtils::Verify(Vector &variant, const SelectionVector &sel_p, idx_t c
 	}
 
 	return true;
+}
+
+LogicalType VariantUtils::ShreddedType(const LogicalType &logical_type) {
+	auto shredding_type = TypeVisitor::VisitReplace(logical_type, [](const LogicalType &type) {
+		return LogicalType::STRUCT({{"untyped_value_index", LogicalType::UINTEGER}, {"typed_value", type}});
+	});
+	return LogicalType::STRUCT({{"unshredded", VariantShredding::GetUnshreddedType()}, {"shredded", shredding_type}});
 }
 
 } // namespace duckdb

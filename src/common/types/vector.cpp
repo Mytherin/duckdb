@@ -3102,6 +3102,7 @@ void ShreddedVector::Unshred(Vector &vec, idx_t count) {
 }
 
 void ShreddedVector::Unshred(Vector &vec, const SelectionVector &sel, idx_t count) {
+	VerifyShreddedVector(vec);
 	// slice the underlying shredded buffer
 	auto &shredded_buffer = vec.buffer->Cast<ShreddedVectorBuffer>();
 	Vector sliced_shredded_buffer(shredded_buffer.GetChild(), sel, count);
@@ -3109,6 +3110,14 @@ void ShreddedVector::Unshred(Vector &vec, const SelectionVector &sel, idx_t coun
 	Vector unshredded_vector(LogicalType::VARIANT());
 	VariantUtils::UnshredVariantData(sliced_shredded_buffer, unshredded_vector, count);
 	vec.Reference(unshredded_vector);
+}
+
+bool ShreddedVector::IsFullyShredded(Vector &vec) {
+	auto &unshredded_vector = GetUnshreddedVector(vec);
+	if (ConstantVector::IsNull(unshredded_vector)) {
+		return true;
+	}
+	return false;
 }
 
 } // namespace duckdb

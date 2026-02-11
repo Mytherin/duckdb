@@ -663,6 +663,20 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 }
 
 static bool CastFromVARIANT(Vector &variant_vec, Vector &result, idx_t count, CastParameters &parameters) {
+	if (variant_vec.GetVectorType() == VectorType::SHREDDED_VECTOR && result.GetType().id() == LogicalTypeId::BIGINT) {
+		// if this is fully shredded we can directly extract the full entry
+		if (ShreddedVector::IsFullyShredded(variant_vec)) {
+			auto &shredded_vec = ShreddedVector::GetShreddedVector(variant_vec);
+			auto &shredded_entries = StructVector::GetEntries(shredded_vec);
+			// check if this is a top-level bigint
+			if (shredded_entries[1]->GetType().id() == LogicalTypeId::BIGINT) {
+				result.Reference(*shredded_entries[1]);
+				return true;
+			}
+		}
+		// fallback to conversion
+	}
+
 	D_ASSERT(variant_vec.GetType().id() == LogicalTypeId::VARIANT);
 	RecursiveUnifiedVectorFormat variant_format;
 	Vector::RecursiveToUnifiedFormat(variant_vec, count, variant_format);
