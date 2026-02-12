@@ -99,6 +99,7 @@ static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParam
 	if (!count) {
 		return true;
 	}
+	bool is_constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR && count == 1;
 	if (source.GetType().id() == LogicalTypeId::BIGINT) {
 		// cast to shredded variant
 		auto shredded_type = VariantUtils::ShreddedType(source.GetType());
@@ -126,6 +127,10 @@ static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParam
 		typed_value.Reference(source);
 
 		result.Shred(shredded_vector);
+		if (is_constant) {
+			result.Flatten(1);
+			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		}
 		return true;
 	}
 	DataChunk offsets;
