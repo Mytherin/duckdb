@@ -185,13 +185,11 @@ DistinctCountInfo BaseStatistics::GetDistinctCount() const {
 	// we don't have a distinct count
 	if (GetStatsType(type) == StatisticsType::NUMERIC_STATS) {
 		// for numeric stats we can get an upper bound of distinct values through max - min
-		if (NumericStats::HasMinMax(*this)) {
-			auto opt_range = NumericStats::TryGetRange(*this);
-			if (opt_range.IsValid()) {
-				result.type = DistinctCountType::UPPER_BOUND;
-				result.distinct_count = opt_range.GetIndex();
-				return result;
-			}
+		auto opt_range = NumericStats::TryGetRange(*this);
+		if (opt_range.IsValid()) {
+			result.type = DistinctCountType::UPPER_BOUND;
+			result.distinct_count = opt_range.GetIndex();
+			return result;
 		}
 	}
 	// no distinct count
