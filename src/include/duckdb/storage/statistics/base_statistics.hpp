@@ -46,6 +46,13 @@ enum class StatisticsType : uint8_t {
 	VARIANT_STATS
 };
 
+enum class DistinctCountType { UNKNOWN, APPROXIMATE_DISTINCT, UPPER_BOUND };
+
+struct DistinctCountInfo {
+	DistinctCountType type = DistinctCountType::UNKNOWN;
+	optional_idx distinct_count;
+};
+
 class BaseStatistics {
 	friend struct NumericStats;
 	friend struct StringStats;
@@ -123,7 +130,7 @@ public:
 
 	string ToString() const;
 
-	idx_t GetDistinctCount();
+	DistinctCountInfo GetDistinctCount() const;
 	static BaseStatistics FromConstant(const Value &input);
 
 	template <class T>

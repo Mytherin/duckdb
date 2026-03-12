@@ -174,8 +174,28 @@ void BaseStatistics::Merge(const BaseStatistics &other) {
 	}
 }
 
-idx_t BaseStatistics::GetDistinctCount() {
-	return distinct_count;
+DistinctCountInfo BaseStatistics::GetDistinctCount() const {
+	DistinctCountInfo result;
+	if (distinct_count > 0) {
+		// we have an approx distinct count - return it
+		result.type = DistinctCountType::APPROXIMATE_DISTINCT;
+		result.distinct_count = distinct_count;
+		return result;
+	}
+	// we don't have a distinct count
+	if (GetStatsType(type) == StatisticsType::NUMERIC_STATS) {
+		// for numeric stats we can get an upper bound of distinct values through max - min
+		if (NumericStats::HasMinMax(*this)) {
+			auto opt_range = NumericStats::TryGetRange(*this);
+			if (opt_range.IsValid()) {
+				result.type = DistinctCountType::UPPER_BOUND;
+				result.distinct_count = opt_range.GetIndex();
+				return result;
+			}
+		}
+	}
+	// no distinct count
+	return result;
 }
 
 BaseStatistics BaseStatistics::CreateUnknownType(LogicalType type) {

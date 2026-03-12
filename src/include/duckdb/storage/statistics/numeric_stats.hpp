@@ -53,6 +53,8 @@ struct NumericStats {
 	DUCKDB_API static void SetMin(BaseStatistics &stats, const Value &val);
 	//! Sets the max value of the statistics
 	DUCKDB_API static void SetMax(BaseStatistics &stats, const Value &val);
+	//! Try to get the total range (max - min) from numeric stats
+	DUCKDB_API static optional_idx TryGetRange(const BaseStatistics &stats);
 
 	template <class T>
 	static void SetMax(BaseStatistics &stats, T val) {

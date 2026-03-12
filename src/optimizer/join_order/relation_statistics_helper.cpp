@@ -59,10 +59,10 @@ static ExpressionBinding GetChildColumnBinding(Expression &expr) {
 	return ret;
 }
 
-idx_t RelationStatisticsHelper::GetDistinctCount(LogicalGet &get, ClientContext &context,
-                                                 const ColumnIndex &column_id) {
+DistinctCountInfo RelationStatisticsHelper::GetDistinctCount(LogicalGet &get, ClientContext &context,
+                                                             const ColumnIndex &column_id) {
 	if (!get.function.statistics && !get.function.statistics_extended) {
-		return 0;
+		return DistinctCountInfo();
 	}
 	unique_ptr<BaseStatistics> column_statistics;
 	if (get.function.statistics_extended) {
@@ -73,10 +73,9 @@ idx_t RelationStatisticsHelper::GetDistinctCount(LogicalGet &get, ClientContext 
 		column_statistics = get.function.statistics(context, get.bind_data.get(), column_id.GetPrimaryIndex());
 	}
 	if (!column_statistics) {
-		return 0;
+		return DistinctCountInfo();
 	}
-	auto distinct_count = column_statistics->GetDistinctCount();
-	return distinct_count;
+	return column_statistics->GetDistinctCount();
 }
 
 RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientContext &context) {
@@ -97,13 +96,22 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 	auto &column_ids = get.GetColumnIds();
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto column_id = column_ids[i].GetPrimaryIndex();
-		auto distinct_count = GetDistinctCount(get, context, column_ids[i]);
-		if (distinct_count > 0) {
+		auto distinct_info = GetDistinctCount(get, context, column_ids[i]);
+		if (distinct_info.distinct_count.IsValid()) {
+			// we have a distinct count - use it
+			idx_t distinct_count = distinct_info.distinct_count.GetIndex();
+			if (distinct_info.type == DistinctCountType::UPPER_BOUND) {
+				// if the distinct count is an upper bound it might greatly exceed the real distinct count
+				// for example, if we have max = 1M, min=0, we get an upper bound of 1M
+				// however we might just have two values (0, 1M)
+				// cap the distinct count at the estimated cardinality
+				distinct_count = MinValue<idx_t>(distinct_count, cardinality_after_filters);
+			}
 			auto column_distinct_count = DistinctCount({distinct_count, true});
 			return_stats.column_distinct_count.push_back(column_distinct_count);
 			return_stats.column_names.push_back(name + "." + get.names.at(column_id));
 		} else {
-			// treat the cardinality as the distinct count.
+			// no distinct count - treat the cardinality as the distinct count.
 			// the cardinality estimator will update these distinct counts based
 			// on the extra columns that are joined on.
 			auto column_distinct_count = DistinctCount({cardinality_after_filters, false});
@@ -460,11 +468,12 @@ idx_t RelationStatisticsHelper::InspectTableFilter(idx_t cardinality, idx_t colu
 		if (comparison_filter.comparison_type != ExpressionType::COMPARE_EQUAL) {
 			return cardinality_after_filters;
 		}
-		auto column_count = base_stats.GetDistinctCount();
-		// column_count = 0 when there is no column count (i.e parquet scans)
-		if (column_count > 0) {
-			// we want the ceil of cardinality/column_count. We also want to avoid compiler errors
-			cardinality_after_filters = (cardinality + column_count - 1) / column_count;
+		auto distinct_info = base_stats.GetDistinctCount();
+		if (distinct_info.type == DistinctCountType::APPROXIMATE_DISTINCT) {
+			auto distinct_count = distinct_info.distinct_count.GetIndex();
+			// if we have an approximate distinct count we use the approx distinct count to influence the selectivity
+			// we want the ceil of cardinality/distinct_count
+			cardinality_after_filters = (cardinality + distinct_count - 1) / distinct_count;
 		}
 		return cardinality_after_filters;
 	}

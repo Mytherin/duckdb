@@ -422,6 +422,62 @@ Value NumericStats::MaxOrNull(const BaseStatistics &stats) {
 	return NumericStats::Max(stats);
 }
 
+template <class T>
+hugeint_t GetRangeHugeint(const BaseStatistics &nstats) {
+	return Hugeint::Convert(NumericStats::GetMax<T>(nstats)) - Hugeint::Convert(NumericStats::GetMin<T>(nstats));
+}
+
+optional_idx NumericStats::TryGetRange(const BaseStatistics &stats) {
+	if (!HasMinMax(stats)) {
+		// no min-max
+		return optional_idx();
+	}
+
+	if (Max(stats) < Min(stats)) {
+		// if max < min we don't have a range
+		return optional_idx();
+	}
+
+	// we have a min and a max value for the stats: use that to figure out how many bits we have
+	// we add two here, one for the NULL value, and one to make the computation one-indexed
+	// (e.g. if min and max are the same, we still need one entry in total)
+	hugeint_t range_h;
+	switch (stats.GetType().InternalType()) {
+	case PhysicalType::INT8:
+		range_h = GetRangeHugeint<int8_t>(stats);
+		break;
+	case PhysicalType::INT16:
+		range_h = GetRangeHugeint<int16_t>(stats);
+		break;
+	case PhysicalType::INT32:
+		range_h = GetRangeHugeint<int32_t>(stats);
+		break;
+	case PhysicalType::INT64:
+		range_h = GetRangeHugeint<int64_t>(stats);
+		break;
+	case PhysicalType::UINT8:
+		range_h = GetRangeHugeint<uint8_t>(stats);
+		break;
+	case PhysicalType::UINT16:
+		range_h = GetRangeHugeint<uint16_t>(stats);
+		break;
+	case PhysicalType::UINT32:
+		range_h = GetRangeHugeint<uint32_t>(stats);
+		break;
+	case PhysicalType::UINT64:
+		range_h = GetRangeHugeint<uint64_t>(stats);
+		break;
+	default:
+		throw InternalException("Unsupported type for perfect hash (should be caught before)");
+	}
+
+	uint64_t range;
+	if (!Hugeint::TryCast(range_h, range)) {
+		return optional_idx();
+	}
+	return range;
+}
+
 static void SerializeNumericStatsValue(const LogicalType &type, NumericValueUnion val, bool has_value,
                                        Serializer &serializer) {
 	serializer.WriteProperty(100, "has_value", has_value);

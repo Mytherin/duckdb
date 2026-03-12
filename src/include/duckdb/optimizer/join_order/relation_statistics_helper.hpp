@@ -9,6 +9,7 @@
 
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 
@@ -82,7 +83,7 @@ public:
 	static void CopyRelationStats(RelationStats &to, const RelationStats &from);
 
 private:
-	static idx_t GetDistinctCount(LogicalGet &get, ClientContext &context, const ColumnIndex &column_id);
+	static DistinctCountInfo GetDistinctCount(LogicalGet &get, ClientContext &context, const ColumnIndex &column_id);
 };
 
 } // namespace duckdb

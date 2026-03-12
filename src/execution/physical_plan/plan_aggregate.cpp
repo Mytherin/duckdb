@@ -27,11 +27,6 @@ static uint32_t RequiredBitsForValue(uint32_t n) {
 	return UnsafeNumericCast<uint32_t>(required_bits);
 }
 
-template <class T>
-hugeint_t GetRangeHugeint(const BaseStatistics &nstats) {
-	return Hugeint::Convert(NumericStats::GetMax<T>(nstats)) - Hugeint::Convert(NumericStats::GetMin<T>(nstats));
-}
-
 static bool CanUsePartitionedAggregate(ClientContext &context, LogicalAggregate &op, PhysicalOperator &child,
                                        vector<column_t> &partition_columns) {
 	if (op.grouping_sets.size() > 1 || !op.grouping_functions.empty()) {
@@ -159,52 +154,12 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 		}
 		auto &nstats = *stats;
 
-		if (!NumericStats::HasMinMax(nstats)) {
+		auto opt_range = NumericStats::TryGetRange(nstats);
+		if (!opt_range.IsValid()) {
+			// could not get range
 			return false;
 		}
-
-		if (NumericStats::Max(*stats) < NumericStats::Min(*stats)) {
-			// May result in underflow
-			return false;
-		}
-
-		// we have a min and a max value for the stats: use that to figure out how many bits we have
-		// we add two here, one for the NULL value, and one to make the computation one-indexed
-		// (e.g. if min and max are the same, we still need one entry in total)
-		hugeint_t range_h;
-		switch (group_type.InternalType()) {
-		case PhysicalType::INT8:
-			range_h = GetRangeHugeint<int8_t>(nstats);
-			break;
-		case PhysicalType::INT16:
-			range_h = GetRangeHugeint<int16_t>(nstats);
-			break;
-		case PhysicalType::INT32:
-			range_h = GetRangeHugeint<int32_t>(nstats);
-			break;
-		case PhysicalType::INT64:
-			range_h = GetRangeHugeint<int64_t>(nstats);
-			break;
-		case PhysicalType::UINT8:
-			range_h = GetRangeHugeint<uint8_t>(nstats);
-			break;
-		case PhysicalType::UINT16:
-			range_h = GetRangeHugeint<uint16_t>(nstats);
-			break;
-		case PhysicalType::UINT32:
-			range_h = GetRangeHugeint<uint32_t>(nstats);
-			break;
-		case PhysicalType::UINT64:
-			range_h = GetRangeHugeint<uint64_t>(nstats);
-			break;
-		default:
-			throw InternalException("Unsupported type for perfect hash (should be caught before)");
-		}
-
-		uint64_t range;
-		if (!Hugeint::TryCast(range_h, range)) {
-			return false;
-		}
+		auto range = opt_range.GetIndex();
 
 		// bail out on any range bigger than 2^32
 		if (range >= NumericLimits<int32_t>::Maximum()) {
