@@ -736,6 +736,11 @@ bool Hugeint::TryConvert(hugeint_t value, hugeint_t &result) {
 }
 
 template <>
+bool Hugeint::TryConvert(uhugeint_t value, hugeint_t &result) {
+	return Uhugeint::TryCast(value, result);
+}
+
+template <>
 bool Hugeint::TryConvert(float value, hugeint_t &result) {
 	return Hugeint::TryConvert(double(value), result);
 }

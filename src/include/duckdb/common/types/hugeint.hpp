@@ -215,6 +215,8 @@ bool Hugeint::TryConvert(uint32_t value, hugeint_t &result);
 template <>
 bool Hugeint::TryConvert(uint64_t value, hugeint_t &result);
 template <>
+bool Hugeint::TryConvert(uhugeint_t value, hugeint_t &result);
+template <>
 bool Hugeint::TryConvert(float value, hugeint_t &result);
 template <>
 bool Hugeint::TryConvert(double value, hugeint_t &result);

@@ -427,6 +427,25 @@ hugeint_t GetRangeHugeint(const BaseStatistics &nstats) {
 	return Hugeint::Convert(NumericStats::GetMax<T>(nstats)) - Hugeint::Convert(NumericStats::GetMin<T>(nstats));
 }
 
+bool TryGetRangeHugeint(const BaseStatistics &nstats, hugeint_t &result) {
+	auto max = NumericStats::GetMax<hugeint_t>(nstats);
+	auto min = NumericStats::GetMin<hugeint_t>(nstats);
+	if (!Hugeint::TrySubtractInPlace(max, min)) {
+		return false;
+	}
+	result = max;
+	return true;
+}
+
+bool TryGetRangeUHugeint(const BaseStatistics &nstats, hugeint_t &result) {
+	auto max = NumericStats::GetMax<uhugeint_t>(nstats);
+	auto min = NumericStats::GetMin<uhugeint_t>(nstats);
+	if (!Uhugeint::TrySubtractInPlace(max, min)) {
+		return false;
+	}
+	return Hugeint::TryConvert(max, result);
+}
+
 optional_idx NumericStats::TryGetRange(const BaseStatistics &stats) {
 	if (!HasMinMax(stats)) {
 		// no min-max
@@ -438,9 +457,7 @@ optional_idx NumericStats::TryGetRange(const BaseStatistics &stats) {
 		return optional_idx();
 	}
 
-	// we have a min and a max value for the stats: use that to figure out how many bits we have
-	// we add two here, one for the NULL value, and one to make the computation one-indexed
-	// (e.g. if min and max are the same, we still need one entry in total)
+	// we have min/max - try to get the min/max range
 	hugeint_t range_h;
 	switch (stats.GetType().InternalType()) {
 	case PhysicalType::INT8:
@@ -455,6 +472,11 @@ optional_idx NumericStats::TryGetRange(const BaseStatistics &stats) {
 	case PhysicalType::INT64:
 		range_h = GetRangeHugeint<int64_t>(stats);
 		break;
+	case PhysicalType::INT128:
+		if (!TryGetRangeHugeint(stats, range_h)) {
+			return optional_idx();
+		}
+		break;
 	case PhysicalType::UINT8:
 		range_h = GetRangeHugeint<uint8_t>(stats);
 		break;
@@ -467,12 +489,17 @@ optional_idx NumericStats::TryGetRange(const BaseStatistics &stats) {
 	case PhysicalType::UINT64:
 		range_h = GetRangeHugeint<uint64_t>(stats);
 		break;
+	case PhysicalType::UINT128:
+		if (!TryGetRangeUHugeint(stats, range_h)) {
+			return optional_idx();
+		}
+		break;
 	default:
-		throw InternalException("Unsupported type for perfect hash (should be caught before)");
+		return optional_idx();
 	}
 
 	uint64_t range;
-	if (!Hugeint::TryCast(range_h, range)) {
+	if (!Hugeint::TryCast(range_h, range) || range == DConstants::INVALID_INDEX) {
 		return optional_idx();
 	}
 	return range;

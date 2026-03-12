@@ -166,6 +166,9 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 			return false;
 		}
 
+		// we have a min and a max value for the stats: use that to figure out how many bits we have
+		// we add two here, one for the NULL value, and one to make the computation one-indexed
+		// (e.g. if min and max are the same, we still need one entry in total)
 		range += 2;
 		// figure out how many bits we need
 		idx_t required_bits = RequiredBitsForValue(UnsafeNumericCast<uint32_t>(range));
