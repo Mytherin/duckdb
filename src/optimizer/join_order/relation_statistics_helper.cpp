@@ -105,7 +105,7 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 				// for example, if we have max = 1M, min=0, we get an upper bound of 1M
 				// however we might just have two values (0, 1M)
 				// cap the distinct count at the estimated cardinality
-				distinct_count = MinValue<idx_t>(distinct_count, cardinality_after_filters);
+				distinct_count = MinValue<idx_t>(distinct_count, base_table_cardinality);
 			}
 			auto column_distinct_count = DistinctCount({distinct_count, true});
 			return_stats.column_distinct_count.push_back(column_distinct_count);
@@ -114,7 +114,7 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 			// no distinct count - treat the cardinality as the distinct count.
 			// the cardinality estimator will update these distinct counts based
 			// on the extra columns that are joined on.
-			auto column_distinct_count = DistinctCount({cardinality_after_filters, false});
+			auto column_distinct_count = DistinctCount({base_table_cardinality, false});
 			return_stats.column_distinct_count.push_back(column_distinct_count);
 			auto column_name = string("column");
 			if (column_id < get.names.size()) {
