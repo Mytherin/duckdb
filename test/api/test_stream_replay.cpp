@@ -137,7 +137,7 @@ static AllowedValues BuildAllowedValues(const vector<QueryRecord> &records) {
 //===--------------------------------------------------------------------===//
 
 static void RunConnectionStream(DuckDB *db, const vector<QueryRecord> &records, idx_t connection_id,
-                                const AllowedValues &allowed) {
+                                const AllowedValues &allowed, atomic<bool> *success) {
 	Connection con(*db);
 
 	for (auto &rec : records) {
@@ -146,7 +146,8 @@ static void RunConnectionStream(DuckDB *db, const vector<QueryRecord> &records, 
 			// select val from <table> where id = ?
 			if (rec.params.size() != 1) {
 				fprintf(stderr, "Wrong parameter count for SELECT");
-				FAIL();
+				*success = false;
+				return;
 			}
 			const string sql = "SELECT val FROM " + rec.table + " WHERE id = ?";
 			auto id = std::stoi(rec.params[0]);
@@ -163,7 +164,8 @@ static void RunConnectionStream(DuckDB *db, const vector<QueryRecord> &records, 
 				auto v = mat.GetValue(0, row);
 				if (v.IsNull()) {
 					fprintf(stderr, "Value should not have NULLs");
-					FAIL();
+					*success = false;
+					return;
 				}
 				auto str = v.ToString();
 				std::stringstream tok_ss(str);
@@ -175,7 +177,8 @@ static void RunConnectionStream(DuckDB *db, const vector<QueryRecord> &records, 
 						        "[conn=%d] Assert failed: No transaction wrote (%s, %d) token '%s'.\nFull returned "
 						        "value '%s'\n",
 						        static_cast<int>(connection_id), rec.table.c_str(), id, token.c_str(), str.c_str());
-						FAIL();
+						*success = false;
+						return;
 					}
 				}
 			}
@@ -189,7 +192,8 @@ static void RunConnectionStream(DuckDB *db, const vector<QueryRecord> &records, 
 			//   when not matched then insert
 			if (rec.params.size() != 4) {
 				fprintf(stderr, "Wrong parameter count for MERGE");
-				FAIL();
+				*success = false;
+				return;
 			}
 			const string sql = "MERGE INTO " + rec.table +
 			                   " AS t"
@@ -241,6 +245,7 @@ TEST_CASE("Replay jepsen logs", "[stream_replay]") {
 	DuckDB db(db_name);
 	{
 		Connection setup(db);
+		REQUIRE_NO_FAIL(setup.Query("SET GLOBAL force_compression='uncompressed'"));
 		REQUIRE_NO_FAIL(setup.Query("CREATE TABLE txn0 (id INTEGER PRIMARY KEY NOT NULL, sk INTEGER, val VARCHAR)"));
 		REQUIRE_NO_FAIL(setup.Query("CREATE TABLE txn1 (id INTEGER PRIMARY KEY NOT NULL, sk INTEGER, val VARCHAR)"));
 		REQUIRE_NO_FAIL(setup.Query("CREATE TABLE txn2 (id INTEGER PRIMARY KEY NOT NULL, sk INTEGER, val VARCHAR)"));
@@ -249,14 +254,19 @@ TEST_CASE("Replay jepsen logs", "[stream_replay]") {
 	// Build the write-set oracle from the full log before any thread runs.
 	auto allowed = BuildAllowedValues(records);
 
+	atomic<bool> success;
+	success = true;
 	// One thread per unique connection identifier.
 	vector<thread> threads;
 	threads.reserve(connection_names.size());
 	for (idx_t i = 0; i < connection_names.size(); i++) {
-		threads.emplace_back(RunConnectionStream, &db, conn_records[i], i, std::cref(allowed));
+		threads.emplace_back(RunConnectionStream, &db, conn_records[i], i, std::cref(allowed), &success);
 	}
 	for (auto &t : threads) {
 		t.join();
+	}
+	if (!success) {
+		FAIL();
 	}
 
 	// Sanity: all tables remain readable after the concurrent workload.
