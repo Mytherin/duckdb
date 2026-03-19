@@ -33,6 +33,8 @@ def decompose_sql(sql: str) -> str:
     m = MERGE_RE.match(sql.strip())
     if m:
         return f'MERGE\t{m.group(1)}'
+    if re.match(r'begin\s+transaction\b', sql.strip(), re.IGNORECASE):
+        return f'BEGIN\t'
     return f'{sql}\t'
 
 
@@ -70,9 +72,6 @@ def main(log_path: str, out_path: str):
                 continue
             timestamp, connection, vector_body = m.group(1), m.group(2), m.group(3)
             query_desc, params = parse_vector(vector_body)
-            op = query_desc.split('\t')[0]
-            if op not in ('SELECT', 'MERGE'):
-                continue
             f_out.write(f'{connection}\t{query_desc}\t{params}\n')
 
     print(f'Written to {out_path}')
