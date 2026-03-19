@@ -176,7 +176,8 @@ static FileMetadata StatsInternal(int fd, const string &path) {
 	FileMetadata file_metadata;
 	file_metadata.file_size = s.st_size;
 	file_metadata.last_modification_time = Timestamp::FromEpochSeconds(s.st_mtime);
-
+	file_metadata.device_id = static_cast<idx_t>(s.st_dev);
+	file_metadata.file_id = static_cast<idx_t>(s.st_ino);
 	switch (s.st_mode & S_IFMT) {
 	case S_IFBLK:
 		file_metadata.file_type = FileType::FILE_TYPE_BLOCKDEV;
@@ -897,6 +898,11 @@ static FileMetadata StatsInternal(HANDLE hFile, const string &path) {
 	// Get last modification time
 	file_metadata.last_modification_time = FiletimeToTimeStamp(file_info.ftLastWriteTime);
 
+	// Get device / file identifiers
+	file_metadata.device_id = static_cast<idx_t>(file_info.dwVolumeSerialNumber);
+	file_metadata.file_id =
+	    (static_cast<idx_t>(file_info.nFileIndexHigh) << 32) | static_cast<idx_t>(file_info.nFileIndexLow);
+
 	// Get file type from attributes
 	if (strncmp(path.c_str(), PIPE_PREFIX, strlen(PIPE_PREFIX)) == 0) {
 		// pipes in windows are just files in '\\.\pipe\' folder
@@ -1489,25 +1495,16 @@ string LocalFileSystem::CanonicalizePath(const string &input, optional_ptr<FileO
 }
 
 string LocalFileSystem::GetVersionTag(FileHandle &handle) {
-	// TODO: Fix using FileSystem::Stats for v1.5, which should also fix it for Windows
-#ifdef _WIN32
-	return "";
-#else
-	int fd = handle.Cast<UnixFileHandle>().fd;
-	struct stat s;
-	if (fstat(fd, &s) == -1) {
-		throw IOException("Failed to get file size for file \"%s\": %s", handle.path, strerror(errno));
-	}
+	auto stats = handle.Stats();
 
 	// dev/ino should be enough, but to guard against in-place writes we also add file size and modification time
 	uint64_t version_tag[4];
-	Store(NumericCast<uint64_t>(s.st_dev), data_ptr_cast(&version_tag[0]));
-	Store(NumericCast<uint64_t>(s.st_ino), data_ptr_cast(&version_tag[1]));
-	Store(NumericCast<uint64_t>(s.st_size), data_ptr_cast(&version_tag[2]));
-	Store(Timestamp::FromEpochSeconds(s.st_mtime).value, data_ptr_cast(&version_tag[3]));
+	Store(stats.device_id.IsValid() ? stats.device_id.GetIndex() : 0, data_ptr_cast(&version_tag[0]));
+	Store(stats.file_id.IsValid() ? stats.file_id.GetIndex() : 0, data_ptr_cast(&version_tag[1]));
+	Store(stats.file_size, data_ptr_cast(&version_tag[2]));
+	Store(stats.last_modification_time.value, data_ptr_cast(&version_tag[3]));
 
 	return string(char_ptr_cast(version_tag), sizeof(uint64_t) * 4);
-#endif
 }
 
 void LocalFileSystem::Seek(FileHandle &handle, idx_t location) {

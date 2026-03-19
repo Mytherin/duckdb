@@ -98,14 +98,15 @@ CachingFileHandle::~CachingFileHandle() {
 FileHandle &CachingFileHandle::GetFileHandle() {
 	if (!file_handle) {
 		file_handle = caching_file_system.file_system.OpenFile(path, flags, opener);
-		last_modified = caching_file_system.file_system.GetLastModifiedTime(*file_handle);
+		auto file_stats = file_handle->Stats();
+		last_modified = file_stats.last_modification_time;
 		version_tag = caching_file_system.file_system.GetVersionTag(*file_handle);
 
 		auto guard = cached_file.lock.GetExclusiveLock();
 		if (!cached_file.IsValid(guard, Validate(), version_tag, last_modified)) {
 			cached_file.Ranges(guard).clear(); // Invalidate entire cache
 		}
-		cached_file.FileSize(guard) = file_handle->GetFileSize();
+		cached_file.FileSize(guard) = file_stats.file_size;
 		cached_file.LastModified(guard) = last_modified;
 		cached_file.VersionTag(guard) = version_tag;
 		cached_file.CanSeek(guard) = file_handle->CanSeek();
