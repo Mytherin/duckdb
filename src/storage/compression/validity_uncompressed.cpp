@@ -581,7 +581,7 @@ void ValidityRevertAppend(ColumnSegment &segment, idx_t new_count) {
 		// handle sub-bit stuff (yay)
 		idx_t byte_pos = start_bit / 8;
 		idx_t bit_end = (byte_pos + 1) * 8;
-		ValidityMask mask(reinterpret_cast<validity_t *>(handle.Ptr()), segment.count);
+		ValidityMask mask(reinterpret_cast<validity_t *>(handle.Ptr()), bit_end);
 		for (idx_t i = start_bit; i < bit_end; i++) {
 			mask.SetValid(i);
 		}

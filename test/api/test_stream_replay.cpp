@@ -165,14 +165,16 @@ static void RunConnectionStream(DuckDB *db, const vector<QueryRecord> &records, 
 					fprintf(stderr, "Value should not have NULLs");
 					FAIL();
 				}
-				std::stringstream tok_ss(v.ToString());
+				auto str = v.ToString();
+				std::stringstream tok_ss(str);
 				string token;
 				while (std::getline(tok_ss, token, ',')) {
 					bool ok = allowed_it != allowed.end() && allowed_it->second.count(token);
 					if (!ok) {
 						fprintf(stderr,
-						        "[conn=%llu] Assert failed: No transaction wrote (%s, %d) token '%s'\n",
-						        connection_id, rec.table.c_str(), id, token.c_str());
+						        "[conn=%d] Assert failed: No transaction wrote (%s, %d) token '%s'.\nFull returned "
+						        "value '%s'\n",
+						        static_cast<int>(connection_id), rec.table.c_str(), id, token.c_str(), str.c_str());
 						FAIL();
 					}
 				}
@@ -239,9 +241,9 @@ TEST_CASE("Replay jepsen logs", "[stream_replay]") {
 	DuckDB db(db_name);
 	{
 		Connection setup(db);
-		REQUIRE_NO_FAIL(setup.Query("CREATE TABLE txn0 (id INTEGER NOT NULL PRIMARY KEY, sk INTEGER, val VARCHAR)"));
-		REQUIRE_NO_FAIL(setup.Query("CREATE TABLE txn1 (id INTEGER NOT NULL PRIMARY KEY, sk INTEGER, val VARCHAR)"));
-		REQUIRE_NO_FAIL(setup.Query("CREATE TABLE txn2 (id INTEGER NOT NULL PRIMARY KEY, sk INTEGER, val VARCHAR)"));
+		REQUIRE_NO_FAIL(setup.Query("CREATE TABLE txn0 (id INTEGER PRIMARY KEY NOT NULL, sk INTEGER, val VARCHAR)"));
+		REQUIRE_NO_FAIL(setup.Query("CREATE TABLE txn1 (id INTEGER PRIMARY KEY NOT NULL, sk INTEGER, val VARCHAR)"));
+		REQUIRE_NO_FAIL(setup.Query("CREATE TABLE txn2 (id INTEGER PRIMARY KEY NOT NULL, sk INTEGER, val VARCHAR)"));
 	}
 
 	// Build the write-set oracle from the full log before any thread runs.
