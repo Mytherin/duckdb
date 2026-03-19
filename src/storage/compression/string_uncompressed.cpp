@@ -5,6 +5,8 @@
 #include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 
+#include <duckdb/common/printer.hpp>
+
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
@@ -277,7 +279,7 @@ CompressionFunction StringUncompressed::GetFunction(PhysicalType data_type) {
 	    UncompressedStringStorage::StringScan, UncompressedStringStorage::StringScanPartial,
 	    UncompressedStringStorage::StringFetchRow, UncompressedFunctions::EmptySkip,
 	    UncompressedStringStorage::StringInitSegment, UncompressedStringStorage::StringInitAppend,
-	    UncompressedStringStorage::StringAppend, UncompressedStringStorage::FinalizeAppend, nullptr,
+	    UncompressedStringStorage::StringAppend, UncompressedStringStorage::FinalizeAppend, UncompressedStringStorage::StringRevertAppend,
 	    UncompressedStringStorage::SerializeState, UncompressedStringStorage::DeserializeState,
 	    UncompressedStringStorage::VisitBlockIds, UncompressedStringInitPrefetch, UncompressedStringStorage::Select);
 }

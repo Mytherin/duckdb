@@ -232,8 +232,10 @@ TEST_CASE("Replay jepsen logs", "[stream_replay]") {
 
 	vector<string> connection_names;
 	auto records = ParseQueryLog(tsv_path, connection_names);
-	INFO("Could not parse any records from " + tsv_path);
-	REQUIRE(!records.empty());
+	if (records.empty()) {
+		INFO("Could not parse any records from " + tsv_path);
+		FAIL();
+	}
 
 	// Group queries by connection index; connection_names already has unique names in insertion order.
 	vector<vector<QueryRecord>> conn_records(connection_names.size());
@@ -245,7 +247,9 @@ TEST_CASE("Replay jepsen logs", "[stream_replay]") {
 	DuckDB db(db_name);
 	{
 		Connection setup(db);
-		REQUIRE_NO_FAIL(setup.Query("SET GLOBAL force_compression='uncompressed'"));
+		REQUIRE_NO_FAIL(setup.Query("SET checkpoint_threshold='1TB'"));
+		REQUIRE_NO_FAIL(setup.Query("SET threads=1"));
+
 		REQUIRE_NO_FAIL(setup.Query("CREATE TABLE txn0 (id INTEGER PRIMARY KEY NOT NULL, sk INTEGER, val VARCHAR)"));
 		REQUIRE_NO_FAIL(setup.Query("CREATE TABLE txn1 (id INTEGER PRIMARY KEY NOT NULL, sk INTEGER, val VARCHAR)"));
 		REQUIRE_NO_FAIL(setup.Query("CREATE TABLE txn2 (id INTEGER PRIMARY KEY NOT NULL, sk INTEGER, val VARCHAR)"));
@@ -266,6 +270,16 @@ TEST_CASE("Replay jepsen logs", "[stream_replay]") {
 		t.join();
 	}
 	if (!success) {
+		INFO("Failed to run test - impossible values were found");
+
+		Connection verify(db);
+		auto txn0_content = verify.Query("SELECT * FROM txn0 ORDER BY id");
+		auto txn1_content = verify.Query("SELECT * FROM txn1 ORDER BY id");
+		auto txn2_content = verify.Query("SELECT * FROM txn2 ORDER BY id");
+		fprintf(stderr, "Content of txn0\n%s", txn0_content->ToString().c_str());
+		fprintf(stderr, "Content of txn1\n%s", txn1_content->ToString().c_str());
+		fprintf(stderr, "Content of txn2\n%s", txn2_content->ToString().c_str());
+
 		FAIL();
 	}
 
