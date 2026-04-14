@@ -21,10 +21,11 @@ static void ThrowIfExceptionIsInternal(StatementVerifier &verifier) {
 	}
 }
 
-ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
+ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
                                      PendingQueryParameters query_parameters) {
 	D_ASSERT(statement->type == StatementType::SELECT_STATEMENT);
 	// Aggressive query verification
+	auto query = statement->GetQuery();
 
 #ifdef DUCKDB_RUN_SLOW_VERIFIERS
 	bool run_slow_verifiers = true;
@@ -96,7 +97,7 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 	bool any_failed = original->Run(*this, query,
 	                                [&](const string &q, unique_ptr<SQLStatement> s,
 	                                    optional_ptr<case_insensitive_map_t<BoundParameterData>> params) {
-		                                return RunStatementInternal(lock, q, std::move(s), query_parameters, false);
+		                                return RunStatementInternal(lock, std::move(s), query_parameters, false);
 	                                });
 	if (!any_failed) {
 		statement_verifiers.emplace_back(
@@ -107,7 +108,7 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 		bool failed = verifier->Run(*this, query,
 		                            [&](const string &q, unique_ptr<SQLStatement> s,
 		                                optional_ptr<case_insensitive_map_t<BoundParameterData>> params) {
-			                            return RunStatementInternal(lock, q, std::move(s), query_parameters, false);
+			                            return RunStatementInternal(lock, std::move(s), query_parameters, false);
 		                            });
 		any_failed = any_failed || failed;
 	}
@@ -118,7 +119,7 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 		    *this, query,
 		    [&](const string &q, unique_ptr<SQLStatement> s,
 		        optional_ptr<case_insensitive_map_t<BoundParameterData>> params) {
-			    return RunStatementInternal(lock, q, std::move(s), query_parameters, false);
+			    return RunStatementInternal(lock, std::move(s), query_parameters, false);
 		    });
 		if (!failed) {
 			// PreparedStatementVerifier fails if it runs into a ParameterNotAllowedException, which is OK
@@ -146,6 +147,7 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 		auto original_named_param_map = statement_copy_for_explain->named_param_map;
 		auto explain_stmt = make_uniq<ExplainStatement>(std::move(statement_copy_for_explain));
 		explain_stmt->named_param_map = original_named_param_map;
+		explain_stmt->SetQuery(explain_q);
 
 		auto explain_statement_verifier =
 		    StatementVerifier::Create(VerificationType::EXPLAIN, *explain_stmt, parameters);
@@ -153,7 +155,7 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 		    *this, explain_q,
 		    [&](const string &q, unique_ptr<SQLStatement> s,
 		        optional_ptr<case_insensitive_map_t<BoundParameterData>> params) {
-			    return RunStatementInternal(lock, q, std::move(s), query_parameters, false);
+			    return RunStatementInternal(lock, std::move(s), query_parameters, false);
 		    });
 
 		if (explain_failed) { // LCOV_EXCL_START

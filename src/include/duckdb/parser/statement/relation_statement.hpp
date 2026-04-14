@@ -26,6 +26,7 @@ protected:
 	RelationStatement(const RelationStatement &other) = default;
 
 public:
+	const string &GetQuery() const override;
 	unique_ptr<SQLStatement> Copy() const override;
 	string ToString() const override;
 };

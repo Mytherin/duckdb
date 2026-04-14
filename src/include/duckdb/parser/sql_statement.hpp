@@ -36,11 +36,11 @@ public:
 	case_insensitive_map_t<idx_t> named_param_map;
 
 	//! Get the query text that corresponds to this SQL statement
-	const string &GetQuery() const {
+	virtual const string &GetQuery() const {
 		return query;
 	}
 	//! Set the query text that corresponds to this SQL statement
-	void SetQuery(string query_p) {
+	void SetQuery(string query_p) const {
 		query = std::move(query_p);
 	}
 
@@ -72,6 +72,6 @@ public:
 
 private:
 	//! The query text that corresponds to this SQL statement
-	string query;
+	mutable string query;
 };
 } // namespace duckdb

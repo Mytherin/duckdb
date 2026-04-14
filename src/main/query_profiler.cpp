@@ -1,5 +1,7 @@
 #include "duckdb/main/query_profiler.hpp"
 
+#include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/common/enums/metric_type.hpp"
 #include "duckdb/common/fstream.hpp"
 #include "duckdb/common/numeric_utils.hpp"
@@ -109,6 +111,19 @@ void QueryProfiler::Reset() {
 	running = false;
 	query_metrics.Reset();
 	metrics_finalized = false;
+}
+
+static bool IsExplainAnalyze(const SQLStatement &statement) {
+	if (statement.type != StatementType::EXPLAIN_STATEMENT) {
+		return false;
+	}
+	auto &explain = statement.Cast<ExplainStatement>();
+	return explain.explain_type == ExplainType::EXPLAIN_ANALYZE;
+}
+
+void QueryProfiler::StartQuery(const SQLStatement &statement) {
+	bool is_explain_analyze = duckdb::IsExplainAnalyze(statement);
+	StartQuery(IsEnabled() ? statement.GetQuery() : string(), is_explain_analyze);
 }
 
 void QueryProfiler::StartQuery(const string &query, bool is_explain_analyze_p, bool start_at_optimizer) {

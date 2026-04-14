@@ -89,7 +89,7 @@ unique_ptr<QueryResult> PreparedStatement::Execute(case_insensitive_map_t<BoundP
 	        ? QueryResultOutputType::ALLOW_STREAMING
 	        : QueryResultOutputType::FORCE_MATERIALIZED;
 
-	return context->Execute(query, data, parameters);
+	return context->Execute(data, parameters);
 }
 
 unique_ptr<QueryResult> PreparedStatement::Execute(vector<Value> &values, bool allow_stream_result) {
@@ -129,7 +129,7 @@ unique_ptr<PendingQueryResult> PreparedStatement::PendingQuery(case_insensitive_
 	    allow_stream_result && data->properties.output_type == QueryResultOutputType::ALLOW_STREAMING
 	        ? QueryResultOutputType::ALLOW_STREAMING
 	        : QueryResultOutputType::FORCE_MATERIALIZED;
-	auto result = context->PendingQuery(query, data, parameters);
+	auto result = context->PendingQuery(data, parameters);
 	// The result should not contain any reference to the 'vector<Value> parameters.parameters'
 	return result;
 }

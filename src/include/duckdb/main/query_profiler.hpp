@@ -143,6 +143,7 @@ public:
 	DUCKDB_API void Start(const string &query);
 	DUCKDB_API void Reset();
 	DUCKDB_API void StartQuery(const string &query, bool is_explain_analyze = false, bool start_at_optimizer = false);
+	DUCKDB_API void StartQuery(const SQLStatement &statement);
 	DUCKDB_API void EndQuery();
 	//! Finalize query metrics for output; safe to call multiple times.
 	DUCKDB_API void FinalizeMetrics();
