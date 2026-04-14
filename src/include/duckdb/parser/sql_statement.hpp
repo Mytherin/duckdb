@@ -35,12 +35,10 @@ public:
 	//! The map of named parameter to param index
 	case_insensitive_map_t<idx_t> named_param_map;
 
-	//! Get the query text that corresponds to this SQL statement
 	virtual const string &GetQuery() const {
 		return query;
 	}
-	//! Set the query text that corresponds to this SQL statement
-	void SetQuery(string query_p) const {
+	void SetQuery(string query_p) {
 		query = std::move(query_p);
 	}
 
