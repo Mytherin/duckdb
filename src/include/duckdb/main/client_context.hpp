@@ -278,8 +278,7 @@ private:
 	CreatePreparedStatement(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
 	                        PendingQueryParameters parameters,
 	                        PreparedStatementMode mode = PreparedStatementMode::PREPARE_ONLY);
-	unique_ptr<PendingQueryResult> PendingStatementInternal(ClientContextLock &lock,
-	                                                        unique_ptr<SQLStatement> statement,
+	unique_ptr<PendingQueryResult> PendingStatementInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
 	                                                        const PendingQueryParameters &parameters);
 	unique_ptr<QueryResult> RunStatementInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
 	                                             const PendingQueryParameters &parameters, bool verify = true);
@@ -298,9 +297,10 @@ private:
 	void WaitForTask(ClientContextLock &lock, BaseQueryResult &result);
 	PendingExecutionResult ExecuteTaskInternal(ClientContextLock &lock, BaseQueryResult &result, bool dry_run = false);
 
-	unique_ptr<PendingQueryResult> PendingStatementOrPreparedStatementInternal(
-	    ClientContextLock &lock, unique_ptr<SQLStatement> statement, shared_ptr<PreparedStatementData> &prepared,
-	    const PendingQueryParameters &parameters);
+	unique_ptr<PendingQueryResult>
+	PendingStatementOrPreparedStatementInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
+	                                            shared_ptr<PreparedStatementData> &prepared,
+	                                            const PendingQueryParameters &parameters);
 
 	unique_ptr<PendingQueryResult> PendingQueryPreparedInternal(ClientContextLock &lock,
 	                                                            shared_ptr<PreparedStatementData> &prepared,

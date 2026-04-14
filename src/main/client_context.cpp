@@ -849,8 +849,8 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementInternal(ClientCon
 		PreparedStatement::VerifyParameters(*parameters.parameters, statement->named_param_map);
 	}
 
-	auto prepared = CreatePreparedStatement(lock, std::move(statement), parameters,
-	                                        PreparedStatementMode::PREPARE_AND_EXECUTE);
+	auto prepared =
+	    CreatePreparedStatement(lock, std::move(statement), parameters, PreparedStatementMode::PREPARE_AND_EXECUTE);
 
 	idx_t parameter_count = !parameters.parameters ? 0 : parameters.parameters->size();
 	if (prepared->properties.parameter_count > 0 && parameter_count == 0) {
@@ -883,9 +883,10 @@ bool ClientContext::IsActiveResult(ClientContextLock &lock, BaseQueryResult &res
 	return active_query->IsOpenResult(result);
 }
 
-unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatementInternal(
-    ClientContextLock &lock, unique_ptr<SQLStatement> statement, shared_ptr<PreparedStatementData> &prepared,
-    const PendingQueryParameters &parameters) {
+unique_ptr<PendingQueryResult>
+ClientContext::PendingStatementOrPreparedStatementInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
+                                                           shared_ptr<PreparedStatementData> &prepared,
+                                                           const PendingQueryParameters &parameters) {
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
 	if (statement && statement->type != StatementType::LOGICAL_PLAN_STATEMENT) {
 		statement = statement->Copy();
@@ -954,9 +955,10 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 	return PendingStatementOrPreparedStatement(lock, std::move(statement), prepared, parameters);
 }
 
-unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatement(
-    ClientContextLock &lock, unique_ptr<SQLStatement> statement, shared_ptr<PreparedStatementData> &prepared,
-    const PendingQueryParameters &parameters) {
+unique_ptr<PendingQueryResult>
+ClientContext::PendingStatementOrPreparedStatement(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
+                                                   shared_ptr<PreparedStatementData> &prepared,
+                                                   const PendingQueryParameters &parameters) {
 	unique_ptr<PendingQueryResult> pending;
 	auto query = statement ? statement->GetQuery() : prepared->unbound_statement->GetQuery();
 	try {
