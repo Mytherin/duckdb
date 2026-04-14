@@ -34,8 +34,15 @@ public:
 	idx_t stmt_length = 0;
 	//! The map of named parameter to param index
 	case_insensitive_map_t<idx_t> named_param_map;
-	//! The query text that corresponds to this SQL statement
-	string query;
+
+	//! Get the query text that corresponds to this SQL statement
+	const string &GetQuery() const {
+		return query;
+	}
+	//! Set the query text that corresponds to this SQL statement
+	void SetQuery(string query_p) {
+		query = std::move(query_p);
+	}
 
 protected:
 	SQLStatement(const SQLStatement &other) = default;
@@ -62,5 +69,9 @@ public:
 		}
 		return reinterpret_cast<const TARGET &>(*this);
 	}
+
+private:
+	//! The query text that corresponds to this SQL statement
+	string query;
 };
 } // namespace duckdb

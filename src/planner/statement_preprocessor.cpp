@@ -138,7 +138,7 @@ void StatementPreprocessor::PreprocessInternal(ClientContextLock &lock, vector<u
 	CurrentTransactionState chained_transaction_state = NOT_IN_ACTIVE_TRANSACTION;
 	vector<unique_ptr<SQLStatement>> new_statements;
 	for (idx_t i = 0; i < statements.size(); i++) {
-		auto query = statements[i]->query;
+		auto query = statements[i]->GetQuery();
 		const CurrentTransactionState full_transaction_state =
 		    (transaction_context_state == IN_ACTIVE_TRANSACTION || chained_transaction_state == IN_ACTIVE_TRANSACTION)
 		        ? IN_ACTIVE_TRANSACTION

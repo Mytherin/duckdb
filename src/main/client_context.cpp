@@ -773,7 +773,7 @@ unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query) {
 unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &lock,
                                                              unique_ptr<SQLStatement> statement) {
 	auto named_param_map = statement->named_param_map;
-	auto statement_query = statement->query;
+	auto statement_query = statement->GetQuery();
 	shared_ptr<PreparedStatementData> prepared_data;
 	auto unbound_statement = statement->Copy();
 	PendingQueryParameters parameters;
@@ -789,7 +789,7 @@ unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &
 unique_ptr<PreparedStatement> ClientContext::Prepare(unique_ptr<SQLStatement> statement) {
 	auto lock = LockContext();
 	// Store the query in case of an error.
-	auto query = statement->query;
+	auto query = statement->GetQuery();
 
 	// Try to prepare.
 	try {
@@ -1162,7 +1162,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(unique_ptr<SQLStateme
                                                            case_insensitive_map_t<BoundParameterData> &values,
                                                            QueryParameters parameters) {
 	auto lock = LockContext();
-	auto query = statement->query;
+	auto query = statement->GetQuery();
 	try {
 		InitialCleanup(*lock);
 
@@ -1180,7 +1180,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQueryInternal(ClientContext
                                                                    unique_ptr<SQLStatement> statement,
                                                                    const PendingQueryParameters &parameters,
                                                                    bool verify) {
-	auto query = statement->query;
+	auto query = statement->GetQuery();
 	shared_ptr<PreparedStatementData> prepared;
 	if (verify) {
 		return PendingStatementOrPreparedStatementInternal(lock, query, std::move(statement), prepared, parameters);

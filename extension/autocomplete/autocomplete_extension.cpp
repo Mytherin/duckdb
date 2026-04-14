@@ -612,19 +612,19 @@ public:
 					                tokenized_statement[tokenized_statement.size() - 1].length;
 					statement->stmt_length = last_pos - tokenized_statement[0].offset;
 				}
-				statement->query = query;
+				statement->SetQuery(query);
 				result.push_back(std::move(statement));
 			}
 			if (!result.empty()) {
 				auto &last_statement = result.back();
 				last_statement->stmt_length = query.size() - last_statement->stmt_location;
 				for (auto &statement : result) {
-					statement->query = query.substr(statement->stmt_location, statement->stmt_length);
+					statement->SetQuery(query.substr(statement->stmt_location, statement->stmt_length));
 					statement->stmt_location = 0;
-					statement->stmt_length = statement->query.size();
+					statement->stmt_length = statement->GetQuery().size();
 					if (statement->type == StatementType::CREATE_STATEMENT) {
 						auto &create = statement->Cast<CreateStatement>();
-						create.info->sql = statement->query;
+						create.info->sql = statement->GetQuery();
 					}
 				}
 			}
