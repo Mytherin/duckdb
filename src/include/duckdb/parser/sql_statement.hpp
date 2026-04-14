@@ -68,7 +68,7 @@ public:
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 
-private:
+protected:
 	//! The query text that corresponds to this SQL statement
 	mutable string query;
 };

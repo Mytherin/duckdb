@@ -8,10 +8,10 @@ RelationStatement::RelationStatement(shared_ptr<Relation> relation_p)
 }
 
 const string &RelationStatement::GetQuery() const {
-	if (SQLStatement::GetQuery().empty()) {
-		SetQuery(relation->GetQuery());
+	if (query.empty()) {
+		query = relation->GetQuery();
 	}
-	return SQLStatement::GetQuery();
+	return query;
 }
 
 unique_ptr<SQLStatement> RelationStatement::Copy() const {
