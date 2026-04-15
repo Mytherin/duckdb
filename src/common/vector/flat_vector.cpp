@@ -144,20 +144,16 @@ void FlattenVectorBuffer(data_ptr_t target, const_data_ptr_t source, const Selec
 	}
 }
 
-buffer_ptr<VectorBuffer> StandardVectorBuffer::Flatten(const LogicalType &type, const SelectionVector &input_sel,
-                                                       idx_t count) const {
-	if (!input_sel.IsSet() && vector_type == VectorType::FLAT_VECTOR) {
+buffer_ptr<VectorBuffer> StandardVectorBuffer::Flatten(const LogicalType &type, idx_t count) const {
+	if (vector_type == VectorType::FLAT_VECTOR) {
 		// already a flat vector - bail
 		return nullptr;
 	}
-	SelectionVector owned_sel;
-	const_reference<SelectionVector> sel_ref(input_sel);
-	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		// for constant vectors we just use the selection vector [0, 0, 0, 0, 0, 0, ...]
-		sel_ref = *ConstantVector::ZeroSelectionVector(count, owned_sel);
-	}
-	auto &sel = sel_ref.get();
+	return FlattenSlice(type, *FlatVector::IncrementalSelectionVector(), count);
+}
 
+buffer_ptr<VectorBuffer> StandardVectorBuffer::FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
+                                                                    idx_t count) const {
 	auto type_size = GetTypeIdSize(type.InternalType());
 
 	// allocate the new buffer

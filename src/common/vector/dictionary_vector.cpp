@@ -115,8 +115,12 @@ Value DictionaryBuffer::GetValue(const LogicalType &type, idx_t index) const {
 	return entry->data.GetValue(resolved_index);
 }
 
-buffer_ptr<VectorBuffer> DictionaryBuffer::Flatten(const LogicalType &type, const SelectionVector &input_sel,
-                                                   idx_t count) const {
+buffer_ptr<VectorBuffer> DictionaryBuffer::Flatten(const LogicalType &type, idx_t count) const {
+	return entry->data.buffer->FlattenSlice(type, sel_vector, count);
+}
+
+buffer_ptr<VectorBuffer> DictionaryBuffer::FlattenSliceInternal(const LogicalType &type,
+                                                                const SelectionVector &input_sel, idx_t count) const {
 	// get the selection vector to push into the child
 	// if input_sel is set, we slice the dictionary by input_sel, otherwise we pass in the dict directly
 	const_reference<SelectionVector> sel_ref(sel_vector);
@@ -132,7 +136,7 @@ buffer_ptr<VectorBuffer> DictionaryBuffer::Flatten(const LogicalType &type, cons
 	auto &sel = sel_ref.get();
 
 	// flatten the child using the selection vector
-	return entry->data.buffer->Flatten(type, sel, count);
+	return entry->data.buffer->FlattenSlice(type, sel, count);
 }
 
 buffer_ptr<DictionaryEntry> DictionaryVector::CreateReusableDictionary(const LogicalType &type, const idx_t &size) {

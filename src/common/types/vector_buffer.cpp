@@ -111,7 +111,31 @@ void VectorBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) con
 	throw InternalException("ToUnifiedFormat not supported for this buffer type - flatten first");
 }
 
-buffer_ptr<VectorBuffer> VectorBuffer::Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
+buffer_ptr<VectorBuffer> VectorBuffer::Flatten(const LogicalType &type, idx_t count) const {
+	// FIXME: this should just be using size.GetIndex()...
+	if (size.IsValid()) {
+		if (count > size.GetIndex()) {
+			throw InternalException("Flatten called with count that exceeds the size of the vector");
+		}
+		count = size.GetIndex();
+	}
+	return FlattenSliceInternal(type, *FlatVector::IncrementalSelectionVector(), count);
+}
+
+buffer_ptr<VectorBuffer> VectorBuffer::FlattenSlice(const LogicalType &type, const SelectionVector &sel,
+                                                    idx_t count) const {
+	if (vector_type == VectorType::CONSTANT_VECTOR) {
+		// if the vector is a constant vector the input selection vector does not matter
+		// we always need to select the first value
+		SelectionVector owned_sel;
+		auto &constant_sel = *ConstantVector::ZeroSelectionVector(count, owned_sel);
+		return FlattenSliceInternal(type, constant_sel, count);
+	}
+	return FlattenSliceInternal(type, sel, count);
+}
+
+buffer_ptr<VectorBuffer> VectorBuffer::FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
+                                                            idx_t count) const {
 	throw InternalException("Unimplemented type for flatten");
 }
 
@@ -149,7 +173,7 @@ buffer_ptr<VectorBuffer> VectorBuffer::SliceInternal(const LogicalType &type, id
 
 buffer_ptr<VectorBuffer> VectorBuffer::SliceInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) {
 	// default slice: flatten with a selection vector and then wrap in a dictionary
-	return Flatten(type, sel, count);
+	return FlattenSlice(type, sel, count);
 }
 
 void VectorBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {

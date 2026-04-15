@@ -165,16 +165,21 @@ buffer_ptr<VectorBuffer> VectorListBuffer::CreateBuffer(AllocatedData &&new_data
 	return make_buffer<VectorListBuffer>(std::move(new_data), capacity, *this);
 }
 
-buffer_ptr<VectorBuffer> VectorListBuffer::Flatten(const LogicalType &type, const SelectionVector &sel,
-                                                   idx_t count) const {
-	auto result = StandardVectorBuffer::Flatten(type, sel, count);
-	if (!result) {
+buffer_ptr<VectorBuffer> VectorListBuffer::Flatten(const LogicalType &type, idx_t count) const {
+	if (vector_type == VectorType::FLAT_VECTOR) {
 		// already flat - flatten the child
-		auto &child = GetChild();
-		child.Flatten(size);
+		auto &child_vector = GetChild();
+		child_vector.Flatten(size);
 		return nullptr;
 	}
-	// created a new buffer - also flatten the child
+	return FlattenSlice(type, *FlatVector::IncrementalSelectionVector(), count);
+}
+
+buffer_ptr<VectorBuffer> VectorListBuffer::FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
+                                                                idx_t count) const {
+	// flatten the list offsets
+	auto result = StandardVectorBuffer::FlattenSliceInternal(type, sel, count);
+	// now flatten the child
 	auto &list_result = result->Cast<VectorListBuffer>();
 	list_result.GetChild().Flatten(list_result.size);
 	return result;
