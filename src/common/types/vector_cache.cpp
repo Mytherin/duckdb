@@ -53,7 +53,7 @@ public:
 		auto internal_type = type.InternalType();
 		buffer->ClearAuxiliaryData();
 		AssignSharedPointer(result.buffer, buffer);
-		result.buffer->ResetCapacity(capacity);
+		result.buffer->ResetCache(capacity);
 		// use SetVectorTypeOnly to avoid propagating to children
 		// for nested types (struct/array/list) children may have stale incompatible buffers
 		// from a previous execution - they will be reset individually below
@@ -64,7 +64,6 @@ public:
 			// propagate through child
 			auto &child_cache = *child_caches[0];
 			auto &list_buffer = result.buffer->Cast<VectorListBuffer>();
-			list_buffer.SetSize(0);
 
 			auto &list_child = list_buffer.GetChild();
 			child_cache.ResetFromCache(list_child);

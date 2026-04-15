@@ -83,8 +83,8 @@ public:
 	virtual idx_t Capacity() const {
 		throw InternalException("VectorBuffer does not have a capacity");
 	}
-	virtual void ResetCapacity(idx_t capacity) {
-		throw InternalException("VectorBuffer does not have a capacity");
+	virtual void ResetCache(idx_t capacity) {
+		throw InternalException("VectorBuffer type cannot be cached");
 	}
 	virtual ValidityMask &GetValidityMask() {
 		throw InternalException("VectorBuffer does not have a ValidityMask");
@@ -98,6 +98,9 @@ public:
 	}
 	idx_t Size() const {
 		return size.GetIndex();
+	}
+	virtual void SetSize(idx_t new_size) {
+		throw InternalException("VectorBuffer size cannot be adjusted for this buffer type");
 	}
 
 	void AddAuxiliaryData(unique_ptr<AuxiliaryDataHolder> aux_data_p) {

@@ -30,16 +30,30 @@ idx_t VectorArrayBuffer::GetArraySize() const {
 }
 
 idx_t VectorArrayBuffer::GetChildSize() const {
-	return capacity * array_size;
+	return child->size();
 }
 
 void VectorArrayBuffer::SetVectorType(VectorType new_vector_type) {
 	vector_type = new_vector_type;
 }
 
-void VectorArrayBuffer::ResetCapacity(idx_t capacity) {
-	this->capacity = capacity;
-	validity.Reset(capacity);
+void VectorArrayBuffer::ResetCache(idx_t new_capacity) {
+	D_ASSERT(new_capacity <= capacity);
+	this->capacity = new_capacity;
+	validity.Reset(new_capacity);
+	size = 0;
+}
+
+void VectorArrayBuffer::SetSize(idx_t new_size) {
+	if (vector_type != VectorType::CONSTANT_VECTOR) {
+		// for flat vectors we need to check the capacity
+		// for constant vectors we do not
+		if (new_size > capacity) {
+			throw InternalException("Vector::SetSize out of range - trying to set size to %d for vector with capacity %d", new_size, capacity);
+		}
+	}
+	this->size = new_size;
+	FlatVector::SetSize(*child, array_size * new_size);
 }
 
 idx_t VectorArrayBuffer::GetDataSize(const LogicalType &type, idx_t count) const {
@@ -126,8 +140,8 @@ buffer_ptr<VectorBuffer> VectorArrayBuffer::FlattenSliceInternal(const LogicalTy
 	}
 	// flatten the child using the child selection vector
 	child_result->Flatten(child_sel, target_child_size);
-
 	result->child = std::move(child_result);
+	result->size = count;
 	return result;
 }
 

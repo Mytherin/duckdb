@@ -32,9 +32,22 @@ void StandardVectorBuffer::SetVectorType(VectorType new_vector_type) {
 	vector_type = new_vector_type;
 }
 
-void StandardVectorBuffer::ResetCapacity(idx_t capacity) {
-	this->capacity = capacity;
-	validity.Reset(capacity);
+void StandardVectorBuffer::ResetCache(idx_t new_capacity) {
+	D_ASSERT(new_capacity <= capacity);
+	this->capacity = new_capacity;
+	validity.Reset(new_capacity);
+	size = 0;
+}
+
+void StandardVectorBuffer::SetSize(idx_t new_size) {
+	if (vector_type != VectorType::CONSTANT_VECTOR) {
+		// for flat vectors we need to check the capacity
+		// for constant vectors we do not
+		if (new_size > capacity) {
+			throw InternalException("Vector::SetSize out of range - trying to set size to %d for vector with capacity %d", new_size, capacity);
+		}
+	}
+	this->size = new_size;
 }
 
 idx_t StandardVectorBuffer::GetAllocationSize() const {
@@ -62,9 +75,11 @@ void StandardVectorBuffer::Verify(const LogicalType &type, const SelectionVector
 buffer_ptr<VectorBuffer> StandardVectorBuffer::SliceInternal(const LogicalType &type, idx_t offset, idx_t end) {
 	D_ASSERT(end <= capacity);
 	auto type_size = GetTypeIdSize(type.InternalType());
+	idx_t element_count = end - offset;
 	auto offset_ptr = data_ptr + type_size * offset;
-	auto result = make_buffer<StandardVectorBuffer>(offset_ptr, end - offset);
-	result->GetValidityMask().Slice(validity, offset, end - offset);
+	auto result = make_buffer<StandardVectorBuffer>(offset_ptr, element_count);
+	result->GetValidityMask().Slice(validity, offset, element_count);
+	result->size = element_count;
 	return result;
 }
 
@@ -75,8 +90,10 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::SliceInternal(const LogicalType &
 	return make_buffer<DictionaryBuffer>(sel, std::move(entry));
 }
 
-buffer_ptr<VectorBuffer> StandardVectorBuffer::CreateBuffer(AllocatedData &&new_data, idx_t capacity) const {
-	return make_buffer<StandardVectorBuffer>(std::move(new_data), capacity);
+buffer_ptr<VectorBuffer> StandardVectorBuffer::CreateBuffer(AllocatedData &&new_data, idx_t count) const {
+	auto result = make_buffer<StandardVectorBuffer>(std::move(new_data), count);
+	result->size = capacity;
+	return std::move(result);
 }
 
 buffer_ptr<VectorBuffer> StandardVectorBuffer::Resize(const LogicalType &type, idx_t current_size, idx_t new_size) {
@@ -379,7 +396,7 @@ void FlatVector::SetData(Vector &vector, data_ptr_t data, idx_t capacity) {
 	if (vector.GetType().InternalType() == PhysicalType::LIST) {
 		auto &current_buffer = vector.buffer->Cast<VectorListBuffer>();
 		vector.buffer =
-		    make_buffer<VectorListBuffer>(data, capacity, current_buffer.GetChild(), current_buffer.GetSize());
+		    make_buffer<VectorListBuffer>(data, capacity, current_buffer.GetChild());
 	} else if (vector.GetType().InternalType() == PhysicalType::VARCHAR) {
 		vector.buffer = make_buffer<VectorStringBuffer>(data, capacity);
 	} else {

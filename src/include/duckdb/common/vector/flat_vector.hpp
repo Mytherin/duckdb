@@ -17,7 +17,7 @@ class StandardVectorBuffer : public VectorBuffer {
 public:
 	StandardVectorBuffer(Allocator &allocator, idx_t capacity, idx_t type_size);
 	explicit StandardVectorBuffer(idx_t capacity, idx_t type_size);
-	explicit StandardVectorBuffer(data_ptr_t data_ptr_p, idx_t capacity);
+	explicit StandardVectorBuffer(data_ptr_t data_ptr_p, idx_t count);
 	explicit StandardVectorBuffer(AllocatedData &&data_p, idx_t capacity);
 
 public:
@@ -27,7 +27,8 @@ public:
 	idx_t Capacity() const override {
 		return capacity;
 	}
-	void ResetCapacity(idx_t capacity) override;
+	void ResetCache(idx_t capacity) override;
+	void SetSize(idx_t new_size) override;
 	ValidityMask &GetValidityMask() override {
 		return validity;
 	}
@@ -55,7 +56,7 @@ protected:
 	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, idx_t offset, idx_t end) override;
 	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) override;
 
-	virtual buffer_ptr<VectorBuffer> CreateBuffer(AllocatedData &&new_data, idx_t capacity) const;
+	virtual buffer_ptr<VectorBuffer> CreateBuffer(AllocatedData &&new_data, idx_t count) const;
 
 protected:
 	ValidityMask validity;
@@ -125,6 +126,9 @@ struct FlatVector {
 	static inline idx_t GetCapacity(const Vector &vector) {
 		VerifyFlatVector(vector);
 		return vector.buffer ? vector.buffer->Capacity() : 0;
+	}
+	static void SetSize(Vector &vector, idx_t new_size) {
+		vector.buffer->SetSize(new_size);
 	}
 	template <class T>
 	static inline const T *GetDataUnsafe(const Vector &vector) {

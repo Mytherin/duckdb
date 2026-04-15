@@ -69,12 +69,14 @@ idx_t StringHeapHolder::GetAllocationSize() const {
 buffer_ptr<VectorBuffer> VectorStringBuffer::SliceInternal(const LogicalType &type, idx_t offset, idx_t end) {
 	auto type_size = GetTypeIdSize(type.InternalType());
 	auto offset_ptr = data_ptr + type_size * offset;
-	auto result = make_buffer<VectorStringBuffer>(offset_ptr, end - offset);
-	result->GetValidityMask().Slice(validity, offset, end - offset);
+	idx_t element_count = end - offset;
+	auto result = make_buffer<VectorStringBuffer>(offset_ptr, element_count);
+	result->GetValidityMask().Slice(validity, offset, element_count);
 	// keep the heap alive
 	if (auxiliary_data) {
 		result->AddAuxiliaryData(make_uniq<AuxiliaryDataSetHolder>(auxiliary_data));
 	}
+	result->size = element_count;
 	return result;
 }
 
@@ -123,8 +125,10 @@ void VectorStringBuffer::Verify(const LogicalType &type, const SelectionVector &
 	}
 }
 
-buffer_ptr<VectorBuffer> VectorStringBuffer::CreateBuffer(AllocatedData &&new_data, idx_t capacity) const {
-	return make_buffer<VectorStringBuffer>(std::move(new_data), capacity, *this);
+buffer_ptr<VectorBuffer> VectorStringBuffer::CreateBuffer(AllocatedData &&new_data, idx_t count) const {
+	auto result = make_buffer<VectorStringBuffer>(std::move(new_data), count, *this);
+	result->size = count;
+	return std::move(result);
 }
 
 buffer_ptr<VectorBuffer> VectorStringBuffer::FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,

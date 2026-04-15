@@ -30,7 +30,8 @@ public:
 	void SetCapacity(idx_t new_capacity) {
 		capacity = new_capacity;
 	}
-	void ResetCapacity(idx_t capacity) override;
+	void ResetCache(idx_t capacity) override;
+	void SetSize(idx_t new_size) override;
 	const ValidityMask &GetValidityMask() const override {
 		return validity;
 	}

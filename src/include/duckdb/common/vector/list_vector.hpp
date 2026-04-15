@@ -21,7 +21,7 @@ public:
 	                          idx_t child_capacity = STANDARD_VECTOR_SIZE);
 	explicit VectorListBuffer(idx_t capacity, const LogicalType &list_type,
 	                          idx_t child_capacity = STANDARD_VECTOR_SIZE);
-	explicit VectorListBuffer(data_ptr_t data, idx_t capacity, const Vector &vector, idx_t child_size);
+	explicit VectorListBuffer(data_ptr_t data, idx_t capacity, const Vector &vector);
 	explicit VectorListBuffer(data_ptr_t data, idx_t capacity, const VectorListBuffer &parent);
 	explicit VectorListBuffer(AllocatedData allocated_data, idx_t capacity, const VectorListBuffer &parent);
 	~VectorListBuffer() override;
@@ -40,13 +40,7 @@ public:
 
 	void PushBack(const Value &insert);
 
-	idx_t GetSize() const {
-		return size;
-	}
-
 	idx_t GetChildCapacity() const;
-
-	void SetSize(idx_t new_size);
 
 public:
 	idx_t GetDataSize(const LogicalType &type, idx_t count) const override;
@@ -61,12 +55,11 @@ protected:
 	buffer_ptr<VectorBuffer> FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
 	                                              idx_t count) const override;
 	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, idx_t offset, idx_t end) override;
-	buffer_ptr<VectorBuffer> CreateBuffer(AllocatedData &&new_data, idx_t capacity) const override;
+	buffer_ptr<VectorBuffer> CreateBuffer(AllocatedData &&new_data, idx_t count) const override;
 
 private:
 	//! child vectors used for nested data
 	unique_ptr<Vector> child;
-	idx_t size = 0;
 };
 
 struct ListVector {

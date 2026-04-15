@@ -47,9 +47,25 @@ void VectorStructBuffer::SetVectorType(VectorType new_vector_type) {
 VectorStructBuffer::~VectorStructBuffer() {
 }
 
-void VectorStructBuffer::ResetCapacity(idx_t capacity) {
-	this->capacity = capacity;
-	validity.Reset(capacity);
+void VectorStructBuffer::ResetCache(idx_t new_capacity) {
+	D_ASSERT(new_capacity <= capacity);
+	this->capacity = new_capacity;
+	validity.Reset(new_capacity);
+	size = 0;
+}
+
+void VectorStructBuffer::SetSize(idx_t new_size) {
+	if (vector_type != VectorType::CONSTANT_VECTOR) {
+		// for flat vectors we need to check the capacity
+		// for constant vectors we do not
+		if (new_size > capacity) {
+			throw InternalException("Vector::SetSize out of range - trying to set size to %d for vector with capacity %d", new_size, capacity);
+		}
+	}
+	this->size = new_size;
+	for(auto &child : children) {
+		FlatVector::SetSize(child, new_size);
+	}
 }
 
 idx_t VectorStructBuffer::GetDataSize(const LogicalType &type, idx_t count) const {
@@ -218,6 +234,7 @@ buffer_ptr<VectorBuffer> VectorStructBuffer::FlattenSliceInternal(const LogicalT
 	// copy validity using sel
 	auto &result_validity = result->GetValidityMask();
 	result_validity.CopySel(validity, sel, 0, 0, count);
+	result->size = count;
 	return result;
 }
 

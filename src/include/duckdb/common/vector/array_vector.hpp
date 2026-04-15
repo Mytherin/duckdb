@@ -25,7 +25,8 @@ public:
 	idx_t Capacity() const override {
 		return capacity;
 	}
-	void ResetCapacity(idx_t capacity) override;
+	void ResetCache(idx_t capacity) override;
+	void SetSize(idx_t new_size) override;
 	const ValidityMask &GetValidityMask() const override {
 		return validity;
 	}
