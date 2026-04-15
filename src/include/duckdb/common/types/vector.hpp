@@ -159,6 +159,10 @@ public:
 		buffer = other.buffer;
 	}
 
+	//! FIXME: should be removed - all vectors need to have a size eventually
+	bool HasSize() const;
+	idx_t size() const; // NOLINT
+
 	//! Resizes the vector.
 	DUCKDB_API void Resize(idx_t cur_size, idx_t new_size);
 
