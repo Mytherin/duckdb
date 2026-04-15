@@ -29,11 +29,12 @@ struct VectorWriter<FixedStruct<Args...>> {
 		children.SetInvalid(idx);
 	}
 
-	ChildrenType children;
-
 private:
 	ValidityMask &validity;
 	idx_t count;
+
+public:
+	ChildrenType children;
 };
 
 } // namespace duckdb

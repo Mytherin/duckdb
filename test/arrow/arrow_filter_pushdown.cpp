@@ -1,8 +1,7 @@
-#include <regex>
-
 #include "catch.hpp"
 
 #include "arrow/arrow_test_helper.hpp"
+#include "duckdb/common/re2_regex.hpp"
 
 using namespace duckdb;
 
@@ -46,8 +45,9 @@ static bool StandaloneFilter(const std::string &explain_str) {
 	// │          ~20 rows         │
 	// └─────────────┬─────────────┘
 	//
-	const std::regex re_filter(R"(│ +FILTER +│)");
-	return std::regex_search(explain_str, re_filter);
+	duckdb_re2::Match match;
+	duckdb_re2::Regex re_filter(R"(│ +FILTER +│)");
+	return duckdb_re2::RegexSearch(explain_str, match, re_filter);
 }
 
 // Helper: regexp search for a scan node with filter
@@ -66,8 +66,9 @@ static bool FilterInScan(const std::string &explain_str) {
 	// │           ~1 row          │
 	// └───────────────────────────┘
 	//
-	const std::regex re_block(R"(│[ \t]*Function:[ \t]*ARROW_SCAN[ \t]*│[\s\S]*?│[ \t]*Filters:[ \t]*([^│]*?)[ \t]*│)");
-	return std::regex_search(explain_str, re_block);
+	duckdb_re2::Match match;
+	duckdb_re2::Regex re_block("(?s)Function:.*ARROW_SCAN.*Filters:");
+	return duckdb_re2::RegexSearch(explain_str, match, re_block);
 }
 
 TEST_CASE("Arrow filter pushdown - view types disable pushdown", "[arrow]") {
