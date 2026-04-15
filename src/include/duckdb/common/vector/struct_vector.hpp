@@ -70,3 +70,5 @@ struct StructVector {
 };
 
 } // namespace duckdb
+
+#include "duckdb/common/vector/struct_vector_writer.hpp"

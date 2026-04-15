@@ -1222,16 +1222,11 @@ static void ToPoints(Vector &source_vec, Vector &target_vec, idx_t row_count) {
 	source_vec.Flatten(row_count);
 
 	const auto geom_data = FlatVector::GetData<string_t>(source_vec);
-	auto &vert_parts = StructVector::GetEntries(target_vec);
-	double *vert_data[V::WIDTH];
-
-	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetDataMutable<double>(vert_parts[i]);
-	}
+	auto writer = FlatVector::Writer<typename V::STRUCT_TYPE>(target_vec, row_count);
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 		if (FlatVector::IsNull(source_vec, row_idx)) {
-			FlatVector::SetNull(target_vec, row_idx, true);
+			writer.SetInvalid(row_idx);
 			continue;
 		}
 
@@ -1245,7 +1240,7 @@ static void ToPoints(Vector &source_vec, Vector &target_vec, idx_t row_count) {
 		reader.Skip(sizeof(uint8_t) + sizeof(uint32_t));
 
 		for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-			vert_data[dim_idx][row_idx] = reader.Read<double>();
+			writer.children[dim_idx][row_idx] = reader.Read<double>();
 		}
 	}
 }
@@ -1255,13 +1250,8 @@ static void FromPoints(Vector &source_vec, Vector &target_vec, idx_t row_count, 
 	// Flatten the source vector to extract all vertices
 	source_vec.Flatten(row_count);
 
-	auto &vert_parts = StructVector::GetEntries(source_vec);
+	auto vert_reader = FlatVector::Writer<typename V::STRUCT_TYPE>(source_vec, row_count);
 	auto geom_data = FlatVector::GetDataMutable<string_t>(target_vec);
-	double *vert_data[V::WIDTH];
-
-	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetDataMutable<double>(vert_parts[i]);
-	}
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 		const auto out_idx = result_offset + row_idx;
@@ -1285,7 +1275,7 @@ static void FromPoints(Vector &source_vec, Vector &target_vec, idx_t row_count, 
 
 		// Write vertex data
 		for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-			writer.Write<double>(vert_data[dim_idx][row_idx]);
+			writer.Write<double>(vert_reader.children[dim_idx][row_idx]);
 		}
 
 		blob.Finalize();
@@ -1324,11 +1314,7 @@ static void ToLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_coun
 	ListVector::SetListSize(target_vec, vert_total);
 
 	auto list_data = FlatVector::GetDataMutable<list_entry_t>(target_vec);
-	auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(target_vec));
-	double *vert_data[V::WIDTH];
-	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetDataMutable<double>(vert_parts[i]);
-	}
+	auto vert_writer = FlatVector::Writer<typename V::STRUCT_TYPE>(ListVector::GetEntry(target_vec), vert_total);
 
 	// Second pass, write out the linestrings
 
@@ -1354,7 +1340,7 @@ static void ToLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_coun
 		// Read vertices
 		for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
 			for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-				vert_data[dim_idx][vert_start + vert_idx] = reader.Read<double>();
+				vert_writer.children[dim_idx][vert_start + vert_idx] = reader.Read<double>();
 			}
 		}
 
@@ -1370,12 +1356,7 @@ static void FromLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_co
 	source_vec.Flatten(row_count);
 
 	const auto line_data = FlatVector::GetData<list_entry_t>(source_vec);
-	auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(source_vec));
-
-	double *vert_data[V::WIDTH];
-	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetDataMutable<double>(vert_parts[i]);
-	}
+	auto vert_reader = FlatVector::Writer<typename V::STRUCT_TYPE>(ListVector::GetEntry(source_vec));
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 		const auto out_idx = result_offset + row_idx;
@@ -1404,7 +1385,7 @@ static void FromLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_co
 		// Write vertex data
 		for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
 			for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-				writer.Write<double>(vert_data[dim_idx][line_entry.offset + vert_idx]);
+				writer.Write<double>(vert_reader.children[dim_idx][line_entry.offset + vert_idx]);
 			}
 		}
 
@@ -1460,12 +1441,7 @@ static void ToPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count) 
 
 	auto poly_data = FlatVector::GetDataMutable<list_entry_t>(target_vec);
 	auto ring_data = FlatVector::GetDataMutable<list_entry_t>(ring_vec);
-	auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(ring_vec));
-	double *vert_data[V::WIDTH];
-
-	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetDataMutable<double>(vert_parts[i]);
-	}
+	auto vert_writer = FlatVector::Writer<typename V::STRUCT_TYPE>(ListVector::GetEntry(ring_vec), vert_total);
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 		if (FlatVector::IsNull(source_vec, row_idx)) {
@@ -1498,7 +1474,7 @@ static void ToPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count) 
 			// Read vertices
 			for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
 				for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-					vert_data[dim_idx][vert_start + vert_idx] = reader.Read<double>();
+					vert_writer.children[dim_idx][vert_start + vert_idx] = reader.Read<double>();
 				}
 			}
 
@@ -1519,12 +1495,7 @@ static void FromPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count
 	const auto poly_data = FlatVector::GetData<list_entry_t>(source_vec);
 	auto &ring_vec = ListVector::GetEntry(source_vec);
 	const auto ring_data = FlatVector::GetData<list_entry_t>(ring_vec);
-	auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(ring_vec));
-
-	double *vert_data[V::WIDTH];
-	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetDataMutable<double>(vert_parts[i]);
-	}
+	auto vert_reader = FlatVector::Writer<typename V::STRUCT_TYPE>(ListVector::GetEntry(ring_vec));
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 		const auto out_idx = result_offset + row_idx;
@@ -1569,7 +1540,7 @@ static void FromPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count
 			// Write vertex data
 			for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
 				for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-					writer.Write<double>(vert_data[dim_idx][ring_entry.offset + vert_idx]);
+					writer.Write<double>(vert_reader.children[dim_idx][ring_entry.offset + vert_idx]);
 				}
 			}
 		}
@@ -1611,11 +1582,7 @@ static void ToMultiPoints(Vector &source_vec, Vector &target_vec, idx_t row_coun
 	ListVector::SetListSize(target_vec, vert_total);
 
 	auto mult_data = FlatVector::GetDataMutable<list_entry_t>(target_vec);
-	auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(target_vec));
-	double *vert_data[V::WIDTH];
-	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetDataMutable<double>(vert_parts[i]);
-	}
+	auto vert_writer = FlatVector::Writer<typename V::STRUCT_TYPE>(ListVector::GetEntry(target_vec), vert_total);
 
 	// Second pass, write out the multipoints
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
@@ -1643,7 +1610,7 @@ static void ToMultiPoints(Vector &source_vec, Vector &target_vec, idx_t row_coun
 			reader.Skip(sizeof(uint8_t) + sizeof(uint32_t));
 
 			for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-				vert_data[dim_idx][vert_start + part_idx] = reader.Read<double>();
+				vert_writer.children[dim_idx][vert_start + part_idx] = reader.Read<double>();
 			}
 		}
 
@@ -1659,12 +1626,7 @@ static void FromMultiPoints(Vector &source_vec, Vector &target_vec, idx_t row_co
 	source_vec.Flatten(row_count);
 
 	const auto mult_data = FlatVector::GetData<list_entry_t>(source_vec);
-	auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(source_vec));
-
-	double *vert_data[V::WIDTH];
-	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetDataMutable<double>(vert_parts[i]);
-	}
+	auto vert_reader = FlatVector::Writer<typename V::STRUCT_TYPE>(ListVector::GetEntry(source_vec));
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 		const auto out_idx = result_offset + row_idx;
@@ -1706,7 +1668,7 @@ static void FromMultiPoints(Vector &source_vec, Vector &target_vec, idx_t row_co
 
 			// Write vertex data
 			for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-				writer.Write<double>(vert_data[dim_idx][mult_entry.offset + part_idx]);
+				writer.Write<double>(vert_reader.children[dim_idx][mult_entry.offset + part_idx]);
 			}
 		}
 
@@ -1769,11 +1731,7 @@ static void ToMultiLineStrings(Vector &source_vec, Vector &target_vec, idx_t row
 
 	auto mult_data = FlatVector::GetDataMutable<list_entry_t>(target_vec);
 	auto line_data = FlatVector::GetDataMutable<list_entry_t>(line_vec);
-	auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(line_vec));
-	double *vert_data[V::WIDTH];
-	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetDataMutable<double>(vert_parts[i]);
-	}
+	auto vert_writer = FlatVector::Writer<typename V::STRUCT_TYPE>(ListVector::GetEntry(line_vec), vert_total);
 
 	// Second pass, write out the multilinestrings
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
@@ -1809,7 +1767,7 @@ static void ToMultiLineStrings(Vector &source_vec, Vector &target_vec, idx_t row
 			// Read vertices
 			for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
 				for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-					vert_data[dim_idx][vert_start + vert_idx] = reader.Read<double>();
+					vert_writer.children[dim_idx][vert_start + vert_idx] = reader.Read<double>();
 				}
 			}
 
@@ -1831,11 +1789,7 @@ static void FromMultiLineStrings(Vector &source_vec, Vector &target_vec, idx_t r
 	const auto mult_data = FlatVector::GetData<list_entry_t>(source_vec);
 	auto &line_vec = ListVector::GetEntry(source_vec);
 	const auto line_data = FlatVector::GetData<list_entry_t>(line_vec);
-	auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(line_vec));
-	double *vert_data[V::WIDTH];
-	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetDataMutable<double>(vert_parts[i]);
-	}
+	auto vert_reader = FlatVector::Writer<typename V::STRUCT_TYPE>(ListVector::GetEntry(line_vec));
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 		const auto out_idx = result_offset + row_idx;
@@ -1886,7 +1840,7 @@ static void FromMultiLineStrings(Vector &source_vec, Vector &target_vec, idx_t r
 			// Write vertex data
 			for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
 				for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-					writer.Write<double>(vert_data[dim_idx][line_entry.offset + vert_idx]);
+					writer.Write<double>(vert_reader.children[dim_idx][line_entry.offset + vert_idx]);
 				}
 			}
 		}
@@ -1955,11 +1909,7 @@ static void ToMultiPolygons(Vector &source_vec, Vector &target_vec, idx_t row_co
 	auto mult_data = FlatVector::GetDataMutable<list_entry_t>(target_vec);
 	auto poly_data = FlatVector::GetDataMutable<list_entry_t>(poly_vec);
 	auto ring_data = FlatVector::GetDataMutable<list_entry_t>(ring_vec);
-	auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(ring_vec));
-	double *vert_data[V::WIDTH];
-	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetDataMutable<double>(vert_parts[i]);
-	}
+	auto vert_writer = FlatVector::Writer<typename V::STRUCT_TYPE>(ListVector::GetEntry(ring_vec), vert_total);
 
 	// Second pass, write out the multipolygons
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
@@ -2006,7 +1956,7 @@ static void ToMultiPolygons(Vector &source_vec, Vector &target_vec, idx_t row_co
 				// Read vertices
 				for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
 					for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-						vert_data[dim_idx][vert_start + vert_idx] = reader.Read<double>();
+						vert_writer.children[dim_idx][vert_start + vert_idx] = reader.Read<double>();
 					}
 				}
 				vert_start += vert_count;
@@ -2027,11 +1977,7 @@ static void FromMultiPolygons(Vector &source_vec, Vector &target_vec, idx_t row_
 	const auto poly_data = FlatVector::GetData<list_entry_t>(poly_vec);
 	auto &ring_vec = ListVector::GetEntry(poly_vec);
 	const auto ring_data = FlatVector::GetData<list_entry_t>(ring_vec);
-	auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(ring_vec));
-	double *vert_data[V::WIDTH];
-	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetDataMutable<double>(vert_parts[i]);
-	}
+	auto vert_reader = FlatVector::Writer<typename V::STRUCT_TYPE>(ListVector::GetEntry(ring_vec));
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 		const auto out_idx = result_offset + row_idx;
@@ -2094,7 +2040,7 @@ static void FromMultiPolygons(Vector &source_vec, Vector &target_vec, idx_t row_
 				// Write vertex data
 				for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
 					for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-						writer.Write<double>(vert_data[dim_idx][ring_entry.offset + vert_idx]);
+						writer.Write<double>(vert_reader.children[dim_idx][ring_entry.offset + vert_idx]);
 					}
 				}
 			}

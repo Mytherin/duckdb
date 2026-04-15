@@ -10,8 +10,15 @@
 
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/types/string_heap.hpp"
+#include <array>
+#include <tuple>
+#include <type_traits>
 
 namespace duckdb {
+
+//! Tag type for struct vector writers with a fixed set of child types
+template <class... Args>
+struct FixedStruct {};
 
 template <class T>
 struct VectorWriter {
@@ -113,6 +120,79 @@ private:
 	ValidityMask &validity;
 	optional_ptr<StringHeap> heap;
 	idx_t count;
+};
+
+//===--------------------------------------------------------------------===//
+// FixedStruct VectorWriter helpers (specialization in struct_vector_writer.hpp)
+//===--------------------------------------------------------------------===//
+
+//! Helper to check if all types in a parameter pack are the same
+template <class...>
+struct AllSameType : std::true_type {};
+template <class T>
+struct AllSameType<T> : std::true_type {};
+template <class T, class U, class... Rest>
+struct AllSameType<T, U, Rest...>
+    : std::conditional_t<std::is_same<T, U>::value, AllSameType<U, Rest...>, std::false_type> {};
+
+//! Children container for homogeneous struct writers (all children same type) - supports operator[]
+template <bool HOMOGENEOUS, class... Args>
+struct StructWriterChildren;
+
+template <class T, class... Rest>
+struct StructWriterChildren<true, T, Rest...> {
+	static constexpr idx_t SIZE = 1 + sizeof...(Rest);
+
+	template <size_t... Is>
+	StructWriterChildren(vector<Vector> &entries, idx_t count, std::index_sequence<Is...>)
+	    : data {{VectorWriter<T>(entries[Is], count)...}} {
+	}
+
+	VectorWriter<T> &operator[](idx_t idx) {
+		return data[idx];
+	}
+	const VectorWriter<T> &operator[](idx_t idx) const {
+		return data[idx];
+	}
+
+	void SetInvalid(idx_t idx) {
+		for (idx_t i = 0; i < SIZE; i++) {
+			data[i].SetInvalid(idx);
+		}
+	}
+
+	std::array<VectorWriter<T>, SIZE> data;
+};
+
+//! Children container for heterogeneous struct writers (mixed child types) - supports Get<N>()
+template <class... Args>
+struct StructWriterChildren<false, Args...> {
+	template <size_t... Is>
+	StructWriterChildren(vector<Vector> &entries, idx_t count, std::index_sequence<Is...>)
+	    : data(VectorWriter<Args>(entries[Is], count)...) {
+	}
+
+	template <size_t N>
+	auto &Get() {
+		return std::get<N>(data);
+	}
+	template <size_t N>
+	const auto &Get() const {
+		return std::get<N>(data);
+	}
+
+	void SetInvalid(idx_t idx) {
+		SetInvalidImpl(idx, std::index_sequence_for<Args...> {});
+	}
+
+	std::tuple<VectorWriter<Args>...> data;
+
+private:
+	template <size_t... Is>
+	void SetInvalidImpl(idx_t idx, std::index_sequence<Is...>) {
+		int dummy[] = {(std::get<Is>(data).SetInvalid(idx), 0)...};
+		(void)dummy;
+	}
 };
 
 } // namespace duckdb
