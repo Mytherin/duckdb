@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/vector/vector_writer.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 
 namespace duckdb {
 
