@@ -383,12 +383,16 @@ void DataChunk::Hash(vector<idx_t> &column_ids, Vector &result) {
 	}
 }
 
-void DataChunk::Verify(optional_ptr<DatabaseInstance> database_instance) {
+void DataChunk::Verify(optional_ptr<DatabaseInstance> database_instance) const {
 #ifdef DEBUG
 	D_ASSERT(size() <= capacity);
 	// verify that all vectors in this chunk have the chunk selection vector
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		data[i].Verify(size());
+
+		if (data[i].HasSize()) {
+			D_ASSERT(data[i].size() == size());
+		}
 	}
 
 	if (!ColumnCount()) {

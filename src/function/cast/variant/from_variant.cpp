@@ -159,6 +159,7 @@ static bool CastVariantToPrimitive(FromVariantConversionData &conversion_data, V
 	auto &target_type = result.GetType();
 	auto result_data = FlatVector::GetDataMutable<T>(result);
 	auto &result_validity = FlatVector::Validity(result);
+	FlatVector::SetSize(result, offset + count);
 
 	bool all_valid = true;
 	for (idx_t i = 0; i < count; i++) {

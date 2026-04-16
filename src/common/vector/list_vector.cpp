@@ -20,6 +20,9 @@ VectorListBuffer::VectorListBuffer(idx_t capacity, const LogicalType &list_type,
 VectorListBuffer::VectorListBuffer(data_ptr_t data, idx_t capacity, const Vector &vector)
     : StandardVectorBuffer(data, capacity) {
 	buffer_type = VectorBufferType::LIST_BUFFER;
+	if (!vector.HasSize()) {
+		throw InternalException("VectorListBuffer created with a child vector without a size");
+	}
 	child = make_uniq<Vector>(Vector::Ref(vector));
 }
 
@@ -28,12 +31,18 @@ VectorListBuffer::VectorListBuffer(data_ptr_t data, idx_t capacity, const Vector
 	buffer_type = VectorBufferType::LIST_BUFFER;
 	child = make_uniq<Vector>(Vector::Ref(parent.GetChild()));
 	size = capacity;
+	if (!child->HasSize()) {
+		throw InternalException("VectorListBuffer created with a child vector without a size");
+	}
 }
 
 VectorListBuffer::VectorListBuffer(AllocatedData allocated_data_p, idx_t capacity, const VectorListBuffer &parent)
     : StandardVectorBuffer(std::move(allocated_data_p), capacity) {
 	buffer_type = VectorBufferType::LIST_BUFFER;
 	child = make_uniq<Vector>(Vector::Ref(parent.GetChild()));
+	if (!child->HasSize()) {
+		throw InternalException("VectorListBuffer created with a child vector without a size");
+	}
 }
 
 void VectorListBuffer::Reserve(idx_t to_reserve) {
@@ -96,9 +105,6 @@ idx_t VectorListBuffer::GetAllocationSize() const {
 }
 
 void VectorListBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
-	if (count == 0) {
-		return;
-	}
 	D_ASSERT(type.InternalType() == PhysicalType::LIST);
 	D_ASSERT(vector_type == VectorType::FLAT_VECTOR || vector_type == VectorType::CONSTANT_VECTOR);
 	if (type.id() == LogicalTypeId::MAP) {
@@ -114,9 +120,8 @@ void VectorListBuffer::Verify(const LogicalType &type, const SelectionVector &se
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
 		count = 1;
 	}
-	// NOTE: size > capacity can occur in valid intermediate states (e.g. after SetListSize before Reserve)
+	// FIXME: size > capacity can occur in intermediate states right now... (e.g. after SetListSize before Reserve)
 	// D_ASSERT(size <= capacity);
-	idx_t total_size = 0;
 	auto child_size = child->size();
 	auto list_data = reinterpret_cast<list_entry_t *>(data_ptr);
 	for (idx_t i = 0; i < count; i++) {
@@ -125,23 +130,9 @@ void VectorListBuffer::Verify(const LogicalType &type, const SelectionVector &se
 		auto &le = list_data[idx];
 		if (validity.RowIsValid(idx)) {
 			D_ASSERT(le.offset + le.length <= child_size);
-			total_size += le.length;
 		}
 	}
-	SelectionVector child_sel(total_size);
-	idx_t child_count = 0;
-	for (idx_t i = 0; i < count; i++) {
-		auto idx = sel.get_index(i);
-		idx = vector_type == VectorType::CONSTANT_VECTOR ? 0 : idx;
-		auto &le = list_data[idx];
-		if (validity.RowIsValid(idx)) {
-			D_ASSERT(le.offset + le.length <= child_size);
-			for (idx_t k = 0; k < le.length; k++) {
-				child_sel.set_index(child_count++, le.offset + k);
-			}
-		}
-	}
-	child->Verify(child_sel, child_count);
+	child->Verify(child_size);
 }
 
 buffer_ptr<VectorBuffer> VectorListBuffer::SliceInternal(const LogicalType &type, idx_t offset, idx_t end) {

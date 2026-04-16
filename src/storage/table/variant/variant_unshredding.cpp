@@ -257,6 +257,8 @@ void VariantUtils::UnshredVariantData(Vector &input, Vector &output, idx_t count
 
 	auto variant_values = Unshred(variant, shredded, count, nullptr);
 	VariantValue::ToVARIANT(variant_values, output);
+
+	FlatVector::SetSize(output, count);
 }
 
 } // namespace duckdb

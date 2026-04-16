@@ -181,7 +181,7 @@ struct FlatVector {
 	}
 	template <class T>
 	static VectorWriter<T> Writer(Vector &vector) {
-		return Writer<T>(vector);
+		return VectorWriter<T>(vector);
 	}
 };
 

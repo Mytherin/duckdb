@@ -114,19 +114,29 @@ buffer_ptr<VectorBuffer> VectorBuffer::Flatten(const LogicalType &type, idx_t co
 		}
 		count = size.GetIndex();
 	}
-	return FlattenSliceInternal(type, *FlatVector::IncrementalSelectionVector(), count);
+	auto result = FlattenSliceInternal(type, *FlatVector::IncrementalSelectionVector(), count);
+	if (result && (!result->HasSize() || result->Size() != count)) {
+		throw InternalException("FlattenSliceInternal did not set size correctly");
+	}
+	return result;
 }
 
 buffer_ptr<VectorBuffer> VectorBuffer::FlattenSlice(const LogicalType &type, const SelectionVector &sel,
                                                     idx_t count) const {
+	buffer_ptr<VectorBuffer> result;
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
 		// if the vector is a constant vector the input selection vector does not matter
 		// we always need to select the first value
 		SelectionVector owned_sel;
 		auto &constant_sel = *ConstantVector::ZeroSelectionVector(count, owned_sel);
-		return FlattenSliceInternal(type, constant_sel, count);
+		result = FlattenSliceInternal(type, constant_sel, count);
+	} else {
+		result = FlattenSliceInternal(type, sel, count);
 	}
-	return FlattenSliceInternal(type, sel, count);
+	if (result && (!result->HasSize() || result->Size() != count)) {
+		throw InternalException("FlattenSliceInternal did not set size correctly");
+	}
+	return result;
 }
 
 buffer_ptr<VectorBuffer> VectorBuffer::FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
@@ -192,7 +202,7 @@ void VectorBuffer::SetValue(const LogicalType &type, idx_t index, const Value &v
 }
 
 Value VectorBuffer::GetValue(const LogicalType &type, idx_t index) const {
-	if (HasSize() && index >= Size()) {
+	if (vector_type != VectorType::CONSTANT_VECTOR && HasSize() && index >= Size()) {
 		throw InternalException("VectorBuffer::GetValue out of range for vector - attempting to access index %d for vector of size %d", index, Size());
 	}
 	return GetValueInternal(type, index);

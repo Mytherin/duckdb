@@ -429,8 +429,7 @@ void Vector::Shred(Vector &shredded_data) {
 	this->buffer = make_buffer<ShreddedVectorBuffer>(shredded_data);
 }
 
-// FIXME: This should ideally be const
-void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_serialization) {
+void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_serialization) const {
 	auto &logical_type = GetType();
 
 	UnifiedVectorFormat vdata;
@@ -655,7 +654,9 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 
 	// first handle deserialization of compressed vector types
 	if (vtype == VectorType::CONSTANT_VECTOR) {
-		Vector::Deserialize(deserializer, 1); // read a vector of size 1
+		// read a vector of size 1
+		Vector::Deserialize(deserializer, 1);
+		FlatVector::SetSize(*this, count);
 		Vector::SetVectorType(VectorType::CONSTANT_VECTOR);
 		return;
 	} else if (vtype == VectorType::DICTIONARY_VECTOR) {
@@ -795,6 +796,7 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 			throw InternalException("Unimplemented variable width type for Vector::Deserialize!");
 		}
 	}
+	FlatVector::SetSize(*this, count);
 }
 
 VectorType Vector::GetVectorType() const {

@@ -93,7 +93,7 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::SliceInternal(const LogicalType &
 
 buffer_ptr<VectorBuffer> StandardVectorBuffer::CreateBuffer(AllocatedData &&new_data, idx_t count) const {
 	auto result = make_buffer<StandardVectorBuffer>(std::move(new_data), count);
-	result->size = capacity;
+	result->size = count;
 	return std::move(result);
 }
 

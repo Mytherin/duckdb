@@ -203,7 +203,7 @@ struct VectorOperations {
 
 	// Copy the data of <source> to the target location, setting null values to
 	// NullValue<T>. Used to store data without separate NULL mask.
-	static void WriteToStorage(Vector &source, idx_t count, data_ptr_t target);
+	static void WriteToStorage(const Vector &source, idx_t count, data_ptr_t target);
 	// Reads the data of <source> to the target vector, setting the nullmask
 	// for any NullValue<T> of source. Used to go back from storage to a proper vector
 	static void ReadFromStorage(data_ptr_t source, idx_t count, Vector &result);
