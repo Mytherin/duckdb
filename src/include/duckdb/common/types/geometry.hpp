@@ -38,7 +38,7 @@ struct VertexXY {
 	static constexpr auto HAS_Z = false;
 	static constexpr auto HAS_M = false;
 	static constexpr auto WIDTH = 2;
-	using STRUCT_TYPE = FixedStruct<double, double>;
+	using STRUCT_TYPE = FlatStruct<double, double>;
 
 	double x;
 	double y;
@@ -53,7 +53,7 @@ struct VertexXYZ {
 	static constexpr auto HAS_Z = true;
 	static constexpr auto HAS_M = false;
 	static constexpr auto WIDTH = 3;
-	using STRUCT_TYPE = FixedStruct<double, double, double>;
+	using STRUCT_TYPE = FlatStruct<double, double, double>;
 
 	double x;
 	double y;
@@ -68,7 +68,7 @@ struct VertexXYM {
 	static constexpr auto HAS_M = true;
 	static constexpr auto HAS_Z = false;
 	static constexpr auto WIDTH = 3;
-	using STRUCT_TYPE = FixedStruct<double, double, double>;
+	using STRUCT_TYPE = FlatStruct<double, double, double>;
 
 	double x;
 	double y;
@@ -84,7 +84,7 @@ struct VertexXYZM {
 	static constexpr auto HAS_Z = true;
 	static constexpr auto HAS_M = true;
 	static constexpr auto WIDTH = 4;
-	using STRUCT_TYPE = FixedStruct<double, double, double, double>;
+	using STRUCT_TYPE = FlatStruct<double, double, double, double>;
 
 	double x;
 	double y;

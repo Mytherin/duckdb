@@ -13,12 +13,9 @@
 
 namespace duckdb {
 
-//! VectorWriter specialization for FixedStruct - writes into struct vectors
+//! VectorWriter specialization for FlatStruct - writes into struct vectors
 template <class... Args>
-struct VectorWriter<FixedStruct<Args...>> {
-	static constexpr bool IS_HOMOGENEOUS = AllSameType<Args...>::value;
-	using ChildrenType = StructWriterChildren<IS_HOMOGENEOUS, Args...>;
-
+struct VectorWriter<FlatStruct<Args...>> {
 	VectorWriter(Vector &vector, idx_t count)
 	    : validity(FlatVector::Validity(vector)), count(count),
 	      children(StructVector::GetEntries(vector), count, std::index_sequence_for<Args...> {}) {
@@ -35,7 +32,7 @@ private:
 	idx_t count;
 
 public:
-	ChildrenType children;
+	StructWriterChildren<Args...> children;
 };
 
 } // namespace duckdb

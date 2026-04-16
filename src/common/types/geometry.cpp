@@ -1299,9 +1299,7 @@ static void ToPoints(Vector &source_vec, Vector &target_vec, idx_t row_count) {
 		// Skip byte order and type/meta
 		reader.Skip(sizeof(uint8_t) + sizeof(uint32_t));
 
-		for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-			writer.children[dim_idx][row_idx] = reader.Read<double>();
-		}
+		writer.children.ForEachChild([&](auto &child) { child[row_idx] = reader.Read<double>(); });
 	}
 }
 
@@ -1334,9 +1332,7 @@ static void FromPoints(Vector &source_vec, Vector &target_vec, idx_t row_count, 
 		writer.Write<uint32_t>(meta); // Type/meta
 
 		// Write vertex data
-		for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-			writer.Write<double>(vert_reader.children[dim_idx][row_idx]);
-		}
+		vert_reader.children.ForEachChild([&](auto &child) { writer.Write<double>(child[row_idx]); });
 
 		blob.Finalize();
 		geom_data[out_idx] = blob;
@@ -1399,9 +1395,7 @@ static void ToLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_coun
 
 		// Read vertices
 		for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
-			for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-				vert_writer.children[dim_idx][vert_start + vert_idx] = reader.Read<double>();
-			}
+			vert_writer.children.ForEachChild([&](auto &child) { child[vert_start + vert_idx] = reader.Read<double>(); });
 		}
 
 		vert_start += vert_count;
@@ -1444,9 +1438,7 @@ static void FromLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_co
 
 		// Write vertex data
 		for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
-			for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-				writer.Write<double>(vert_reader.children[dim_idx][line_entry.offset + vert_idx]);
-			}
+			vert_reader.children.ForEachChild([&](auto &child) { writer.Write<double>(child[line_entry.offset + vert_idx]); });
 		}
 
 		blob.Finalize();
@@ -1533,9 +1525,7 @@ static void ToPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count) 
 
 			// Read vertices
 			for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
-				for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-					vert_writer.children[dim_idx][vert_start + vert_idx] = reader.Read<double>();
-				}
+				vert_writer.children.ForEachChild([&](auto &child) { child[vert_start + vert_idx] = reader.Read<double>(); });
 			}
 
 			vert_start += vert_count;
@@ -1599,9 +1589,7 @@ static void FromPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count
 
 			// Write vertex data
 			for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
-				for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-					writer.Write<double>(vert_reader.children[dim_idx][ring_entry.offset + vert_idx]);
-				}
+				vert_reader.children.ForEachChild([&](auto &child) { writer.Write<double>(child[ring_entry.offset + vert_idx]); });
 			}
 		}
 
@@ -1669,9 +1657,7 @@ static void ToMultiPoints(Vector &source_vec, Vector &target_vec, idx_t row_coun
 			// Skip byte order and type/meta of the point
 			reader.Skip(sizeof(uint8_t) + sizeof(uint32_t));
 
-			for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-				vert_writer.children[dim_idx][vert_start + part_idx] = reader.Read<double>();
-			}
+			vert_writer.children.ForEachChild([&](auto &child) { child[vert_start + part_idx] = reader.Read<double>(); });
 		}
 
 		vert_start += part_count;
@@ -1727,9 +1713,7 @@ static void FromMultiPoints(Vector &source_vec, Vector &target_vec, idx_t row_co
 			writer.Write<uint32_t>(point_meta); // Type/meta
 
 			// Write vertex data
-			for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-				writer.Write<double>(vert_reader.children[dim_idx][mult_entry.offset + part_idx]);
-			}
+			vert_reader.children.ForEachChild([&](auto &child) { writer.Write<double>(child[mult_entry.offset + part_idx]); });
 		}
 
 		blob.Finalize();
@@ -1826,9 +1810,7 @@ static void ToMultiLineStrings(Vector &source_vec, Vector &target_vec, idx_t row
 
 			// Read vertices
 			for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
-				for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-					vert_writer.children[dim_idx][vert_start + vert_idx] = reader.Read<double>();
-				}
+				vert_writer.children.ForEachChild([&](auto &child) { child[vert_start + vert_idx] = reader.Read<double>(); });
 			}
 
 			vert_start += vert_count;
@@ -1899,9 +1881,7 @@ static void FromMultiLineStrings(Vector &source_vec, Vector &target_vec, idx_t r
 
 			// Write vertex data
 			for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
-				for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-					writer.Write<double>(vert_reader.children[dim_idx][line_entry.offset + vert_idx]);
-				}
+				vert_reader.children.ForEachChild([&](auto &child) { writer.Write<double>(child[line_entry.offset + vert_idx]); });
 			}
 		}
 		blob.Finalize();
@@ -2015,9 +1995,7 @@ static void ToMultiPolygons(Vector &source_vec, Vector &target_vec, idx_t row_co
 
 				// Read vertices
 				for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
-					for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-						vert_writer.children[dim_idx][vert_start + vert_idx] = reader.Read<double>();
-					}
+					vert_writer.children.ForEachChild([&](auto &child) { child[vert_start + vert_idx] = reader.Read<double>(); });
 				}
 				vert_start += vert_count;
 			}
@@ -2099,9 +2077,7 @@ static void FromMultiPolygons(Vector &source_vec, Vector &target_vec, idx_t row_
 
 				// Write vertex data
 				for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
-					for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-						writer.Write<double>(vert_reader.children[dim_idx][ring_entry.offset + vert_idx]);
-					}
+					vert_reader.children.ForEachChild([&](auto &child) { writer.Write<double>(child[ring_entry.offset + vert_idx]); });
 				}
 			}
 		}
