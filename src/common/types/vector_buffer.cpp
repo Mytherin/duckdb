@@ -145,16 +145,14 @@ buffer_ptr<VectorBuffer> VectorBuffer::FlattenSliceInternal(const LogicalType &t
 }
 
 buffer_ptr<VectorBuffer> VectorBuffer::Slice(const LogicalType &type, idx_t offset, idx_t end) {
-	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		// constant vectors do not need to get sliced
+	if (vector_type == VectorType::CONSTANT_VECTOR && HasSize() && end - offset == Size()) {
 		return nullptr;
 	}
 	return SliceInternal(type, offset, end);
 }
 
 buffer_ptr<VectorBuffer> VectorBuffer::Slice(const LogicalType &type, const SelectionVector &sel, idx_t count) {
-	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		// constant vectors do not need to get sliced
+	if (vector_type == VectorType::CONSTANT_VECTOR && HasSize() && count == Size()) {
 		return nullptr;
 	}
 	return SliceInternal(type, sel, count);

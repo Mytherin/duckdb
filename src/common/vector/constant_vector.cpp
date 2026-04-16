@@ -49,6 +49,7 @@ void ConstantVector::SetNull(Vector &vector) {
 		return;
 	}
 	vector.SetVectorType(VectorType::CONSTANT_VECTOR);
+	FlatVector::SetSize(vector, count);
 	SetNull(vector, true);
 }
 

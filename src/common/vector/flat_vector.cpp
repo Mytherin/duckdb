@@ -402,6 +402,7 @@ void FlatVector::SetData(Vector &vector, data_ptr_t data, idx_t capacity) {
 	} else {
 		vector.buffer = make_buffer<StandardVectorBuffer>(data, capacity);
 	}
+	vector.buffer->SetSize(capacity);
 	vector.buffer->GetValidityMask() = std::move(old_validity);
 }
 

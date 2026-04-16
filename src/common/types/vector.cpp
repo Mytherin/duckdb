@@ -172,20 +172,32 @@ void Vector::Slice(const Vector &other, const SelectionVector &sel, idx_t count)
 }
 
 void Vector::Slice(const SelectionVector &sel, idx_t count) {
-	if (!sel.IsSet() || count == 0) {
-		return;
+	buffer_ptr<VectorBuffer> new_buffer;
+	if (!sel.IsSet()) {
+		if (count == buffer->Size()) {
+			// early-out: no need to do anything
+			return;
+		}
+		new_buffer = buffer->Slice(GetType(), 0, count);
+	} else {
+		new_buffer = buffer->Slice(GetType(), sel, count);
 	}
-	auto new_buffer = buffer->Slice(GetType(), sel, count);
 	if (new_buffer) {
 		buffer = std::move(new_buffer);
 	}
 }
 
 void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
-	if (!sel.IsSet() || count == 0) {
-		return;
+	buffer_ptr<VectorBuffer> new_buffer;
+	if (!sel.IsSet()) {
+		if (count == buffer->Size()) {
+			// early-out: no need to do anything
+			return;
+		}
+		new_buffer = buffer->Slice(GetType(), 0, count);;
+	} else {
+		new_buffer = buffer->SliceWithCache(cache, GetType(), sel, count);
 	}
-	auto new_buffer = buffer->SliceWithCache(cache, GetType(), sel, count);
 	if (new_buffer) {
 		buffer = std::move(new_buffer);
 	}
