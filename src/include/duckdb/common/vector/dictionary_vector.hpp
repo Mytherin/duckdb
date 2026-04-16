@@ -31,10 +31,10 @@ public:
 //! The DictionaryBuffer holds a selection vector and a reference to a DictionaryEntry
 class DictionaryBuffer : public VectorBuffer {
 public:
-	explicit DictionaryBuffer(const SelectionVector &sel, buffer_ptr<DictionaryEntry> entry_p);
-	explicit DictionaryBuffer(buffer_ptr<SelectionData> data, buffer_ptr<DictionaryEntry> entry_p);
-	explicit DictionaryBuffer(const SelectionVector &sel);
-	explicit DictionaryBuffer(buffer_ptr<SelectionData> data);
+	explicit DictionaryBuffer(const SelectionVector &sel, idx_t size, buffer_ptr<DictionaryEntry> entry_p);
+	explicit DictionaryBuffer(buffer_ptr<SelectionData> data, idx_t size, buffer_ptr<DictionaryEntry> entry_p);
+	explicit DictionaryBuffer(const SelectionVector &sel, idx_t size);
+	explicit DictionaryBuffer(buffer_ptr<SelectionData> data, idx_t size);
 	explicit DictionaryBuffer(idx_t count = STANDARD_VECTOR_SIZE);
 
 public:

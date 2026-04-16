@@ -33,7 +33,6 @@ void StandardVectorBuffer::SetVectorType(VectorType new_vector_type) {
 }
 
 void StandardVectorBuffer::ResetCache(idx_t new_capacity) {
-	D_ASSERT(new_capacity <= capacity);
 	this->capacity = new_capacity;
 	validity.Reset(new_capacity);
 	size = 0;
@@ -87,7 +86,7 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::SliceInternal(const LogicalType &
                                                              idx_t count) {
 	Vector child_vector(type, shared_from_this());
 	auto entry = make_shared_ptr<DictionaryEntry>(std::move(child_vector));
-	return make_buffer<DictionaryBuffer>(sel, std::move(entry));
+	return make_buffer<DictionaryBuffer>(sel, count, std::move(entry));
 }
 
 buffer_ptr<VectorBuffer> StandardVectorBuffer::CreateBuffer(AllocatedData &&new_data, idx_t count) const {

@@ -38,7 +38,6 @@ void VectorArrayBuffer::SetVectorType(VectorType new_vector_type) {
 }
 
 void VectorArrayBuffer::ResetCache(idx_t new_capacity) {
-	D_ASSERT(new_capacity <= capacity);
 	this->capacity = new_capacity;
 	validity.Reset(new_capacity);
 	size = 0;

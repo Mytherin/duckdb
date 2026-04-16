@@ -6,22 +6,27 @@
 
 namespace duckdb {
 
-DictionaryBuffer::DictionaryBuffer(const SelectionVector &sel, buffer_ptr<DictionaryEntry> entry_p)
+DictionaryBuffer::DictionaryBuffer(const SelectionVector &sel, idx_t size_p, buffer_ptr<DictionaryEntry> entry_p)
     : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER), sel_vector(sel),
       entry(std::move(entry_p)) {
+	this->size = size_p;
 }
-DictionaryBuffer::DictionaryBuffer(buffer_ptr<SelectionData> data, buffer_ptr<DictionaryEntry> entry_p)
+DictionaryBuffer::DictionaryBuffer(buffer_ptr<SelectionData> data, idx_t size_p, buffer_ptr<DictionaryEntry> entry_p)
     : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER), sel_vector(std::move(data)),
       entry(std::move(entry_p)) {
+	this->size = size_p;
 }
-DictionaryBuffer::DictionaryBuffer(const SelectionVector &sel)
+DictionaryBuffer::DictionaryBuffer(const SelectionVector &sel, idx_t size_p)
     : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER), sel_vector(sel) {
+	this->size = size_p;
 }
-DictionaryBuffer::DictionaryBuffer(buffer_ptr<SelectionData> data)
+DictionaryBuffer::DictionaryBuffer(buffer_ptr<SelectionData> data, idx_t size_p)
     : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER), sel_vector(std::move(data)) {
+	this->size = size_p;
 }
 DictionaryBuffer::DictionaryBuffer(idx_t count)
     : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER), sel_vector(count) {
+	this->size = count;
 }
 
 idx_t DictionaryBuffer::GetDataSize(const LogicalType &type, idx_t count) const {
@@ -77,7 +82,7 @@ buffer_ptr<VectorBuffer> DictionaryBuffer::SliceWithCache(SelCache &cache, const
 	if (cache_entry != cache.cache.end()) {
 		// cached entry exists: use the cached selection vector with our dictionary entry
 		auto &cached_dict = cache_entry->second->Cast<DictionaryBuffer>();
-		result = make_buffer<DictionaryBuffer>(cached_dict.GetSelVector(), entry);
+		result = make_buffer<DictionaryBuffer>(cached_dict.GetSelVector(), count, entry);
 	} else {
 		// no cached entry - perform the slice and store the result
 		result = Slice(type, sel, count);
@@ -101,7 +106,7 @@ buffer_ptr<VectorBuffer> DictionaryBuffer::SliceInternal(const LogicalType &type
 	auto dictionary_id = GetDictionaryId();
 	auto sliced_dictionary = GetSelVector().Slice(sel, count);
 	auto entry = GetEntryPtr();
-	auto new_buffer = make_buffer<DictionaryBuffer>(std::move(sliced_dictionary), std::move(entry));
+	auto new_buffer = make_buffer<DictionaryBuffer>(std::move(sliced_dictionary), count, std::move(entry));
 	if (dictionary_size.IsValid()) {
 		auto &dict_buffer = new_buffer->Cast<DictionaryBuffer>();
 		dict_buffer.SetDictionarySize(dictionary_size.GetIndex());

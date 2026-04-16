@@ -99,8 +99,10 @@ void DataChunk::Reset() {
 		for (idx_t i = 0; i < ColumnCount(); i++) {
 			data[i].ResetFromCache(vector_caches[i]);
 		}
+		count = 0;
+	} else {
+		SetCardinality(0);
 	}
-	SetCardinality(0);
 	capacity = initial_capacity;
 }
 
@@ -113,6 +115,10 @@ void DataChunk::Destroy() {
 
 void DataChunk::SetCardinality(idx_t count_p) {
 	for(auto &child : data) {
+		if (!child.GetBuffer()) {
+			// empty buffer - skip
+			continue;
+		}
 		if (!child.HasSize() || child.size() != count_p) {
 			// override the child size if it hasn't yet been set to this size
 			FlatVector::SetSize(child, count_p);
@@ -217,6 +223,7 @@ void DataChunk::ReferenceColumns(DataChunk &other, const vector<column_t> &colum
 		D_ASSERT(other_col.GetType() == this_col.GetType());
 		this_col.Reference(other_col);
 	}
+	capacity = other.capacity;
 	SetCardinality(other.size());
 }
 

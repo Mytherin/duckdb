@@ -59,6 +59,7 @@ static bool ArrayToArrayCast(Vector &source, Vector &result, idx_t count, CastPa
 	}
 
 	auto &cast_data = parameters.cast_data->Cast<ArrayBoundCastData>();
+	bool all_ok;
 	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 
@@ -73,8 +74,7 @@ static bool ArrayToArrayCast(Vector &source, Vector &result, idx_t count, CastPa
 		D_ASSERT(source_cc.GetVectorType() == VectorType::FLAT_VECTOR || source_array_size == 1);
 
 		CastParameters child_parameters(parameters, cast_data.child_cast_info.cast_data, parameters.local_state);
-		bool all_ok = cast_data.child_cast_info.function(source_cc, result_cc, source_array_size, child_parameters);
-		return all_ok;
+		all_ok = cast_data.child_cast_info.function(source_cc, result_cc, source_array_size, child_parameters);
 	} else {
 		// Flatten if not constant
 		source.Flatten(count);
@@ -85,10 +85,11 @@ static bool ArrayToArrayCast(Vector &source, Vector &result, idx_t count, CastPa
 		auto &result_cc = ArrayVector::GetEntry(result);
 
 		CastParameters child_parameters(parameters, cast_data.child_cast_info.cast_data, parameters.local_state);
-		bool all_ok =
+		all_ok =
 		    cast_data.child_cast_info.function(source_cc, result_cc, count * source_array_size, child_parameters);
-		return all_ok;
 	}
+	FlatVector::SetSize(result, count);
+	return all_ok;
 }
 
 //------------------------------------------------------------------------------

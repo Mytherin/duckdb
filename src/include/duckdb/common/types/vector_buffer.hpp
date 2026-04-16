@@ -99,9 +99,7 @@ public:
 	idx_t Size() const {
 		return size.GetIndex();
 	}
-	virtual void SetSize(idx_t new_size) {
-		throw InternalException("VectorBuffer size cannot be adjusted for this buffer type");
-	}
+	virtual void SetSize(idx_t new_size);
 
 	void AddAuxiliaryData(unique_ptr<AuxiliaryDataHolder> aux_data_p) {
 		if (!auxiliary_data) {

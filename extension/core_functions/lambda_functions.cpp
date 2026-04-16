@@ -176,8 +176,6 @@ LambdaFunctions::GetMutableColumnInfo(vector<LambdaFunctions::ColumnInfo> &data)
 static void ExecuteExpression(const idx_t elem_cnt, const LambdaFunctions::ColumnInfo &column_info,
                               const vector<LambdaFunctions::ColumnInfo> &column_infos, const Vector &index_vector,
                               LambdaExecuteInfo &info) {
-	info.input_chunk.SetCardinality(elem_cnt);
-	info.lambda_chunk.SetCardinality(elem_cnt);
 
 	// slice the child vector
 	Vector slice(column_info.vector, column_info.sel, elem_cnt);
@@ -204,6 +202,8 @@ static void ExecuteExpression(const idx_t elem_cnt, const LambdaFunctions::Colum
 			info.input_chunk.data[i + slice_offset].Reference(slices.back());
 		}
 	}
+	info.input_chunk.SetCardinality(elem_cnt);
+	info.lambda_chunk.SetCardinality(elem_cnt);
 
 	// execute the lambda expression
 	info.expr_executor->Execute(info.input_chunk, info.lambda_chunk);
