@@ -128,6 +128,12 @@ struct FlatVector {
 		return vector.buffer ? vector.buffer->Capacity() : 0;
 	}
 	static void SetSize(Vector &vector, idx_t new_size) {
+		if (!vector.buffer) {
+			if (new_size != 0) {
+				throw InternalException("Calling FlatVector::SetSize on a vector without a buffer with non-zero size");
+			}
+			return;
+		}
 		vector.buffer->SetSize(new_size);
 	}
 	template <class T>

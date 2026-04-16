@@ -57,10 +57,7 @@ public:
 	inline idx_t ColumnCount() const {
 		return data.size();
 	}
-	inline void SetCardinality(idx_t count_p) {
-		D_ASSERT(count_p <= capacity);
-		this->count = count_p;
-	}
+	void SetCardinality(idx_t count_p);
 	inline void SetCardinality(const DataChunk &other) {
 		SetCardinality(other.size());
 	}

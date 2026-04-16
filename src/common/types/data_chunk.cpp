@@ -91,16 +91,16 @@ idx_t DataChunk::GetAllocationSize() const {
 }
 
 void DataChunk::Reset() {
+	if (!data.empty() && !vector_caches.empty()) {
+		// reset from caches
+		if (vector_caches.size() != data.size()) {
+			throw InternalException("VectorCache and column count mismatch in DataChunk::Reset");
+		}
+		for (idx_t i = 0; i < ColumnCount(); i++) {
+			data[i].ResetFromCache(vector_caches[i]);
+		}
+	}
 	SetCardinality(0);
-	if (data.empty() || vector_caches.empty()) {
-		return;
-	}
-	if (vector_caches.size() != data.size()) {
-		throw InternalException("VectorCache and column count mismatch in DataChunk::Reset");
-	}
-	for (idx_t i = 0; i < ColumnCount(); i++) {
-		data[i].ResetFromCache(vector_caches[i]);
-	}
 	capacity = initial_capacity;
 }
 
@@ -109,6 +109,17 @@ void DataChunk::Destroy() {
 	vector_caches.clear();
 	capacity = 0;
 	SetCardinality(0);
+}
+
+void DataChunk::SetCardinality(idx_t count_p) {
+	for(auto &child : data) {
+		if (!child.HasSize() || child.size() != count_p) {
+			// override the child size if it hasn't yet been set to this size
+			FlatVector::SetSize(child, count_p);
+		}
+	}
+	D_ASSERT(count_p <= capacity);
+	this->count = count_p;
 }
 
 Value DataChunk::GetValue(idx_t col_idx, idx_t index) const {
@@ -132,7 +143,7 @@ bool DataChunk::AllConstant() const {
 void DataChunk::Reference(DataChunk &chunk) {
 	D_ASSERT(chunk.ColumnCount() <= ColumnCount());
 	SetCapacity(chunk);
-	SetCardinality(chunk);
+	this->count = chunk.size();
 	for (idx_t i = 0; i < chunk.ColumnCount(); i++) {
 		data[i].Reference(chunk.data[i]);
 	}
@@ -140,7 +151,7 @@ void DataChunk::Reference(DataChunk &chunk) {
 
 void DataChunk::Move(DataChunk &chunk) {
 	SetCapacity(chunk);
-	SetCardinality(chunk);
+	this->count = chunk.size();
 	data = std::move(chunk.data);
 	vector_caches = std::move(chunk.vector_caches);
 
