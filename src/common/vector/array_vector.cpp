@@ -48,7 +48,9 @@ void VectorArrayBuffer::SetSize(idx_t new_size) {
 		// for flat vectors we need to check the capacity
 		// for constant vectors we do not
 		if (new_size > capacity) {
-			throw InternalException("Vector::SetSize out of range - trying to set size to %d for vector with capacity %d", new_size, capacity);
+			throw InternalException(
+			    "Vector::SetSize out of range - trying to set size to %d for vector with capacity %d", new_size,
+			    capacity);
 		}
 	}
 	this->size = new_size;

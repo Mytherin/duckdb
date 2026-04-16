@@ -57,7 +57,9 @@ void VectorBuffer::SetSize(idx_t new_size) {
 	if (Size() == new_size) {
 		return;
 	}
-	throw InternalException("VectorBuffer size cannot be adjusted for this buffer type - and new size %d differs from current size %d", new_size, Size());
+	throw InternalException(
+	    "VectorBuffer size cannot be adjusted for this buffer type - and new size %d differs from current size %d",
+	    new_size, Size());
 }
 
 idx_t VectorBuffer::GetDataSize(const LogicalType &type, idx_t count) const {

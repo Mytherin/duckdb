@@ -114,7 +114,7 @@ void DataChunk::Destroy() {
 }
 
 void DataChunk::SetCardinality(idx_t count_p) {
-	for(auto &child : data) {
+	for (auto &child : data) {
 		if (!child.GetBuffer()) {
 			// empty buffer - skip
 			continue;

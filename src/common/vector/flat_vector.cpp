@@ -43,7 +43,9 @@ void StandardVectorBuffer::SetSize(idx_t new_size) {
 		// for flat vectors we need to check the capacity
 		// for constant vectors we do not
 		if (new_size > capacity) {
-			throw InternalException("Vector::SetSize out of range - trying to set size to %d for vector with capacity %d", new_size, capacity);
+			throw InternalException(
+			    "Vector::SetSize out of range - trying to set size to %d for vector with capacity %d", new_size,
+			    capacity);
 		}
 	}
 	this->size = new_size;
@@ -394,8 +396,7 @@ void FlatVector::SetData(Vector &vector, data_ptr_t data, idx_t capacity) {
 	auto old_validity = std::move(vector.buffer->GetValidityMask());
 	if (vector.GetType().InternalType() == PhysicalType::LIST) {
 		auto &current_buffer = vector.buffer->Cast<VectorListBuffer>();
-		vector.buffer =
-		    make_buffer<VectorListBuffer>(data, capacity, current_buffer.GetChild());
+		vector.buffer = make_buffer<VectorListBuffer>(data, capacity, current_buffer.GetChild());
 	} else if (vector.GetType().InternalType() == PhysicalType::VARCHAR) {
 		vector.buffer = make_buffer<VectorStringBuffer>(data, capacity);
 	} else {
