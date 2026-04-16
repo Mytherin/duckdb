@@ -10,23 +10,10 @@ namespace duckdb {
 buffer_ptr<VectorBuffer> CreateConstantBuffer(const Value &value) {
 	auto &type = value.type();
 	auto internal_type = type.InternalType();
-	if (internal_type == PhysicalType::STRUCT) {
-		auto &child_values = StructValue::GetChildren(value);
-		vector<Vector> child_vectors;
-		for (auto &child_value : child_values) {
-			child_vectors.emplace_back(child_value.type(), CreateConstantBuffer(child_value));
-		}
-		auto struct_buffer = make_buffer<VectorStructBuffer>(std::move(child_vectors), 1ULL);
-		if (value.IsNull()) {
-			// set the top-level struct to NULL
-			struct_buffer->GetValidityMask().SetInvalid(0);
-		}
-		struct_buffer->SetSize(1);
-		return std::move(struct_buffer);
-	}
-	// scalar type
 	buffer_ptr<VectorBuffer> result;
-	if (internal_type == PhysicalType::LIST) {
+	if (internal_type == PhysicalType::STRUCT) {
+		result = make_buffer<VectorStructBuffer>(value.type(), 1ULL);
+	} else if (internal_type == PhysicalType::LIST) {
 		result = make_buffer<VectorListBuffer>(1ULL, value.type());
 	} else if (internal_type == PhysicalType::ARRAY) {
 		result = make_buffer<VectorArrayBuffer>(value.type());
@@ -37,6 +24,7 @@ buffer_ptr<VectorBuffer> CreateConstantBuffer(const Value &value) {
 	}
 	result->SetValue(type, 0, value);
 	result->SetSize(1);
+	result->SetVectorType(VectorType::CONSTANT_VECTOR);
 	return result;
 }
 
