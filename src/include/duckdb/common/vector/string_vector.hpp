@@ -57,9 +57,9 @@ public:
 
 public:
 	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
-	void SetValue(const LogicalType &type, idx_t index, const Value &val) override;
 
 protected:
+	void SetValueInternal(const LogicalType &type, idx_t index, const Value &val) override;
 	buffer_ptr<VectorBuffer> FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
 	                                              idx_t count) const override;
 	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, idx_t offset, idx_t end) override;

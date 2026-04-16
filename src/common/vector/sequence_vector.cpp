@@ -37,7 +37,7 @@ string SequenceBuffer::ToString(const LogicalType &type, idx_t count) const {
 	return retval;
 }
 
-Value SequenceBuffer::GetValue(const LogicalType &type, idx_t index) const {
+Value SequenceBuffer::GetValueInternal(const LogicalType &type, idx_t index) const {
 	return Value::Numeric(type, start + static_cast<int64_t>(static_cast<uint64_t>(increment) * index));
 }
 

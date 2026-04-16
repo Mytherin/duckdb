@@ -139,7 +139,7 @@ void VectorStructBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &forma
 	format.validity = validity;
 }
 
-void VectorStructBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {
+void VectorStructBuffer::SetValueInternal(const LogicalType &type, idx_t index, const Value &val) {
 	if (!val.IsNull() && val.type() != type) {
 		SetValue(type, index, val.DefaultCastAs(type));
 		return;
@@ -158,7 +158,7 @@ void VectorStructBuffer::SetValue(const LogicalType &type, idx_t index, const Va
 	}
 }
 
-Value VectorStructBuffer::GetValue(const LogicalType &type, idx_t index) const {
+Value VectorStructBuffer::GetValueInternal(const LogicalType &type, idx_t index) const {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
 		index = 0;
 	}

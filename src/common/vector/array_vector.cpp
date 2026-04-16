@@ -177,7 +177,7 @@ void VectorArrayBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format
 	format.validity = validity;
 }
 
-void VectorArrayBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {
+void VectorArrayBuffer::SetValueInternal(const LogicalType &type, idx_t index, const Value &val) {
 	if (!val.IsNull() && val.type() != type) {
 		SetValue(type, index, val.DefaultCastAs(type));
 		return;
@@ -195,7 +195,7 @@ void VectorArrayBuffer::SetValue(const LogicalType &type, idx_t index, const Val
 	}
 }
 
-Value VectorArrayBuffer::GetValue(const LogicalType &type, idx_t index) const {
+Value VectorArrayBuffer::GetValueInternal(const LogicalType &type, idx_t index) const {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
 		index = 0;
 	}

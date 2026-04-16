@@ -35,8 +35,7 @@ string ShreddedVectorBuffer::ToString(const LogicalType &type, idx_t count) cons
 	return "Shredded: " + shredded.ToString(count) + ", Unshredded: " + unshredded.ToString(count);
 }
 
-Value ShreddedVectorBuffer::GetValue(const LogicalType &type, idx_t index) const {
-	// FIXME: this is extremely inefficient
+Value ShreddedVectorBuffer::GetValueInternal(const LogicalType &type, idx_t index) const {
 	auto &shredded = StructVector::GetEntries(*shredded_data)[1];
 	auto &unshredded = StructVector::GetEntries(*shredded_data)[0];
 

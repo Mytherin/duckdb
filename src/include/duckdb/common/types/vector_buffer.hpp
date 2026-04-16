@@ -146,9 +146,9 @@ public:
 	virtual idx_t GetAllocationSize() const;
 	virtual void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const;
 	//! Get the value at the given index directly from the buffer's data
-	virtual Value GetValue(const LogicalType &type, idx_t index) const;
+	Value GetValue(const LogicalType &type, idx_t index) const;
 	//! Set the value at the given index (flat/constant vectors only)
-	virtual void SetValue(const LogicalType &type, idx_t index, const Value &val);
+	void SetValue(const LogicalType &type, idx_t index, const Value &val);
 	//! Produce a string representation of buffer contents (debug only)
 	virtual string ToString(const LogicalType &type, idx_t count) const;
 	virtual string ToString(const LogicalType &type) const;
@@ -165,6 +165,8 @@ public:
 	virtual buffer_ptr<VectorBuffer> Resize(const LogicalType &type, idx_t current_size, idx_t new_size);
 
 protected:
+	virtual Value GetValueInternal(const LogicalType &type, idx_t index) const;
+	virtual void SetValueInternal(const LogicalType &type, idx_t index, const Value &val);
 	virtual buffer_ptr<VectorBuffer> FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
 	                                                      idx_t count) const;
 	//! Slice the buffer with a selection vector, returning a new buffer

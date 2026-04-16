@@ -191,7 +191,7 @@ buffer_ptr<VectorBuffer> VectorListBuffer::FlattenSliceInternal(const LogicalTyp
 	return result;
 }
 
-void VectorListBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {
+void VectorListBuffer::SetValueInternal(const LogicalType &type, idx_t index, const Value &val) {
 	if (!val.IsNull() && val.type() != type) {
 		SetValue(type, index, val.DefaultCastAs(type));
 		return;
@@ -214,7 +214,7 @@ void VectorListBuffer::SetValue(const LogicalType &type, idx_t index, const Valu
 	}
 }
 
-Value VectorListBuffer::GetValue(const LogicalType &type, idx_t index) const {
+Value VectorListBuffer::GetValueInternal(const LogicalType &type, idx_t index) const {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
 		index = 0;
 	}

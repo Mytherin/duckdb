@@ -23,7 +23,7 @@ buffer_ptr<VectorBuffer> CreateConstantBuffer(const Value &value) {
 		result = make_buffer<StandardVectorBuffer>(1ULL, GetTypeIdSize(internal_type));
 	}
 	result->SetValue(type, 0, value);
-	result->SetSize(1);
+	D_ASSERT(result->Size() == 1);
 	result->SetVectorType(VectorType::CONSTANT_VECTOR);
 	return result;
 }

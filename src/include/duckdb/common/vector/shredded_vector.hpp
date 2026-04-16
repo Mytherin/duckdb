@@ -26,10 +26,10 @@ public:
 	idx_t GetDataSize(const LogicalType &type, idx_t count) const override;
 	idx_t GetAllocationSize() const override;
 	string ToString(const LogicalType &type, idx_t count) const override;
-	Value GetValue(const LogicalType &type, idx_t index) const override;
 	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
 
 protected:
+	Value GetValueInternal(const LogicalType &type, idx_t index) const override;
 	buffer_ptr<VectorBuffer> FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
 	                                              idx_t count) const override;
 

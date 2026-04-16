@@ -36,10 +36,10 @@ public:
 	void SetVectorType(VectorType vector_type) override;
 
 public:
-	Value GetValue(const LogicalType &type, idx_t index) const override;
 	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
 
 protected:
+	Value GetValueInternal(const LogicalType &type, idx_t index) const override;
 	buffer_ptr<VectorBuffer> FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
 	                                              idx_t count) const override;
 

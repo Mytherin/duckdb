@@ -115,7 +115,7 @@ buffer_ptr<VectorBuffer> DictionaryBuffer::SliceInternal(const LogicalType &type
 	return new_buffer;
 }
 
-Value DictionaryBuffer::GetValue(const LogicalType &type, idx_t index) const {
+Value DictionaryBuffer::GetValueInternal(const LogicalType &type, idx_t index) const {
 	auto resolved_index = sel_vector.get_index(index);
 	return entry->data.GetValue(resolved_index);
 }

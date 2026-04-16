@@ -8,6 +8,12 @@ namespace duckdb {
 VectorWriter<string_t>::VectorWriter(Vector &vector, idx_t count)
     : vector(vector), data(FlatVector::GetDataMutable<string_t>(vector)), validity(FlatVector::Validity(vector)),
       count(count) {
+	FlatVector::SetSize(vector, count);
+}
+
+VectorWriter<string_t>::VectorWriter(Vector &vector)
+	: vector(vector), data(FlatVector::GetDataMutable<string_t>(vector)), validity(FlatVector::Validity(vector)),
+	  count(NumericLimits<idx_t>::Maximum()) {
 }
 
 void VectorWriter<string_t>::InitializeHeap() {
@@ -80,7 +86,7 @@ buffer_ptr<VectorBuffer> VectorStringBuffer::SliceInternal(const LogicalType &ty
 	return result;
 }
 
-void VectorStringBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {
+void VectorStringBuffer::SetValueInternal(const LogicalType &type, idx_t index, const Value &val) {
 	if (!val.IsNull() && val.type() != type) {
 		SetValue(type, index, val.DefaultCastAs(type));
 		return;

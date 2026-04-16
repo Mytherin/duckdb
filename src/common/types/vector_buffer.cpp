@@ -172,12 +172,40 @@ buffer_ptr<VectorBuffer> VectorBuffer::SliceInternal(const LogicalType &type, co
 }
 
 void VectorBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {
-	throw InternalException("SetValue not supported for this buffer type");
+	if (index >= Capacity()) {
+		throw InternalException("VectorBuffer::SetValue out of range for vector capacity - attempting to set index %d for vector with capacity %d", index, Capacity());
+	}
+	idx_t max_index;
+	if (!HasSize()) {
+		max_index = 0;
+	} else {
+		max_index = Size();
+	}
+	if (index > max_index) {
+		throw InternalException("VectorBuffer::SetValue non-consecutive for vector - attempting to set index %d for vector, but current size is %d\nCannot grow vector to fit this value without creating uninitialized spaces", index, max_index);
+	}
+	SetValueInternal(type, index, val);
+	if (index == max_index) {
+		// grow the size
+		SetSize(max_index + 1);
+	}
 }
 
 Value VectorBuffer::GetValue(const LogicalType &type, idx_t index) const {
+	if (HasSize() && index >= Size()) {
+		throw InternalException("VectorBuffer::GetValue out of range for vector - attempting to access index %d for vector of size %d", index, Size());
+	}
+	return GetValueInternal(type, index);
+}
+
+Value VectorBuffer::GetValueInternal(const LogicalType &type, idx_t index) const {
+	throw InternalException("SetValue not supported for this buffer type");
+}
+
+void VectorBuffer::SetValueInternal(const LogicalType &type, idx_t index, const Value &val) {
 	throw InternalException("Unimplemented GetValue for this buffer type");
 }
+
 
 PinnedBufferHolder::PinnedBufferHolder(BufferHandle handle) : handle(std::move(handle)) {
 }

@@ -19,7 +19,7 @@ void VectorFSSTStringBuffer::Verify(const LogicalType &type, const SelectionVect
 	D_ASSERT(vector_type == VectorType::FSST_VECTOR);
 }
 
-Value VectorFSSTStringBuffer::GetValue(const LogicalType &type, idx_t index) const {
+Value VectorFSSTStringBuffer::GetValueInternal(const LogicalType &type, idx_t index) const {
 	if (!validity.RowIsValid(index)) {
 		return Value(type);
 	}

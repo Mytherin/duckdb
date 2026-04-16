@@ -17,6 +17,10 @@ template <class T>
 struct VectorWriter {
 	VectorWriter(Vector &vector, idx_t count)
 	    : data(FlatVector::GetDataMutable<T>(vector)), validity(FlatVector::Validity(vector)), count(count) {
+		FlatVector::SetSize(vector, count);
+	}
+	VectorWriter(Vector &vector)
+		: data(FlatVector::GetDataMutable<T>(vector)), validity(FlatVector::Validity(vector)), count(NumericLimits<idx_t>::Maximum()) {
 	}
 
 	void SetInvalid(idx_t idx) {
@@ -86,6 +90,7 @@ struct VectorWriter<string_t> {
 	};
 
 	VectorWriter(Vector &vector, idx_t count);
+	VectorWriter(Vector &vector);
 
 	inline void SetInvalid(idx_t idx) {
 		D_ASSERT(idx < count);

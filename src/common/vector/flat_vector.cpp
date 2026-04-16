@@ -201,7 +201,7 @@ void StandardVectorBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &for
 	format.validity = validity;
 }
 
-void StandardVectorBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {
+void StandardVectorBuffer::SetValueInternal(const LogicalType &type, idx_t index, const Value &val) {
 	if (!val.IsNull() && val.type() != type) {
 		SetValue(type, index, val.DefaultCastAs(type));
 		return;
@@ -258,7 +258,7 @@ void StandardVectorBuffer::SetValue(const LogicalType &type, idx_t index, const 
 	}
 }
 
-Value StandardVectorBuffer::GetValue(const LogicalType &type, idx_t index) const {
+Value StandardVectorBuffer::GetValueInternal(const LogicalType &type, idx_t index) const {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
 		index = 0;
 	}
