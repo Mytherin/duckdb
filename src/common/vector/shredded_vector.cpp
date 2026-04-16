@@ -7,6 +7,7 @@ namespace duckdb {
 ShreddedVectorBuffer::ShreddedVectorBuffer(Vector &shredded_data_p)
     : VectorBuffer(VectorType::SHREDDED_VECTOR, VectorBufferType::SHREDDED_BUFFER),
       shredded_data(make_uniq<Vector>(Vector::Ref(shredded_data_p))) {
+	this->size = shredded_data->size();
 }
 
 ShreddedVectorBuffer::~ShreddedVectorBuffer() {

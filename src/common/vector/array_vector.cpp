@@ -52,9 +52,13 @@ void VectorArrayBuffer::SetSize(idx_t new_size) {
 			    "Vector::SetSize out of range - trying to set size to %d for vector with capacity %d", new_size,
 			    capacity);
 		}
+		// set the size of the child
+		FlatVector::SetSize(*child, array_size * new_size);
+	} else {
+		// for constant vectors the child is just a single array
+		FlatVector::SetSize(*child, array_size);
 	}
 	this->size = new_size;
-	FlatVector::SetSize(*child, array_size * new_size);
 }
 
 idx_t VectorArrayBuffer::GetDataSize(const LogicalType &type, idx_t count) const {
