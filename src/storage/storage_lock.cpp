@@ -1,85 +1,59 @@
 #include "duckdb/storage/storage_lock.hpp"
-#include "duckdb/common/atomic.hpp"
-#include "duckdb/common/mutex.hpp"
-#include "duckdb/common/common.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
 #include "duckdb/common/assert.hpp"
 
 namespace duckdb {
 
 struct StorageLockInternals : enable_shared_from_this<StorageLockInternals> {
 public:
-	StorageLockInternals() : read_count(0) {
-	}
-
-	mutex exclusive_lock;
-	atomic<idx_t> read_count;
+	std::shared_mutex rw_lock;
 
 public:
 	unique_ptr<StorageLockKey> GetExclusiveLock() {
-		exclusive_lock.lock();
-		while (read_count != 0) {
-		}
-		return make_uniq<StorageLockKey>(shared_from_this(), StorageLockType::EXCLUSIVE);
+		std::unique_lock<std::shared_mutex> lk(rw_lock);
+		return make_uniq<StorageLockKey>(shared_from_this(), std::move(lk));
 	}
 
 	unique_ptr<StorageLockKey> GetSharedLock() {
-		exclusive_lock.lock();
-		read_count++;
-		exclusive_lock.unlock();
-		return make_uniq<StorageLockKey>(shared_from_this(), StorageLockType::SHARED);
+		std::shared_lock<std::shared_mutex> lk(rw_lock);
+		return make_uniq<StorageLockKey>(shared_from_this(), std::move(lk));
 	}
 
 	unique_ptr<StorageLockKey> TryGetExclusiveLock() {
-		if (!exclusive_lock.try_lock()) {
-			// could not lock mutex
+		std::unique_lock<std::shared_mutex> lk(rw_lock, std::try_to_lock);
+		if (!lk.owns_lock()) {
 			return nullptr;
 		}
-		if (read_count != 0) {
-			// there are active readers - cannot get exclusive lock
-			exclusive_lock.unlock();
-			return nullptr;
-		}
-		// success!
-		return make_uniq<StorageLockKey>(shared_from_this(), StorageLockType::EXCLUSIVE);
+		return make_uniq<StorageLockKey>(shared_from_this(), std::move(lk));
 	}
 
-	unique_ptr<StorageLockKey> TryUpgradeCheckpointLock(StorageLockKey &lock) {
+	unique_ptr<StorageLockKey> TryUpgradeCheckpointLock(StorageLockKey &lock)
+	    __attribute__((no_thread_safety_analysis)) {
 		if (lock.GetType() != StorageLockType::SHARED) {
 			throw InternalException("StorageLock::TryUpgradeLock called on an exclusive lock");
 		}
-		if (!exclusive_lock.try_lock()) {
-			// could not lock mutex
+		// Release the shared lock before attempting exclusive to avoid undefined behavior
+		auto &slock = std::get<std::shared_lock<std::shared_mutex>>(lock.lock_holder);
+		slock.unlock();
+		std::unique_lock<std::shared_mutex> ulock(rw_lock, std::try_to_lock);
+		if (!ulock.owns_lock()) {
+			// Another writer or reader got in — re-acquire shared and report failure
+			slock.lock();
 			return nullptr;
 		}
-		if (read_count != 1) {
-			// other shared locks are active: failed to upgrade
-			D_ASSERT(read_count != 0);
-			exclusive_lock.unlock();
-			return nullptr;
-		}
-		// no other shared locks active: success!
-		return make_uniq<StorageLockKey>(shared_from_this(), StorageLockType::EXCLUSIVE);
-	}
-
-	void ReleaseExclusiveLock() {
-		exclusive_lock.unlock();
-	}
-	void ReleaseSharedLock() {
-		read_count--;
+		// Exclusive acquired. The original shared key's lock_holder now holds a non-owning
+		// shared_lock (owns_lock() == false), so its destructor will not call unlock_shared().
+		return make_uniq<StorageLockKey>(shared_from_this(), std::move(ulock));
 	}
 };
 
-StorageLockKey::StorageLockKey(shared_ptr<StorageLockInternals> internals_p, StorageLockType type)
-    : internals(std::move(internals_p)), type(type) {
+StorageLockKey::StorageLockKey(shared_ptr<StorageLockInternals> internals_p, std::unique_lock<std::shared_mutex> lock)
+    : internals(std::move(internals_p)), lock_holder(std::move(lock)), type(StorageLockType::EXCLUSIVE) {
 }
 
-StorageLockKey::~StorageLockKey() {
-	if (type == StorageLockType::EXCLUSIVE) {
-		internals->ReleaseExclusiveLock();
-	} else {
-		D_ASSERT(type == StorageLockType::SHARED);
-		internals->ReleaseSharedLock();
-	}
+StorageLockKey::StorageLockKey(shared_ptr<StorageLockInternals> internals_p, std::shared_lock<std::shared_mutex> lock)
+    : internals(std::move(internals_p)), lock_holder(std::move(lock)), type(StorageLockType::SHARED) {
 }
 
 StorageLock::StorageLock() : internals(make_shared_ptr<StorageLockInternals>()) {
