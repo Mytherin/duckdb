@@ -222,7 +222,7 @@ void TopNHeap::AddSmallHeap(DataChunk &input, Vector &sort_keys_vec) {
 	}
 
 	// for all matching entries we need to copy over the corresponding payload values
-	idx_t match_count = 0;
+	matching_sel.set_size(0);
 	for (auto &entry : heap) {
 		if (entry.index < BASE_INDEX) {
 			continue;
@@ -231,19 +231,19 @@ void TopNHeap::AddSmallHeap(DataChunk &input, Vector &sort_keys_vec) {
 		// copy over the string to the string heap
 		entry.sort_key = sort_key_heap.AddBlob(entry.sort_key);
 		// to finalize the addition of this entry we need to move over the payload data
-		matching_sel.set_index(match_count, entry.index - BASE_INDEX);
-		entry.index = heap_data.size() + match_count;
-		match_count++;
+		const auto original_entry_index = entry.index;
+		entry.index = heap_data.size() + matching_sel.size();
+		matching_sel.push_index(original_entry_index - BASE_INDEX);
 	}
 
 	// copy over the input rows to the payload chunk
-	heap_data.Append(input, true, &matching_sel, match_count);
+	heap_data.Append(input, true, &matching_sel, matching_sel.size());
 }
 
 void TopNHeap::AddLargeHeap(DataChunk &input, Vector &sort_keys_vec) {
 	auto sort_key_values = FlatVector::GetData<string_t>(sort_keys_vec);
 	idx_t base_index = heap_data.size();
-	idx_t match_count = 0;
+	matching_sel.set_size(0);
 	for (idx_t r = 0; r < input.size(); r++) {
 		auto &sort_key = sort_key_values[r];
 		if (!EntryShouldBeAdded(sort_key)) {
@@ -252,17 +252,17 @@ void TopNHeap::AddLargeHeap(DataChunk &input, Vector &sort_keys_vec) {
 		// replace the previous top entry with the new entry
 		TopNEntry entry;
 		entry.sort_key = sort_key_heap.AddBlob(sort_key);
-		entry.index = base_index + match_count;
+		entry.index = base_index + matching_sel.size();
 		AddEntryToHeap(entry);
-		matching_sel.set_index(match_count++, r);
+		matching_sel.push_index(r);
 	}
-	if (match_count == 0) {
+	if (matching_sel.size() == 0) {
 		// early-out: no matches
 		return;
 	}
 
 	// copy over the input rows to the payload chunk
-	heap_data.Append(input, true, &matching_sel, match_count);
+	heap_data.Append(input, true, &matching_sel, matching_sel.size());
 }
 
 bool TopNHeap::CheckBoundaryValues(DataChunk &sort_chunk, DataChunk &payload, TopNBoundaryValue &global_boundary) {
@@ -380,7 +380,7 @@ void TopNHeap::Sink(DataChunk &input, optional_ptr<TopNBoundaryValue> global_bou
 
 void TopNHeap::Combine(TopNHeap &other) {
 	// "other" is sorted at this point
-	idx_t match_count = 0;
+	matching_sel.set_size(0);
 	// merge the heap of other into this
 	for (idx_t i = 0; i < other.heap.size(); i++) {
 		// heap is full - check the latest entry
@@ -392,20 +392,20 @@ void TopNHeap::Combine(TopNHeap &other) {
 		// add this entry
 		TopNEntry new_entry;
 		new_entry.sort_key = sort_key_heap.AddBlob(sort_key);
-		new_entry.index = heap_data.size() + match_count;
+		new_entry.index = heap_data.size() + matching_sel.size();
 		AddEntryToHeap(new_entry);
 
-		matching_sel.set_index(match_count++, other_entry.index);
-		if (match_count >= STANDARD_VECTOR_SIZE) {
+		matching_sel.push_index(other_entry.index);
+		if (matching_sel.size() >= STANDARD_VECTOR_SIZE) {
 			// flush
-			heap_data.Append(other.heap_data, true, &matching_sel, match_count);
-			match_count = 0;
+			heap_data.Append(other.heap_data, true, &matching_sel, matching_sel.size());
+			matching_sel.set_size(0);
 		}
 	}
-	if (match_count > 0) {
+	if (matching_sel.size() > 0) {
 		// flush
-		heap_data.Append(other.heap_data, true, &matching_sel, match_count);
-		match_count = 0;
+		heap_data.Append(other.heap_data, true, &matching_sel, matching_sel.size());
+		matching_sel.set_size(0);
 	}
 	Reduce();
 }
@@ -430,7 +430,7 @@ void TopNHeap::Reduce() {
 		// move the sort key to the new sort heap
 		entry.sort_key = new_sort_heap.AddBlob(entry.sort_key);
 		// move this heap entry to position X in the payload chunk
-		new_payload_sel.set_index(i, entry.index);
+		new_payload_sel.push_index(entry.index);
 		entry.index = i;
 	}
 

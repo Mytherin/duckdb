@@ -203,7 +203,7 @@ bool PhysicalLimit::HandleOffset(DataChunk &input, idx_t &current_offset, idx_t 
 			auto chunk_count = MinValue<idx_t>(limit, input.size() - start_position);
 			SelectionVector sel(STANDARD_VECTOR_SIZE);
 			for (idx_t i = 0; i < chunk_count; i++) {
-				sel.set_index(i, start_position + i);
+				sel.push_index(start_position + i);
 			}
 			// set up a slice of the input chunks
 			input.Slice(input, sel, chunk_count);

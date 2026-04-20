@@ -549,6 +549,7 @@ void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataCh
 					result.Reference(prev);
 				} else {
 					auto &sel = state.sel;
+					sel.set_size(0);
 					Vector split(wexpr.children[0]->return_type);
 					split.SetValue(0, prev.GetValue(0));
 					sel_t s = 0;
@@ -559,7 +560,7 @@ void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataCh
 							s = 1;
 							split.SetValue(s, v);
 						}
-						sel.set_index(i, s);
+						sel.push_index(s);
 					}
 					result.Slice(split, sel, count);
 				}
@@ -591,12 +592,13 @@ void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataCh
 					}
 					//	Select appropriate the non-NULL values to copy over
 					auto &sel = state.sel;
+					sel.set_size(0);
 					sel_t non_null = 0;
 					for (sel_t i = 0; i < count; ++i) {
 						if (validity.RowIsValidUnsafe(unified.sel->get_index(i))) {
 							non_null = i;
 						}
-						sel.set_index(i, non_null);
+						sel.push_index(non_null);
 					}
 					result.Slice(copy, sel, count);
 				}

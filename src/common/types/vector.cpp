@@ -864,11 +864,10 @@ void Vector::DebugTransformToDictionary(Vector &vector, idx_t count) {
 	// i.e. [1, 2, 3] is converted into [NULL, 3, NULL, 2, NULL, 1]
 	idx_t verify_count = count * 2;
 	SelectionVector inverted_sel(verify_count);
-	idx_t offset = 0;
 	for (idx_t i = 0; i < count; i++) {
 		idx_t current_index = count - i - 1;
-		inverted_sel.set_index(offset++, current_index);
-		inverted_sel.set_index(offset++, current_index);
+		inverted_sel.push_index(current_index);
+		inverted_sel.push_index(current_index);
 	}
 	auto reusable_dict = DictionaryVector::CreateReusableDictionary(vector.type, verify_count);
 	auto &inverted_vector = reusable_dict->data;
@@ -881,9 +880,8 @@ void Vector::DebugTransformToDictionary(Vector &vector, idx_t count) {
 	// construct the selection vector pointing towards the original values
 	// we start at the back, (verify_count - 1) and move backwards
 	SelectionVector original_sel(count);
-	offset = 0;
 	for (idx_t i = 0; i < count; i++) {
-		original_sel.set_index(offset++, verify_count - 1 - i * 2);
+		original_sel.push_index(verify_count - 1 - i * 2);
 	}
 	// now slice the inverted vector with the inverted selection vector
 	if (vector.GetType().InternalType() == PhysicalType::STRUCT) {

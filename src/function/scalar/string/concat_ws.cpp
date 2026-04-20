@@ -96,18 +96,17 @@ static void ConcatWSFunction(DataChunk &args, ExpressionState &state, Vector &re
 	}
 	default: {
 		// default case: loop over nullmask and create a non-null selection vector
-		idx_t not_null_count = 0;
 		SelectionVector not_null_vector(STANDARD_VECTOR_SIZE);
 		auto &result_mask = FlatVector::ValidityMutable(result);
 		for (idx_t i = 0; i < args.size(); i++) {
 			if (!vdata.validity.RowIsValid(vdata.sel->get_index(i))) {
 				result_mask.SetInvalid(i);
 			} else {
-				not_null_vector.set_index(not_null_count++, i);
+				not_null_vector.push_index(i);
 			}
 		}
 		TemplatedConcatWS(args, UnifiedVectorFormat::GetData<string_t>(vdata), *vdata.sel, not_null_vector,
-		                  not_null_count, result);
+		                  not_null_vector.size(), result);
 		return;
 	}
 	}

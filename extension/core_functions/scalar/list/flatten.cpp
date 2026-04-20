@@ -84,7 +84,6 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &, Vector &result) {
 
 	// Now we know the total amount of items, we can create our selection vector.
 	SelectionVector sel(total_items);
-	idx_t sel_idx = 0;
 
 	// Second pass: Fill the selection vector (and the result list entries)
 
@@ -98,7 +97,7 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &, Vector &result) {
 
 		const auto &outer_entry = outer_data[outer_idx];
 
-		list_entry_t list_entry = {sel_idx, 0};
+		list_entry_t list_entry = {sel.size(), 0};
 
 		for (idx_t inner_raw_idx = outer_entry.offset; inner_raw_idx < outer_entry.offset + outer_entry.length;
 		     inner_raw_idx++) {
@@ -116,8 +115,7 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &, Vector &result) {
 			     elem_raw_idx++) {
 				const auto elem_idx = items_format.sel->get_index(elem_raw_idx);
 
-				sel.set_index(sel_idx, elem_idx);
-				sel_idx++;
+				sel.push_index(elem_idx);
 			}
 		}
 
@@ -126,11 +124,11 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	}
 
 	// Now assing the result
-	ListVector::SetListSize(result, sel_idx);
+	ListVector::SetListSize(result, sel.size());
 
 	auto &result_child_vector = ListVector::GetEntry(result);
-	result_child_vector.Slice(items_vec, sel, sel_idx);
-	result_child_vector.Flatten(sel_idx);
+	result_child_vector.Slice(items_vec, sel, sel.size());
+	result_child_vector.Flatten(sel.size());
 }
 
 unique_ptr<BaseStatistics> ListFlattenStats(ClientContext &context, FunctionStatisticsInput &input) {

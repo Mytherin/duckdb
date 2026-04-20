@@ -100,7 +100,7 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 				if (default_data.validity.RowIsValid(default_idx)) {
 					SelectionVector sel(remaining_count.value);
 					for (idx_t j = 0; j < remaining_count.value; j++) {
-						sel.set_index(j, row_idx);
+						sel.push_index(row_idx);
 					}
 					VectorOperations::Copy(*default_vector, result_child_vector, sel, remaining_count.value, 0,
 					                       offset.value);

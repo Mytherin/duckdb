@@ -37,11 +37,10 @@ static FilterPropagateResult TemplatedCheckStatistics(const PerfectHashJoinExecu
 	*range_data = val;
 
 	const auto total_count = NumericCast<idx_t>(range_typed) + 1;
-	idx_t approved_tuple_count = 0;
 	SelectionVector probe_sel(total_count);
-	perfect_join_executor.FillSelectionVectorSwitchProbe(range_vec, total_count, probe_sel, approved_tuple_count,
-	                                                     nullptr);
+	perfect_join_executor.FillSelectionVectorSwitchProbe(range_vec, total_count, probe_sel, nullptr);
 
+	const auto approved_tuple_count = probe_sel.size();
 	if (approved_tuple_count == 0) {
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
@@ -114,19 +113,21 @@ idx_t PerfectHashJoinFilter::Filter(Vector &keys, SelectionVector &sel, idx_t &a
 
 	// Perform the probe
 	const idx_t approved_before = approved_tuple_count;
-	approved_tuple_count = 0;
+	state.probe_sel.set_size(0);
 	perfect_join_executor->FillSelectionVectorSwitchProbe(state.keys_sliced_v, approved_before, state.probe_sel,
-	                                                      approved_tuple_count, nullptr);
+	                                                      nullptr);
+	approved_tuple_count = state.probe_sel.size();
 
 	if (approved_tuple_count == approved_before) {
 		return approved_tuple_count; // Nothing was filtered
 	}
 
 	if (sel.IsSet()) {
+		sel.set_size(0);
 		for (idx_t idx = 0; idx < approved_tuple_count; idx++) {
 			const idx_t sliced_sel_idx = state.probe_sel.get_index_unsafe(idx);
 			const idx_t original_sel_idx = sel.get_index_unsafe(sliced_sel_idx);
-			sel.set_index(idx, original_sel_idx);
+			sel.push_index(original_sel_idx);
 		}
 	} else {
 		sel.Initialize(state.probe_sel);
@@ -144,10 +145,9 @@ bool PerfectHashJoinFilter::FilterValue(const Value &value) const {
 	Vector keys(cast_value);
 	SelectionVector sel;
 	const idx_t approved_before = 1;
-	idx_t approved_tuple_count = 0;
-	perfect_join_executor->FillSelectionVectorSwitchProbe(keys, approved_before, sel, approved_tuple_count, nullptr);
+	perfect_join_executor->FillSelectionVectorSwitchProbe(keys, approved_before, sel, nullptr);
 
-	return approved_tuple_count == 1;
+	return sel.size() == 1;
 }
 
 bool PerfectHashJoinFilter::Equals(const TableFilter &other_p) const {

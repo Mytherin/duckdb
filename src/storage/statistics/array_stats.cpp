@@ -116,19 +116,18 @@ void ArrayStats::Verify(const BaseStatistics &stats, Vector &vector, const Selec
 	}
 
 	SelectionVector element_sel(valid_count * array_size);
-	idx_t element_count = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
 		auto index = vdata.sel->get_index(idx);
 		auto offset = index * array_size;
 		if (vdata.validity.RowIsValid(index)) {
 			for (idx_t elem_idx = 0; elem_idx < array_size; elem_idx++) {
-				element_sel.set_index(element_count++, offset + elem_idx);
+				element_sel.push_index(offset + elem_idx);
 			}
 		}
 	}
 
-	child_stats.Verify(child_entry, element_sel, element_count);
+	child_stats.Verify(child_entry, element_sel, element_sel.size());
 }
 
 } // namespace duckdb

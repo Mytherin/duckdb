@@ -212,7 +212,6 @@ void ListColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vec
 		// if the child of the list vector is a non-contiguous vector (i.e. list elements are repeating or have gaps)
 		// we first push a selection vector and flatten the child vector to turn it into a contiguous vector
 		SelectionVector child_sel(child_count);
-		idx_t current_count = 0;
 		for (idx_t i = 0; i < count; i++) {
 			auto list_entry = input_offsets[i];
 			if (!list_entry.IsValid()) {
@@ -220,10 +219,10 @@ void ListColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vec
 			}
 			auto &input_list = list_entry.GetValue();
 			for (idx_t list_idx = 0; list_idx < input_list.length; list_idx++) {
-				child_sel.set_index(current_count++, input_list.offset + list_idx);
+				child_sel.push_index(input_list.offset + list_idx);
 			}
 		}
-		D_ASSERT(current_count == child_count);
+		D_ASSERT(child_sel.size() == child_count);
 		child_vector.Slice(list_child, child_sel, child_count);
 	}
 

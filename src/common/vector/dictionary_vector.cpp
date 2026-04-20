@@ -52,7 +52,7 @@ void DictionaryBuffer::Verify(const LogicalType &type, const SelectionVector &se
 		// sel is set - slice the dictionary with the selection vector
 		SelectionVector child_sel(count);
 		for (idx_t i = 0; i < count; i++) {
-			child_sel.set_index(i, sel_vector.get_index(sel.get_index(i)));
+			child_sel.push_index(sel_vector.get_index(sel.get_index(i)));
 		}
 		GetEntry().data.Verify(child_sel, count);
 	}
@@ -132,7 +132,7 @@ buffer_ptr<VectorBuffer> DictionaryBuffer::Flatten(const LogicalType &type, cons
 		// slice the dictionary using the provided selection vector
 		composed.Initialize(count);
 		for (idx_t i = 0; i < count; i++) {
-			composed.set_index(i, sel_vector.get_index(input_sel.get_index(i)));
+			composed.push_index(sel_vector.get_index(input_sel.get_index(i)));
 		}
 		sel_ref = composed;
 	}

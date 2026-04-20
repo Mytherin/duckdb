@@ -223,7 +223,7 @@ void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_vector,
 	if (step_vector) {
 		SelectionVector new_sel(sel_length);
 		for (idx_t i = 0; i < sel_length; ++i) {
-			new_sel.set_index(i, sel.get_index(i));
+			new_sel.push_index(sel.get_index(i));
 		}
 		result_child_vector->Slice(new_sel, sel_length);
 		result_child_vector->Flatten(sel_length);

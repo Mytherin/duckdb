@@ -69,13 +69,12 @@ static idx_t GetConsecutiveChildList(Vector &list, Vector &result, idx_t offset,
 		return total_length;
 	}
 	SelectionVector sel(total_length);
-	idx_t index = 0;
 	for (idx_t c = offset; c < offset + count; c++) {
 		if (!validity.RowIsValid(c)) {
 			continue;
 		}
 		for (idx_t k = 0; k < list_entries[c].length; k++) {
-			sel.set_index(index++, list_entries[c].offset + k);
+			sel.push_index(list_entries[c].offset + k);
 		}
 	}
 	result.Slice(sel, total_length);

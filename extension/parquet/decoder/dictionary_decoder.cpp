@@ -232,7 +232,6 @@ void DictionaryDecoder::Filter(uint8_t *defines, const idx_t read_count, Vector 
 	}
 	D_ASSERT(offsets);
 	SelectionVector new_sel(valid_count);
-	approved_tuple_count = 0;
 	for (idx_t idx = 0; idx < valid_count; idx++) {
 		auto row_idx = valid_count == read_count ? idx : valid_sel.get_index(idx);
 		auto offset = offsets[idx];
@@ -240,8 +239,9 @@ void DictionaryDecoder::Filter(uint8_t *defines, const idx_t read_count, Vector 
 			// does not pass the filter
 			continue;
 		}
-		new_sel.set_index(approved_tuple_count++, row_idx);
+		new_sel.push_index(row_idx);
 	}
+	approved_tuple_count = new_sel.size();
 	if (approved_tuple_count < read_count) {
 		sel.Initialize(new_sel);
 	}

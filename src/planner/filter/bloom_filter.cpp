@@ -106,10 +106,11 @@ idx_t BFTableFilter::Filter(Vector &keys_v, SelectionVector &sel, idx_t &approve
 	}
 
 	if (sel.IsSet()) {
+		sel.set_size(0);
 		for (idx_t idx = 0; idx < found_count; idx++) {
 			const idx_t flat_sel_idx = state.probe_sel.get_index(idx);
 			const idx_t original_sel_idx = sel.get_index(flat_sel_idx);
-			sel.set_index(idx, original_sel_idx);
+			sel.push_index(original_sel_idx);
 		}
 	} else {
 		sel.Initialize(state.probe_sel);

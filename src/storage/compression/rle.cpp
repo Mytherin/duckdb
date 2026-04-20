@@ -482,7 +482,6 @@ void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 	auto result_data = FlatVector::GetDataMutable<T>(result);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 
-	idx_t matching_count = 0;
 	SelectionVector matching_sel(sel_count);
 	if (!sel.IsSet()) {
 		// no selection vector yet - fast path
@@ -499,7 +498,7 @@ void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 				if (scan_state.matching_runs[scan_state.entry_pos]) {
 					for (idx_t i = 0; i < remaining_scan_count; i++) {
 						result_data[result_offset + i] = element;
-						matching_sel.set_index(matching_count++, result_offset + i);
+						matching_sel.push_index(result_offset + i);
 					}
 				}
 				scan_state.position_in_entry += remaining_scan_count;
@@ -509,7 +508,7 @@ void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 			if (scan_state.matching_runs[scan_state.entry_pos]) {
 				for (idx_t i = 0; i < run_count; i++) {
 					result_data[result_offset + i] = element;
-					matching_sel.set_index(matching_count++, result_offset + i);
+					matching_sel.push_index(result_offset + i);
 				}
 			}
 
@@ -534,16 +533,16 @@ void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 			}
 			// the run is not filtered out - read the element
 			result_data[read_idx] = data_pointer[scan_state.entry_pos];
-			matching_sel.set_index(matching_count++, read_idx);
+			matching_sel.push_index(read_idx);
 		}
 		// skip the tail
 		scan_state.SkipInternal(index_pointer, vector_count - prev_idx);
 	}
 
 	// set up the filter result
-	if (matching_count != sel_count) {
+	if (matching_sel.size() != sel_count) {
 		sel.Initialize(matching_sel);
-		sel_count = matching_count;
+		sel_count = matching_sel.size();
 	}
 }
 

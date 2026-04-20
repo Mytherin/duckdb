@@ -103,7 +103,6 @@ struct ListFilterFunctor {
 	//! Uses the lambda vector to filter the incoming list and to append the filtered list to the result vector
 	static void AppendResult(Vector &result, Vector &lambda_vector, const idx_t elem_cnt, list_entry_t *result_entries,
 	                         ListFilterInfo &info, LambdaExecuteInfo &execute_info) {
-		idx_t count = 0;
 		SelectionVector sel(elem_cnt);
 
 		// compute the new lengths and offsets, and create a selection vector
@@ -117,7 +116,7 @@ struct ListFilterFunctor {
 
 			// found a true value
 			if (entry.IsValid() && entry.GetValue()) {
-				sel.set_index(count++, entry.GetIndex());
+				sel.push_index(entry.GetIndex());
 				info.length++;
 			}
 
@@ -147,8 +146,8 @@ struct ListFilterFunctor {
 		// slice the input chunk's corresponding vector to get the new lists
 		// and append them to the result
 		idx_t source_list_idx = execute_info.has_index ? 1 : 0;
-		Vector result_lists(execute_info.input_chunk.data[source_list_idx], sel, count);
-		ListVector::Append(result, result_lists, count, 0);
+		Vector result_lists(execute_info.input_chunk.data[source_list_idx], sel, sel.size());
+		ListVector::Append(result, result_lists, sel.size(), 0);
 	}
 };
 

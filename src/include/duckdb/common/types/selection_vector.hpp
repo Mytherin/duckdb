@@ -42,8 +42,9 @@ struct SelectionVector {
 		Initialize(sel_vector);
 	}
 	SelectionVector(SelectionVector &&other) noexcept
-	    : sel_vector(other.sel_vector), selection_data(std::move(other.selection_data)) {
+	    : sel_vector(other.sel_vector), selection_data(std::move(other.selection_data)), sel_size(other.sel_size) {
 		other.sel_vector = nullptr;
+		other.sel_size = 0;
 	}
 	explicit SelectionVector(buffer_ptr<SelectionData> data) {
 		Initialize(std::move(data));
@@ -52,6 +53,8 @@ struct SelectionVector {
 		sel_vector = other.sel_vector;
 		other.sel_vector = nullptr;
 		selection_data = std::move(other.selection_data);
+		sel_size = other.sel_size;
+		other.sel_size = 0;
 		return *this;
 	}
 
@@ -90,6 +93,15 @@ public:
 
 	inline void set_index(idx_t idx, idx_t loc) { // NOLINT: allow casing for legacy reasons
 		sel_vector[idx] = UnsafeNumericCast<sel_t>(loc);
+	}
+	inline void push_index(idx_t loc) { // NOLINT: allow casing for legacy reasons
+		sel_vector[sel_size++] = UnsafeNumericCast<sel_t>(loc);
+	}
+	inline idx_t size() const { // NOLINT: allow casing for legacy reasons
+		return sel_size;
+	}
+	inline void set_size(idx_t size_p) { // NOLINT: allow casing for legacy reasons
+		sel_size = size_p;
 	}
 	inline void swap(idx_t i, idx_t j) { // NOLINT: allow casing for legacy reasons
 		sel_t tmp = sel_vector[i];
@@ -133,6 +145,7 @@ public:
 private:
 	sel_t *sel_vector;
 	buffer_ptr<SelectionData> selection_data;
+	idx_t sel_size = 0;
 };
 
 class OptionalSelection {

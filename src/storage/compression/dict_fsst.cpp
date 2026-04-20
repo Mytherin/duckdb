@@ -206,7 +206,6 @@ static void DictFSSTFilter(ColumnSegment &segment, ColumnScanState &state, idx_t
 		}
 		auto &dict_sel = scan_state.GetSelVec(start, vector_count);
 		SelectionVector new_sel(sel_count);
-		idx_t approved_tuple_count = 0;
 		for (idx_t idx = 0; idx < sel_count; idx++) {
 			auto row_idx = sel.get_index(idx);
 			auto dict_offset = dict_sel.get_index(row_idx);
@@ -214,12 +213,12 @@ static void DictFSSTFilter(ColumnSegment &segment, ColumnScanState &state, idx_t
 				// does not pass the filter
 				continue;
 			}
-			new_sel.set_index(approved_tuple_count++, row_idx);
+			new_sel.push_index(row_idx);
 		}
-		if (approved_tuple_count < vector_count) {
+		if (new_sel.size() < vector_count) {
 			sel.Initialize(new_sel);
 		}
-		sel_count = approved_tuple_count;
+		sel_count = new_sel.size();
 
 		result.Dictionary(scan_state.dictionary, dict_sel, vector_count);
 		return;

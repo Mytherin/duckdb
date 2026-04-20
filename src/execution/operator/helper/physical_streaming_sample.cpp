@@ -37,16 +37,15 @@ void PhysicalStreamingSample::BernoulliSample(DataChunk &input, DataChunk &resul
 	// bernoulli sampling: we throw one dice per tuple
 	// then slice the result chunk
 	auto &state = state_p.Cast<StreamingSampleOperatorState>();
-	idx_t result_count = 0;
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
 	for (idx_t i = 0; i < input.size(); i++) {
 		double rand = state.random.NextRandom();
 		if (rand <= percentage) {
-			sel.set_index(result_count++, i);
+			sel.push_index(i);
 		}
 	}
-	if (result_count > 0) {
-		result.Slice(input, sel, result_count);
+	if (sel.size() > 0) {
+		result.Slice(input, sel, sel.size());
 	}
 }
 

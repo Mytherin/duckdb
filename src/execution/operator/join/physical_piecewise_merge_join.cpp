@@ -813,15 +813,15 @@ SourceResultType PhysicalPiecewiseMergeJoin::GetDataInternal(ExecutionContext &c
 			return result.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 		}
 
-		idx_t result_count = 0;
+		rsel.set_size(0);
 		// figure out which tuples didn't find a match in the RHS
 		for (idx_t i = 0; i < count; i++) {
 			if (!found_match[rhs_pos + i]) {
-				rsel.set_index(result_count++, i);
+				rsel.push_index(i);
 			}
 		}
 
-		if (result_count > 0) {
+		if (rsel.size() > 0) {
 			// if there were any tuples that didn't find a match, output them
 			const idx_t left_column_count = children[0].get().GetTypes().size();
 			for (idx_t col_idx = 0; col_idx < left_column_count; ++col_idx) {
@@ -829,9 +829,9 @@ SourceResultType PhysicalPiecewiseMergeJoin::GetDataInternal(ExecutionContext &c
 			}
 			const idx_t right_column_count = children[1].get().GetTypes().size();
 			for (idx_t col_idx = 0; col_idx < right_column_count; ++col_idx) {
-				result.data[left_column_count + col_idx].Slice(rhs_chunk.data[col_idx], rsel, result_count);
+				result.data[left_column_count + col_idx].Slice(rhs_chunk.data[col_idx], rsel, rsel.size());
 			}
-			result.SetCardinality(result_count);
+			result.SetCardinality(rsel.size());
 			break;
 		}
 	}

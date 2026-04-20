@@ -61,13 +61,12 @@ struct MergeLocalExecutionState {
 };
 
 struct MatchResult {
-	MatchResult(ClientContext &context, const vector<LogicalType> &types) : sel(STANDARD_VECTOR_SIZE), count(0) {
+	MatchResult(ClientContext &context, const vector<LogicalType> &types) : sel(STANDARD_VECTOR_SIZE) {
 		chunk = make_uniq<DataChunk>();
 		chunk->Initialize(context, types);
 	}
 
 	SelectionVector sel;
-	idx_t count;
 	unique_ptr<DataChunk> chunk;
 };
 
@@ -282,9 +281,9 @@ void PhysicalMergeInto::ComputeMatches(MergeIntoLocalState &local_state, DataChu
 	auto &not_matched = match_results[1];
 	auto &not_matched_by_source = match_results[2];
 
-	matched.count = 0;
-	not_matched.count = 0;
-	not_matched_by_source.count = 0;
+	matched.sel.set_size(0);
+	not_matched.sel.set_size(0);
+	not_matched_by_source.sel.set_size(0);
 
 	auto row_id_validity = chunk.data[row_id_index].Validity(chunk.size());
 	if (source_marker.IsValid()) {
@@ -293,13 +292,13 @@ void PhysicalMergeInto::ComputeMatches(MergeIntoLocalState &local_state, DataChu
 		for (idx_t i = 0; i < chunk.size(); i++) {
 			if (!source_marker_validity.IsValid(i)) {
 				// source marker is NULL - no source match
-				not_matched_by_source.sel.set_index(not_matched_by_source.count++, i);
+				not_matched_by_source.sel.push_index(i);
 			} else if (!row_id_validity.IsValid(i)) {
 				// target marker is NULL - no target match
-				not_matched.sel.set_index(not_matched.count++, i);
+				not_matched.sel.push_index(i);
 			} else {
 				// match
-				matched.sel.set_index(matched.count++, i);
+				matched.sel.push_index(i);
 			}
 		}
 	} else {
@@ -307,21 +306,21 @@ void PhysicalMergeInto::ComputeMatches(MergeIntoLocalState &local_state, DataChu
 		for (idx_t i = 0; i < chunk.size(); i++) {
 			if (row_id_validity.IsValid(i)) {
 				// match
-				matched.sel.set_index(matched.count++, i);
+				matched.sel.push_index(i);
 			} else {
 				// no match
-				not_matched.sel.set_index(not_matched.count++, i);
+				not_matched.sel.push_index(i);
 			}
 		}
 	}
 
 	// reset and slice chunks
 	for (auto &match : match_results) {
-		if (match.count == 0) {
+		if (match.sel.size() == 0) {
 			continue;
 		}
 		match.chunk->Reset();
-		match.chunk->Slice(chunk, match.sel, match.count);
+		match.chunk->Slice(chunk, match.sel, match.sel.size());
 	}
 }
 
@@ -349,13 +348,13 @@ SinkResultType PhysicalMergeInto::Sink(ExecutionContext &context, DataChunk &chu
 	// now slice and call sink for each of the match conditions
 	for (; match_idx < 3; match_idx++) {
 		auto &match_result = match_results[match_idx];
-		if (match_result.count == 0) {
+		if (match_result.sel.size() == 0) {
 			// no matches for this action
 			continue;
 		}
 		if (!match_initialized) {
 			current_sel = SelectionVector();
-			current_count = match_result.count;
+			current_count = match_result.sel.size();
 			match_initialized = true;
 		}
 		auto match_range_index = GetIndex(match_actions[match_idx]);

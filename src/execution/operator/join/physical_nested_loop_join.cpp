@@ -46,19 +46,18 @@ template <bool MATCH>
 static void ConstructSemiOrAntiJoinResult(DataChunk &left, DataChunk &result, bool found_match[]) {
 	D_ASSERT(left.ColumnCount() == result.ColumnCount());
 	// create the selection vector from the matches that were found
-	idx_t result_count = 0;
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
 	for (idx_t i = 0; i < left.size(); i++) {
 		if (found_match[i] == MATCH) {
-			sel.set_index(result_count++, i);
+			sel.push_index(i);
 		}
 	}
 	// construct the final result
-	if (result_count > 0) {
+	if (sel.size() > 0) {
 		// we only return the columns on the left side
 		// project them using the result selection vector
 		// reference the columns of the left side from the result
-		result.Slice(left, sel, result_count);
+		result.Slice(left, sel, sel.size());
 	} else {
 		result.SetCardinality(0);
 	}

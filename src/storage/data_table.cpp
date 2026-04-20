@@ -508,15 +508,15 @@ void DataTable::Fetch(DuckTransaction &transaction, DataChunk &result, const vec
 	auto &local_storage = transaction.GetLocalStorage();
 	SelectionVector committed_sel(fetch_count);
 	SelectionVector local_sel(fetch_count);
-	idx_t committed_count = 0;
-	idx_t local_count = 0;
 	for (idx_t i = 0; i < fetch_count; i++) {
 		if (row_ids[i] >= MAX_ROW_ID) {
-			local_sel.set_index(local_count++, i);
+			local_sel.push_index(i);
 		} else {
-			committed_sel.set_index(committed_count++, i);
+			committed_sel.push_index(i);
 		}
 	}
+	const auto committed_count = committed_sel.size();
+	const auto local_count = local_sel.size();
 
 	if (committed_count == 0) {
 		// All local rows.

@@ -482,10 +482,11 @@ idx_t PrefixRangeTableFilter::Filter(Vector &keys, SelectionVector &sel, idx_t &
 	}
 
 	if (sel.IsSet()) {
+		sel.set_size(0);
 		for (idx_t idx = 0; idx < approved_tuple_count; idx++) {
 			const idx_t sliced_sel_idx = result_sel.get_index_unsafe(idx);
 			const idx_t original_sel_idx = sel.get_index_unsafe(sliced_sel_idx);
-			sel.set_index(idx, original_sel_idx);
+			sel.push_index(original_sel_idx);
 		}
 	} else {
 		sel.Initialize(result_sel);

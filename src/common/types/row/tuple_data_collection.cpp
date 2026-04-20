@@ -478,7 +478,7 @@ void TupleDataCollection::FindHeapPointers(TupleDataChunkState &chunk_state, con
 	const auto heap_sizes = FlatVector::GetDataMutable<idx_t>(chunk_state.heap_sizes);
 
 	auto &not_found = chunk_state.utility;
-	idx_t not_found_count = 0;
+	not_found.set_size(0);
 
 	const auto &heap_size_offset = layout.GetHeapSizeOffset();
 	for (idx_t i = 0; i < chunk_count; i++) {
@@ -487,10 +487,11 @@ void TupleDataCollection::FindHeapPointers(TupleDataChunkState &chunk_state, con
 
 		heap_size = Load<idx_t>(row_location + heap_size_offset);
 		if (heap_size != 0) {
-			not_found.set_index(not_found_count++, i);
+			not_found.push_index(i);
 		}
 	}
 
+	idx_t not_found_count = not_found.size();
 	TupleDataAllocator::FindHeapPointers(chunk_state, not_found, not_found_count, layout, 0);
 }
 

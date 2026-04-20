@@ -203,21 +203,19 @@ static void CreateUpdateChunk(ExecutionContext &context, DataChunk &chunk, Table
 		do_update_filter_result.Flatten();
 
 		SelectionVector sel(chunk.size());
-		idx_t count = 0;
 
 		auto where_data = FlatVector::GetData<bool>(do_update_filter_result.data[0]);
 		for (idx_t i = 0; i < chunk.size(); i++) {
 			if (where_data[i]) {
-				sel.set_index(count, i);
-				count++;
+				sel.push_index(i);
 			}
 		}
-		if (count != chunk.size()) {
+		if (sel.size() != chunk.size()) {
 			// Filter any conflicts not meeting the condition.
-			chunk.Slice(sel, count);
-			chunk.SetCardinality(count);
-			row_ids.Slice(sel, count);
-			row_ids.Flatten(count);
+			chunk.Slice(sel, sel.size());
+			chunk.SetCardinality(sel.size());
+			row_ids.Slice(sel, sel.size());
+			row_ids.Flatten(sel.size());
 		}
 	}
 
@@ -404,16 +402,14 @@ static void VerifyOnConflictCondition(ExecutionContext &context, DataChunk &comb
 	// We need to throw.
 	// Filter any passing tuples and verify again with those violating the constraint.
 	SelectionVector sel(combined_chunk.size());
-	idx_t count = 0;
 	auto data = FlatVector::GetData<bool>(conflict_condition_result.data[0]);
 	for (idx_t i = 0; i < combined_chunk.size(); i++) {
 		if (!data[i]) {
 			// The tuple does not meet the condition.
-			sel.set_index(count, i);
-			count++;
+			sel.push_index(i);
 		}
 	}
-	combined_chunk.Slice(sel, count);
+	combined_chunk.Slice(sel, sel.size());
 
 	// Verify and throw.
 	if (GLOBAL) {
@@ -561,7 +557,6 @@ idx_t PhysicalInsert::OnConflictHandling(TableCatalogEntry &table, ExecutionCont
 	if (!inner_conflicts.empty()) {
 		// We have at least one inner conflict to filter out.
 		SelectionVector sel(count);
-		idx_t sel_count = 0;
 
 		ValidityMask not_a_conflict(count);
 		set<idx_t> last_occurrences_of_conflict;
@@ -580,8 +575,7 @@ idx_t PhysicalInsert::OnConflictHandling(TableCatalogEntry &table, ExecutionCont
 				}
 			}
 			if (not_a_conflict.RowIsValid(i)) {
-				sel.set_index(sel_count, i);
-				sel_count++;
+				sel.push_index(i);
 			}
 		}
 		if (action_type == OnConflictAction::UPDATE) {
@@ -592,19 +586,17 @@ idx_t PhysicalInsert::OnConflictHandling(TableCatalogEntry &table, ExecutionCont
 			}
 
 			SelectionVector last_occurrences(last_occurrences_of_conflict.size());
-			idx_t last_occurrences_count = 0;
 			for (auto &idx : last_occurrences_of_conflict) {
-				last_occurrences.set_index(last_occurrences_count, idx);
-				last_occurrences_count++;
+				last_occurrences.push_index(idx);
 			}
 
 			lstate.update_chunk.Reference(insert_chunk);
-			lstate.update_chunk.Slice(last_occurrences, last_occurrences_count);
-			lstate.update_chunk.SetCardinality(last_occurrences_count);
+			lstate.update_chunk.Slice(last_occurrences, last_occurrences.size());
+			lstate.update_chunk.SetCardinality(last_occurrences.size());
 		}
 
-		insert_chunk.Slice(sel, sel_count);
-		insert_chunk.SetCardinality(sel_count);
+		insert_chunk.Slice(sel, sel.size());
+		insert_chunk.SetCardinality(sel.size());
 	}
 
 	// Check whether any conflicts arise, and if they all meet the conflict_target + condition

@@ -656,10 +656,10 @@ void TupleDataAllocator::FindHeapPointers(TupleDataChunkState &chunk_state, Sele
 		idx_t idx_in_entry;
 		ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
 
-		idx_t next_not_found_count = 0;
 		const auto &type = layout.GetTypes()[col_idx];
 		switch (type.InternalType()) {
 		case PhysicalType::VARCHAR: {
+			not_found.set_size(0);
 			for (idx_t i = 0; i < not_found_count; i++) {
 				const auto idx = not_found.get_index(i);
 				const auto &row_location = row_locations[idx] + base_col_offset;
@@ -683,13 +683,14 @@ void TupleDataAllocator::FindHeapPointers(TupleDataChunkState &chunk_state, Sele
 #ifndef DUCKDB_DEBUG_NO_INLINE
 				}
 #endif
-				not_found.set_index(next_not_found_count++, idx);
+				not_found.push_index(idx);
 			}
-			not_found_count = next_not_found_count;
+			not_found_count = not_found.size();
 			break;
 		}
 		case PhysicalType::LIST:
 		case PhysicalType::ARRAY: {
+			not_found.set_size(0);
 			for (idx_t i = 0; i < not_found_count; i++) {
 				const auto idx = not_found.get_index(i);
 				const auto &row_location = row_locations[idx] + base_col_offset;
@@ -704,9 +705,9 @@ void TupleDataAllocator::FindHeapPointers(TupleDataChunkState &chunk_state, Sele
 					heap_locations[idx] = Load<data_ptr_t>(list_ptr_location);
 					continue;
 				}
-				not_found.set_index(next_not_found_count++, idx);
+				not_found.push_index(idx);
 			}
-			not_found_count = next_not_found_count;
+			not_found_count = not_found.size();
 			break;
 		}
 		case PhysicalType::STRUCT: {

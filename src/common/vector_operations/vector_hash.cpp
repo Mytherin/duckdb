@@ -145,13 +145,12 @@ void ListLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, id
 	// Reduce the number of entries to check to the non-empty ones
 	SelectionVector unprocessed(count);
 	SelectionVector cursor(HAS_RSEL ? STANDARD_VECTOR_SIZE : count);
-	idx_t remaining = 0;
 	for (idx_t i = 0; i < count; ++i) {
 		const idx_t ridx = HAS_RSEL ? rsel->get_index(i) : i;
 		const auto lidx = idata.sel->get_index(ridx);
 		const auto &entry = ldata[lidx];
 		if (idata.validity.RowIsValid(lidx) && entry.length > 0) {
-			unprocessed.set_index(remaining++, ridx);
+			unprocessed.push_index(ridx);
 			cursor.set_index(ridx, entry.offset);
 		} else if (FIRST_HASH) {
 			hdata[ridx] = HashOp::NULL_HASH;
@@ -159,7 +158,7 @@ void ListLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, id
 		// Empty or NULL non-first elements have no effect.
 	}
 
-	count = remaining;
+	count = unprocessed.size();
 	if (count == 0) {
 		return;
 	}
@@ -167,7 +166,7 @@ void ListLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, id
 	// Merge the first position hash into the main hash
 	idx_t position = 1;
 	if (FIRST_HASH) {
-		remaining = 0;
+		unprocessed.set_size(0);
 		for (idx_t i = 0; i < count; ++i) {
 			const auto ridx = unprocessed.get_index(i);
 			const auto cidx = cursor.get_index(ridx);
@@ -177,11 +176,11 @@ void ListLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, id
 			const auto &entry = ldata[lidx];
 			if (entry.length > position) {
 				// Entry still has values to hash
-				unprocessed.set_index(remaining++, ridx);
+				unprocessed.push_index(ridx);
 				cursor.set_index(ridx, cidx + 1);
 			}
 		}
-		count = remaining;
+		count = unprocessed.size();
 		if (count == 0) {
 			return;
 		}
@@ -190,7 +189,7 @@ void ListLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, id
 
 	// Combine the hashes for the remaining positions until there are none left
 	for (;; ++position) {
-		remaining = 0;
+		unprocessed.set_size(0);
 		for (idx_t i = 0; i < count; ++i) {
 			const auto ridx = unprocessed.get_index(i);
 			const auto cidx = cursor.get_index(ridx);
@@ -200,12 +199,12 @@ void ListLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, id
 			const auto &entry = ldata[lidx];
 			if (entry.length > position) {
 				// Entry still has values to hash
-				unprocessed.set_index(remaining++, ridx);
+				unprocessed.push_index(ridx);
 				cursor.set_index(ridx, cidx + 1);
 			}
 		}
 
-		count = remaining;
+		count = unprocessed.size();
 		if (count == 0) {
 			break;
 		}
@@ -260,8 +259,9 @@ void ArrayLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, i
 
 			if (idata.validity.RowIsValid(lidx)) {
 				// Create a selection vector for the array
+				array_sel.set_size(0);
 				for (idx_t j = 0; j < array_size; j++) {
-					array_sel.set_index(j, lidx * array_size + j);
+					array_sel.push_index(lidx * array_size + j);
 				}
 
 				// Hash the array slice

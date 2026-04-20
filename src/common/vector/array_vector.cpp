@@ -81,16 +81,15 @@ void VectorArrayBuffer::Verify(const LogicalType &type, const SelectionVector &s
 		}
 	}
 	SelectionVector child_sel(selected_child_count);
-	idx_t child_count = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto oidx = sel.get_index(i);
 		if (validity.RowIsValid(oidx)) {
 			for (idx_t r = 0; r < array_size; r++) {
-				child_sel.set_index(child_count++, oidx * array_size + r);
+				child_sel.push_index(oidx * array_size + r);
 			}
 		}
 	}
-	child->Verify(child_sel, child_count);
+	child->Verify(child_sel, child_sel.size());
 }
 
 buffer_ptr<VectorBuffer> VectorArrayBuffer::Flatten(const LogicalType &type, const SelectionVector &input_sel,
@@ -124,9 +123,8 @@ buffer_ptr<VectorBuffer> VectorArrayBuffer::Flatten(const LogicalType &type, con
 	for (idx_t array_idx = 0; array_idx < count; array_idx++) {
 		auto src_array_idx = sel.get_index(array_idx);
 		for (idx_t elem_idx = 0; elem_idx < array_size; elem_idx++) {
-			auto position = array_idx * array_size + elem_idx;
 			auto src_position = src_array_idx * array_size + elem_idx;
-			child_sel.set_index(position, src_position);
+			child_sel.push_index(src_position);
 		}
 	}
 	// flatten the child using the child selection vector

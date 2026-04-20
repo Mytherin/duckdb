@@ -393,14 +393,14 @@ static idx_t TemplatedNullSelection(UnifiedVectorFormat &vdata, SelectionVector 
 		}
 	} else {
 		SelectionVector result_sel(approved_tuple_count);
-		idx_t result_count = 0;
 		for (idx_t i = 0; i < approved_tuple_count; i++) {
 			auto idx = sel.get_index(i);
 			auto vector_idx = vdata.sel->get_index(idx);
 			if (mask.RowIsValid(vector_idx) != IS_NULL) {
-				result_sel.set_index(result_count++, idx);
+				result_sel.push_index(idx);
 			}
 		}
+		const idx_t result_count = result_sel.size();
 		sel.Initialize(result_sel);
 		approved_tuple_count = result_count;
 		return result_count;
@@ -418,7 +418,6 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 	case TableFilterType::CONJUNCTION_OR: {
 		// similar to the CONJUNCTION_AND, but we need to take care of the SelectionVectors (OR all of them)
 		auto &state = filter_state.Cast<ConjunctionOrFilterState>();
-		idx_t count_total = 0;
 		SelectionVector result_sel(approved_tuple_count);
 		auto &conjunction_or = filter.Cast<ConjunctionOrFilter>();
 		for (idx_t child_idx = 0; child_idx < conjunction_or.child_filters.size(); child_idx++) {
@@ -432,19 +431,19 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 			for (idx_t i = 0; i < temp_count; i++) {
 				auto new_idx = temp_sel.get_index(i);
 				bool is_new_idx = true;
-				for (idx_t res_idx = 0; res_idx < count_total; res_idx++) {
+				for (idx_t res_idx = 0; res_idx < result_sel.size(); res_idx++) {
 					if (result_sel.get_index(res_idx) == new_idx) {
 						is_new_idx = false;
 						break;
 					}
 				}
 				if (is_new_idx) {
-					result_sel.set_index(count_total++, new_idx);
+					result_sel.push_index(new_idx);
 				}
 			}
 		}
+		approved_tuple_count = result_sel.size();
 		sel.Initialize(result_sel);
-		approved_tuple_count = count_total;
 		return approved_tuple_count;
 	}
 	case TableFilterType::CONJUNCTION_AND: {
@@ -592,7 +591,7 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 				chunk.SetCardinality(chunk_count);
 
 				// construct the relevant selection vector for the current chunk (offset ... offset + chunk_count)
-				idx_t current_count = 0;
+				current_sel.set_size(0);
 				for (; current_sel_offset < approved_tuple_count; current_sel_offset++) {
 					auto sel_index = sel.get_index(current_sel_offset);
 					if (sel_index >= chunk_end) {
@@ -602,9 +601,9 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 					if (sel_index < offset) {
 						throw InternalException("sel_index < offset in expression filter");
 					}
-					current_sel.set_index(current_count++, sel_index - offset);
+					current_sel.push_index(sel_index - offset);
 				}
-				if (current_count == 0) {
+				if (current_sel.size() == 0) {
 					// no matching tuples in this chunk
 					offset += chunk_count;
 					continue;
@@ -612,7 +611,7 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 				auto current_result_data = result_sel.data() + result_offset;
 				SelectionVector current_result_sel(current_result_data);
 				idx_t new_matches =
-				    state.executor.SelectExpression(chunk, current_result_sel, current_sel, current_count);
+				    state.executor.SelectExpression(chunk, current_result_sel, current_sel, current_sel.size());
 				// increment all matches by the offset
 				for (idx_t i = 0; i < new_matches; i++) {
 					current_result_data[i] += offset;

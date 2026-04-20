@@ -202,7 +202,6 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 		// selection vector that is to be filled with the 'sorted' payload
 		SelectionVector sel_sorted(incr_payload_count);
-		idx_t sel_sorted_idx = 0;
 
 		// scan the sorted row data
 		auto global_source_state = info.sort->GetGlobalSourceState(info.context, *global_sink_state);
@@ -223,13 +222,12 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 			auto result_data = FlatVector::Writer<uint32_t>(result_vector, row_count);
 			for (idx_t i = 0; i < row_count; i++) {
-				sel_sorted.set_index(sel_sorted_idx, result_data[i]);
+				sel_sorted.push_index(result_data[i]);
 				D_ASSERT(result_data[i] < lists_size);
-				sel_sorted_idx++;
 			}
 		}
 
-		D_ASSERT(sel_sorted_idx == incr_payload_count);
+		D_ASSERT(sel_sorted.size() == incr_payload_count);
 		if (info.is_grade_up) {
 			auto &result_entry = ListVector::GetEntry(result);
 			auto result_data = FlatVector::GetData<list_entry_t>(result);
@@ -243,8 +241,8 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 				}
 			}
 		} else {
-			child_vector.Slice(sel_sorted, sel_sorted_idx);
-			child_vector.Flatten(sel_sorted_idx);
+			child_vector.Slice(sel_sorted, sel_sorted.size());
+			child_vector.Flatten(sel_sorted.size());
 		}
 	}
 }

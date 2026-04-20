@@ -1261,19 +1261,21 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 template <class T>
 static void SetSelectionVectorLoop(SelectionVector &sel, data_ptr_t indices_p, idx_t size) {
 	auto indices = reinterpret_cast<T *>(indices_p);
+	sel.set_size(0);
 	for (idx_t row = 0; row < size; row++) {
-		sel.set_index(row, UnsafeNumericCast<idx_t>(indices[row]));
+		sel.push_index(UnsafeNumericCast<idx_t>(indices[row]));
 	}
 }
 
 template <class T>
 static void SetSelectionVectorLoopWithChecks(SelectionVector &sel, data_ptr_t indices_p, idx_t size) {
 	auto indices = reinterpret_cast<T *>(indices_p);
+	sel.set_size(0);
 	for (idx_t row = 0; row < size; row++) {
 		if (indices[row] > NumericLimits<uint32_t>::Maximum()) {
 			throw ConversionException("DuckDB only supports indices that fit on an uint32");
 		}
-		sel.set_index(row, NumericCast<idx_t>(indices[row]));
+		sel.push_index(NumericCast<idx_t>(indices[row]));
 	}
 }
 
@@ -1281,12 +1283,13 @@ template <class T>
 static void SetMaskedSelectionVectorLoop(SelectionVector &sel, data_ptr_t indices_p, idx_t size, ValidityMask &mask,
                                          idx_t last_element_pos) {
 	auto indices = reinterpret_cast<T *>(indices_p);
+	sel.set_size(0);
 	for (idx_t row = 0; row < size; row++) {
 		if (mask.RowIsValid(row)) {
-			sel.set_index(row, UnsafeNumericCast<idx_t>(indices[row]));
+			sel.push_index(UnsafeNumericCast<idx_t>(indices[row]));
 		} else {
 			//! Need to point out to last element
-			sel.set_index(row, last_element_pos);
+			sel.push_index(last_element_pos);
 		}
 	}
 }

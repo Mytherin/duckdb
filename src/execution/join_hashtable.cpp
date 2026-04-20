@@ -370,15 +370,15 @@ void JoinHashTable::Hash(DataChunk &keys, const SelectionVector &sel, idx_t coun
 
 static idx_t FilterNullValues(UnifiedVectorFormat &vdata, const SelectionVector &sel, idx_t count,
                               SelectionVector &result) {
-	idx_t result_count = 0;
+	result.set_size(0);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
 		auto key_idx = vdata.sel->get_index(idx);
 		if (vdata.validity.RowIsValid(key_idx)) {
-			result.set_index(result_count++, idx);
+			result.push_index(idx);
 		}
 	}
-	return result_count;
+	return result.size();
 }
 
 void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChunk &keys, DataChunk &payload) {
@@ -652,7 +652,7 @@ static void InsertHashesLoop(atomic<ht_entry_t> entries[], Vector &row_locations
 	// use the ht bitmask to make the modulo operation faster but keep the salt bits intact
 	idx_t capacity_mask = ht.bitmask | ht_entry_t::SALT_MASK;
 	while (remaining_count > 0) {
-		idx_t salt_match_count = 0;
+		state.keys_to_compare_sel.set_size(0);
 
 		// iterate over each entry to find out whether it belongs to an existing list or will start a new list
 		for (idx_t i = 0; i < remaining_count; i++) {
@@ -691,22 +691,21 @@ static void InsertHashesLoop(atomic<ht_entry_t> entries[], Vector &row_locations
 					if (DUCKDB_UNLIKELY(potential_collided_ptr != nullptr)) {
 						// if the entry was occupied, we need to compare the keys and insert the row to the next entry
 						// we need to compare the keys and insert the row to the next entry
-						state.keys_to_compare_sel.set_index(salt_match_count, row_index);
-						rhs_row_locations[salt_match_count] = potential_collided_ptr;
-						salt_match_count += 1;
+						rhs_row_locations[state.keys_to_compare_sel.size()] = potential_collided_ptr;
+						state.keys_to_compare_sel.push_index(row_index);
 					}
 				}
 
 			} else { // compare with full entry
-				state.keys_to_compare_sel.set_index(salt_match_count, row_index);
-				rhs_row_locations[salt_match_count] = entry.GetPointer();
-				salt_match_count += 1;
+				rhs_row_locations[state.keys_to_compare_sel.size()] = entry.GetPointer();
+				state.keys_to_compare_sel.push_index(row_index);
 			}
 		}
 
 		// at this step, for all the rows to insert we stepped either until we found an empty entry or an entry with
 		// a matching salt, we now need to compare the keys for the ones that have a matching salt
 		idx_t key_no_match_count = 0;
+		const auto salt_match_count = state.keys_to_compare_sel.size();
 		if (salt_match_count != 0) {
 			idx_t key_match_count = 0;
 			PerformKeyComparison(state, ht, data_collection, row_locations, salt_match_count, key_match_count,
@@ -1234,21 +1233,20 @@ void ScanStructure::NextSemiOrAntiJoin(DataChunk &keys, DataChunk &probe_data, D
 
 	// create the selection vector from the matches that were found
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
-	idx_t result_count = 0;
 	for (idx_t i = 0; i < keys.size(); i++) {
 		if (found_match[i] == MATCH) {
 			// part of the result
-			sel.set_index(result_count++, i);
+			sel.push_index(i);
 		}
 	}
 	// construct the final result
-	if (result_count > 0) {
+	if (sel.size() > 0) {
 		// extract only OUTPUT columns from probe_data
 		for (idx_t i = 0; i < ht.lhs_output_in_probe.size(); i++) {
 			idx_t probe_col_idx = ht.lhs_output_in_probe[i];
-			result.data[i].Slice(probe_data.data[probe_col_idx], sel, result_count);
+			result.data[i].Slice(probe_data.data[probe_col_idx], sel, sel.size());
 		}
-		result.SetCardinality(result_count);
+		result.SetCardinality(sel.size());
 	} else {
 		D_ASSERT(result.size() == 0);
 	}
@@ -1455,21 +1453,20 @@ void ScanStructure::NextLeftJoin(DataChunk &keys, DataChunk &probe_data, DataChu
 		// no entries left from the normal join
 		// fill in the result of the remaining left tuples
 		// together with NULL values on the right-hand side
-		idx_t remaining_count = 0;
 		SelectionVector sel(STANDARD_VECTOR_SIZE);
 		for (idx_t i = 0; i < probe_data.size(); i++) {
 			if (!found_match[i]) {
-				sel.set_index(remaining_count++, i);
+				sel.push_index(i);
 			}
 		}
 
-		if (remaining_count > 0) {
+		if (sel.size() > 0) {
 			// extract only OUTPUT columns from probe_data
 			for (idx_t i = 0; i < ht.lhs_output_in_probe.size(); i++) {
 				idx_t probe_col_idx = ht.lhs_output_in_probe[i];
-				result.data[i].Slice(probe_data.data[probe_col_idx], sel, remaining_count);
+				result.data[i].Slice(probe_data.data[probe_col_idx], sel, sel.size());
 			}
-			result.SetCardinality(remaining_count);
+			result.SetCardinality(sel.size());
 
 			// now set the right side to NULL
 			for (idx_t i = ht.lhs_output_in_probe.size(); i < result.ColumnCount(); i++) {
@@ -1482,7 +1479,6 @@ void ScanStructure::NextLeftJoin(DataChunk &keys, DataChunk &probe_data, DataChu
 }
 
 void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result) {
-	idx_t result_count = 0;
 	SelectionVector result_sel(STANDARD_VECTOR_SIZE);
 
 	while (this->count > 0) {
@@ -1494,7 +1490,7 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &probe_data, DataC
 			// found a match for this index
 			auto index = chain_match_sel_vector.get_index(i);
 			found_match[index] = true;
-			result_sel.set_index(result_count++, index);
+			result_sel.push_index(index);
 		}
 
 		// continue searching for the ones where we did not find a match yet
@@ -1519,17 +1515,17 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &probe_data, DataC
 		}
 		const auto output_col_idx = ht.output_columns[i];
 		D_ASSERT(vector.GetType() == ht.layout_ptr->GetTypes()[output_col_idx]);
-		GatherResult(vector, result_sel, result_sel, result_count, output_col_idx);
+		GatherResult(vector, result_sel, result_sel, result_sel.size(), output_col_idx);
 	}
 	result.SetCardinality(probe_data.size());
 
 	// like the SEMI, ANTI and MARK join types, the SINGLE join only ever does one pass over the HT per input chunk
 	finished = true;
 
-	if (ht.single_join_error_on_multiple_rows && result_count > 0) {
+	if (ht.single_join_error_on_multiple_rows && result_sel.size() > 0) {
 		// we need to throw an error if there are multiple rows per key
 		// advance pointers for those rows
-		AdvancePointers(result_sel, result_count);
+		AdvancePointers(result_sel, result_sel.size());
 
 		// now resolve the predicates
 		idx_t match_count = ResolvePredicates(keys, probe_data, chain_match_sel_vector, nullptr);

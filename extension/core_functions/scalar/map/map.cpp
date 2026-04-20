@@ -99,7 +99,6 @@ static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	// we need to slice potential non-flat vectors
 	SelectionVector sel_keys(result_child_size);
 	SelectionVector sel_values(result_child_size);
-	idx_t offset = 0;
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 		auto keys_idx = keys_data.sel->get_index(row_idx);
@@ -117,6 +116,10 @@ static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
 		if (keys_entry.length != values_entry.length) {
 			MapVector::EvalMapInvalidReason(MapInvalidReason::NOT_ALIGNED);
 		}
+
+		// keys_entry and values_entry have the same length
+		result_entries[row_idx].length = keys_entry.length;
+		result_entries[row_idx].offset = sel_keys.size();
 
 		// set the selection vectors and perform a duplicate key check
 		value_set_t unique_keys;
@@ -137,15 +140,11 @@ static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
 			}
 
 			// set selection vectors
-			sel_keys.set_index(offset + child_idx, key_idx);
-			sel_values.set_index(offset + child_idx, value_idx);
+			sel_keys.push_index(key_idx);
+			sel_values.push_index(value_idx);
 		}
-
-		// keys_entry and values_entry have the same length
-		result_entries[row_idx].length = keys_entry.length;
-		result_entries[row_idx].offset = offset;
-		offset += keys_entry.length;
 	}
+	idx_t offset = sel_keys.size();
 	D_ASSERT(offset == result_child_size);
 
 	auto &result_key_vector = MapVector::GetKeys(result);

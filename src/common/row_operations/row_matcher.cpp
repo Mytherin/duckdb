@@ -39,7 +39,7 @@ static idx_t TemplatedMatchLoop(const TupleDataVectorFormat &lhs_format, Selecti
 	ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
 	const auto rhs_column_count = rhs_layout.ColumnCount();
 
-	idx_t match_count = 0;
+	sel.set_size(0);
 	for (idx_t i = 0; i < count; i++) {
 		const auto idx = sel.get_index(i);
 
@@ -53,12 +53,12 @@ static idx_t TemplatedMatchLoop(const TupleDataVectorFormat &lhs_format, Selecti
 		                      : !ValidityBytes::RowIsValid(
 		                            ValidityBytes(rhs_location, rhs_column_count).GetValidityEntryUnsafe(entry_idx),
 		                            idx_in_entry))) {
-			sel.set_index(match_count++, idx);
+			sel.push_index(idx);
 		} else if (NO_MATCH_SEL) {
 			no_match_sel->set_index(no_match_count++, idx);
 		}
 	}
-	return match_count;
+	return sel.size();
 }
 
 template <bool NO_MATCH_SEL, class T, class OP>
@@ -106,7 +106,7 @@ static idx_t StructMatchEquality(Vector &lhs_vector, const TupleDataVectorFormat
 	idx_t idx_in_entry;
 	ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
 
-	idx_t match_count = 0;
+	sel.set_size(0);
 	for (idx_t i = 0; i < count; i++) {
 		const auto idx = sel.get_index(i);
 
@@ -123,7 +123,7 @@ static idx_t StructMatchEquality(Vector &lhs_vector, const TupleDataVectorFormat
 		// So we use the comparison only if rhs or LHS is NULL and COMPARE_NULL is true
 		if (!(lhs_null || rhs_null) ||
 		    (COMPARISON_OP::COMPARE_NULL && COMPARISON_OP::template Operation<uint32_t>(0, 0, lhs_null, rhs_null))) {
-			sel.set_index(match_count++, idx);
+			sel.push_index(idx);
 		} else if (NO_MATCH_SEL) {
 			no_match_sel->set_index(no_match_count++, idx);
 		}
@@ -133,7 +133,7 @@ static idx_t StructMatchEquality(Vector &lhs_vector, const TupleDataVectorFormat
 	Vector rhs_struct_row_locations(LogicalType::POINTER);
 	const auto rhs_offset_in_row = rhs_layout.GetOffsets()[col_idx];
 	auto rhs_struct_locations = FlatVector::GetDataMutable<data_ptr_t>(rhs_struct_row_locations);
-	for (idx_t i = 0; i < match_count; i++) {
+	for (idx_t i = 0; i < sel.size(); i++) {
 		const auto idx = sel.get_index(i);
 		rhs_struct_locations[idx] = rhs_locations[idx] + rhs_offset_in_row;
 	}
@@ -143,6 +143,7 @@ static idx_t StructMatchEquality(Vector &lhs_vector, const TupleDataVectorFormat
 	auto &lhs_struct_vectors = StructVector::GetEntries(lhs_vector);
 	D_ASSERT(rhs_struct_layout.ColumnCount() == lhs_struct_vectors.size());
 
+	idx_t match_count = sel.size();
 	for (idx_t struct_col_idx = 0; struct_col_idx < rhs_struct_layout.ColumnCount(); struct_col_idx++) {
 		auto &lhs_struct_vector = lhs_struct_vectors[struct_col_idx];
 		auto &lhs_struct_format = lhs_format.children[struct_col_idx];

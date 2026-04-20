@@ -142,7 +142,7 @@ buffer_ptr<VectorBuffer> VectorBuffer::SliceInternal(const LogicalType &type, id
 	idx_t count = end - offset;
 	SelectionVector sel(count);
 	for (idx_t i = 0; i < count; i++) {
-		sel.set_index(i, offset + i);
+		sel.push_index(offset + i);
 	}
 	return Slice(type, sel, count);
 }

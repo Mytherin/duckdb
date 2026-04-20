@@ -109,26 +109,25 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 	if (return_chunk) {
 		D_ASSERT(l_state.deleted_row_ids);
 		auto flat_ids = FlatVector::GetData<row_t>(row_ids);
-		idx_t count = 0;
 		for (idx_t i = 0; i < chunk.size(); i++) {
 			auto row_id = flat_ids[i];
 			if (l_state.deleted_row_ids->insert(row_id).second) {
-				delete_sel.set_index(count++, i);
+				delete_sel.push_index(i);
 			}
 		}
-		if (count == 0) {
+		if (delete_sel.size() == 0) {
 			return SinkResultType::NEED_MORE_INPUT;
 		}
 		{
 			annotated_lock_guard<annotated_mutex> guard(g_state.return_lock);
 			idx_t final_count = 0;
 			unique_ptr<SelectionVector> large_sel;
-			SelectionVector *write_sel = (count <= STANDARD_VECTOR_SIZE) ? &l_state.final_sel : nullptr;
+			SelectionVector *write_sel = (delete_sel.size() <= STANDARD_VECTOR_SIZE) ? &l_state.final_sel : nullptr;
 			if (!write_sel) {
 				large_sel = make_uniq<SelectionVector>(chunk.size());
 				write_sel = large_sel.get();
 			}
-			for (idx_t i = 0; i < count; i++) {
+			for (idx_t i = 0; i < delete_sel.size(); i++) {
 				auto orig_idx = delete_sel[i];
 				auto row_id = flat_ids[orig_idx];
 				if (g_state.deleted_row_ids.insert(row_id).second) {

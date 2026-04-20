@@ -155,7 +155,6 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 	// This is required since we might see the same row_id multiple times, e.g.,
 	// during an UPDATE containing joins.
 	SelectionVector sel(update_chunk.size());
-	idx_t update_count = 0;
 	auto row_id_data = FlatVector::GetData<row_t>(row_ids);
 
 	lock_guard<mutex> glock(g_state.lock);
@@ -163,20 +162,20 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 		auto row_id = row_id_data[i];
 		const auto is_new = g_state.updated_rows.insert(row_id).second;
 		if (is_new) {
-			sel.set_index(update_count++, i);
+			sel.push_index(i);
 		}
 	}
 
 	// The update chunk now contains exactly those rows that we are deleting.
 	Vector del_row_ids(Vector::Ref(row_ids));
-	if (update_count != update_chunk.size()) {
-		update_chunk.Slice(sel, update_count);
-		del_row_ids.Slice(row_ids, sel, update_count);
+	if (sel.size() != update_chunk.size()) {
+		update_chunk.Slice(sel, sel.size());
+		del_row_ids.Slice(row_ids, sel, sel.size());
 	}
 
 	auto &delete_chunk = index_update ? l_state.delete_chunk : l_state.mock_chunk;
 	delete_chunk.Reset();
-	delete_chunk.SetCardinality(update_count);
+	delete_chunk.SetCardinality(sel.size());
 
 	if (index_update) {
 		auto &transaction = DuckTransaction::Get(context.client, table.db);
@@ -186,14 +185,14 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 		};
 		// We need to fetch the previous index keys to add them to the delete index.
 		auto fetch_state = ColumnFetchState();
-		table.Fetch(transaction, delete_chunk, column_ids, row_ids, update_count, fetch_state);
+		table.Fetch(transaction, delete_chunk, column_ids, row_ids, sel.size(), fetch_state);
 	}
 
 	auto &delete_state = l_state.GetDeleteState(table, tableref, context.client);
-	table.Delete(delete_state, context.client, del_row_ids, update_count);
+	table.Delete(delete_state, context.client, del_row_ids, sel.size());
 
 	// Arrange the columns in the standard table order.
-	mock_chunk.SetCardinality(update_count);
+	mock_chunk.SetCardinality(sel.size());
 	for (idx_t i = 0; i < columns.size(); i++) {
 		mock_chunk.data[columns[i].index].Reference(update_chunk.data[i]);
 	}

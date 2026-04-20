@@ -212,7 +212,7 @@ static bool ListToArrayCast(Vector &source, Vector &result, idx_t count, CastPar
 				FlatVector::SetNull(result, i, true);
 				for (idx_t array_elem = 0; array_elem < array_size; array_elem++) {
 					FlatVector::SetNull(result_cc, i * array_size + array_elem, true);
-					child_sel.set_index(i * array_size + array_elem, 0);
+					child_sel.push_index(0);
 				}
 			} else if (ldata[i].length != array_size) {
 				if (all_ok) {
@@ -224,11 +224,11 @@ static bool ListToArrayCast(Vector &source, Vector &result, idx_t count, CastPar
 				FlatVector::SetNull(result, i, true);
 				for (idx_t array_elem = 0; array_elem < array_size; array_elem++) {
 					FlatVector::SetNull(result_cc, i * array_size + array_elem, true);
-					child_sel.set_index(i * array_size + array_elem, 0);
+					child_sel.push_index(0);
 				}
 			} else {
 				for (idx_t array_elem = 0; array_elem < array_size; array_elem++) {
-					child_sel.set_index(i * array_size + array_elem, ldata[i].offset + array_elem);
+					child_sel.push_index(ldata[i].offset + array_elem);
 				}
 			}
 		}

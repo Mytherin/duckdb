@@ -1030,19 +1030,19 @@ idx_t TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics
 		sel.Initialize(nullptr);
 		return count;
 	} else {
-		idx_t not_null_count = 0;
 		sel.Initialize(STANDARD_VECTOR_SIZE);
+		sel.set_size(0);
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = update.sel->get_index(i);
 			if (mask.RowIsValid(idx)) {
 				stats.statistics.SetHasNoNullFast();
-				sel.set_index(not_null_count++, i);
+				sel.push_index(i);
 				stats.statistics.UpdateNumericStats<T>(update_data[idx]);
 			} else {
 				stats.statistics.SetHasNullFast();
 			}
 		}
-		return not_null_count;
+		return sel.size();
 	}
 }
 
@@ -1060,23 +1060,23 @@ idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, U
 		sel.Initialize(nullptr);
 		return count;
 	} else {
-		idx_t not_null_count = 0;
 		sel.Initialize(STANDARD_VECTOR_SIZE);
+		sel.set_size(0);
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = update.sel->get_index(i);
 			if (mask.RowIsValid(idx)) {
 				stats.statistics.SetHasNoNullFast();
-				sel.set_index(not_null_count++, i);
+				sel.push_index(i);
 				auto &str = update_data[idx];
 				StringStats::Update(stats.statistics, str);
 			} else {
 				stats.statistics.SetHasNullFast();
 			}
 		}
-		if (not_null_count == count) {
+		if (sel.size() == count) {
 			sel.Initialize(nullptr);
 		}
-		return not_null_count;
+		return sel.size();
 	}
 }
 
@@ -1128,7 +1128,6 @@ idx_t GetEffectiveUpdatesValidity(UnifiedVectorFormat &update, row_t *ids, idx_t
 	SelectionVector new_sel;
 	new_sel.Initialize(STANDARD_VECTOR_SIZE);
 
-	idx_t effective_count = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto sel_idx = sel.get_index(i);
 		auto update_idx = update.sel->get_index(sel_idx);
@@ -1136,8 +1135,9 @@ idx_t GetEffectiveUpdatesValidity(UnifiedVectorFormat &update, row_t *ids, idx_t
 		if (original_validity.RowIsValid(original_idx) == update.validity.RowIsValid(update_idx)) {
 			continue;
 		}
-		new_sel.set_index(effective_count++, sel_idx);
+		new_sel.push_index(sel_idx);
 	}
+	idx_t effective_count = new_sel.size();
 	sel.Initialize(new_sel);
 	return effective_count;
 }
@@ -1153,7 +1153,6 @@ idx_t TemplatedGetEffectiveUpdates(UnifiedVectorFormat &update, row_t *ids, idx_
 	SelectionVector new_sel;
 	new_sel.Initialize(STANDARD_VECTOR_SIZE);
 
-	idx_t effective_count = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto sel_idx = sel.get_index(i);
 		auto update_idx = update.sel->get_index(sel_idx);
@@ -1164,8 +1163,9 @@ idx_t TemplatedGetEffectiveUpdates(UnifiedVectorFormat &update, row_t *ids, idx_
 			// data is equivalent - skip
 			continue;
 		}
-		new_sel.set_index(effective_count++, sel_idx);
+		new_sel.push_index(sel_idx);
 	}
+	idx_t effective_count = new_sel.size();
 	sel.Initialize(new_sel);
 	return effective_count;
 }
@@ -1230,27 +1230,28 @@ static idx_t SortSelectionVector(SelectionVector &sel, idx_t count, row_t *ids) 
 	// not sorted: need to sort the selection vector
 	SelectionVector sorted_sel(count);
 	for (idx_t i = 0; i < count; i++) {
-		sorted_sel.set_index(i, sel.get_index(i));
+		sorted_sel.push_index(sel.get_index(i));
 	}
 	std::sort(sorted_sel.data(), sorted_sel.data() + count, [&](sel_t l, sel_t r) { return ids[l] < ids[r]; });
 	// eliminate any duplicates
-	idx_t pos = 1;
+	sorted_sel.set_size(1);
 	for (idx_t i = 1; i < count; i++) {
 		auto prev_idx = sorted_sel.get_index(i - 1);
 		auto idx = sorted_sel.get_index(i);
 		D_ASSERT(ids[idx] >= ids[prev_idx]);
 		if (ids[prev_idx] != ids[idx]) {
-			sorted_sel.set_index(pos++, idx);
+			sorted_sel.push_index(idx);
 		}
 	}
 #ifdef DEBUG
-	for (idx_t i = 1; i < pos; i++) {
+	for (idx_t i = 1; i < sorted_sel.size(); i++) {
 		auto prev_idx = sorted_sel.get_index(i - 1);
 		auto idx = sorted_sel.get_index(i);
 		D_ASSERT(ids[idx] > ids[prev_idx]);
 	}
 #endif
 
+	const auto pos = sorted_sel.size();
 	sel.Initialize(sorted_sel);
 	D_ASSERT(pos > 0);
 	return pos;

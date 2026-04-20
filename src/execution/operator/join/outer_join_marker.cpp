@@ -47,14 +47,13 @@ void OuterJoinMarker::ConstructLeftJoinResult(DataChunk &left, DataChunk &result
 	}
 	D_ASSERT(count == STANDARD_VECTOR_SIZE);
 	SelectionVector remaining_sel(STANDARD_VECTOR_SIZE);
-	idx_t remaining_count = 0;
 	for (idx_t i = 0; i < left.size(); i++) {
 		if (!found_match[i]) {
-			remaining_sel.set_index(remaining_count++, i);
+			remaining_sel.push_index(i);
 		}
 	}
-	if (remaining_count > 0) {
-		result.Slice(left, remaining_sel, remaining_count);
+	if (remaining_sel.size() > 0) {
+		result.Slice(left, remaining_sel, remaining_sel.size());
 		for (idx_t idx = left.ColumnCount(); idx < result.ColumnCount(); idx++) {
 			ConstantVector::SetNull(result.data[idx]);
 		}
@@ -80,14 +79,14 @@ void OuterJoinMarker::Scan(OuterJoinGlobalScanState &gstate, OuterJoinLocalScanS
 	D_ASSERT(gstate.data);
 	// fill in NULL values for the LHS
 	while (gstate.data->Scan(gstate.global_scan, lstate.local_scan, lstate.scan_chunk)) {
-		idx_t result_count = 0;
+		lstate.match_sel.set_size(0);
 		// figure out which tuples didn't find a match in the RHS
 		for (idx_t i = 0; i < lstate.scan_chunk.size(); i++) {
 			if (!found_match[lstate.local_scan.current_row_index + i]) {
-				lstate.match_sel.set_index(result_count++, i);
+				lstate.match_sel.push_index(i);
 			}
 		}
-		if (result_count > 0) {
+		if (lstate.match_sel.size() > 0) {
 			// if there were any tuples that didn't find a match, output them
 			idx_t left_column_count = result.ColumnCount() - lstate.scan_chunk.ColumnCount();
 			for (idx_t i = 0; i < left_column_count; i++) {
@@ -95,9 +94,9 @@ void OuterJoinMarker::Scan(OuterJoinGlobalScanState &gstate, OuterJoinLocalScanS
 			}
 			for (idx_t col_idx = left_column_count; col_idx < result.ColumnCount(); col_idx++) {
 				result.data[col_idx].Slice(lstate.scan_chunk.data[col_idx - left_column_count], lstate.match_sel,
-				                           result_count);
+				                           lstate.match_sel.size());
 			}
-			result.SetCardinality(result_count);
+			result.SetCardinality(lstate.match_sel.size());
 			return;
 		}
 	}

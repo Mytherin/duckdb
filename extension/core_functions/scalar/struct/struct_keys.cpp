@@ -57,7 +57,7 @@ static void StructKeysFunction(DataChunk &args, ExpressionState &state, Vector &
 	SelectionVector sel(count);
 	auto validity_entries = input.Validity(count);
 	for (idx_t i = 0; i < count; i++) {
-		sel.set_index(i, !validity_entries.IsValid(i));
+		sel.push_index(!validity_entries.IsValid(i));
 	}
 
 	result.Slice(keys_vector, sel, count);

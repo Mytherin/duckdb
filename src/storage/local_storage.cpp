@@ -438,14 +438,14 @@ void LocalTableStorage::AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete
 	// handled directly by LocalStorage::Delete.
 	row_ids.Flatten(delete_chunk.size());
 	auto flat_row_ids = FlatVector::GetData<row_t>(row_ids);
-	idx_t committed_count = 0;
 	SelectionVector committed_sel(delete_chunk.size());
 	for (idx_t i = 0; i < delete_chunk.size(); i++) {
 		if (flat_row_ids[i] < MAX_ROW_ID) {
-			committed_sel.set_index(committed_count++, i);
+			committed_sel.push_index(i);
 		}
 	}
 
+	const idx_t committed_count = committed_sel.size();
 	if (committed_count == 0) {
 		return;
 	}

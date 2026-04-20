@@ -302,12 +302,12 @@ void VerifyStructStateRoundtrip(const AggregateStateLayout &layout, const Vector
                                 AggregateInputData &aggr_input_data) {
 	// Build selection of valid state rows
 	SelectionVector valid_sel(count);
-	idx_t valid_count = 0;
 	for (idx_t i = 0; i < count; i++) {
 		if (state_data.validity.RowIsValid(state_data.sel->get_index(i))) {
-			valid_sel.set_index(valid_count++, i);
+			valid_sel.push_index(i);
 		}
 	}
+	idx_t valid_count = valid_sel.size();
 	if (valid_count == 0) {
 		return;
 	}
@@ -487,22 +487,25 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 	SelectionVector copy_from_1_sel(STANDARD_VECTOR_SIZE);
 	SelectionVector both_valid_sel(STANDARD_VECTOR_SIZE);
 
-	idx_t both_null_count = 0, copy_from_0_count = 0, copy_from_1_count = 0, both_valid_count = 0;
-
 	for (idx_t i = 0; i < input.size(); i++) {
 		const bool is_null0 = !state0_data.validity.RowIsValid(state0_data.sel->get_index(i));
 		const bool is_null1 = !state1_data.validity.RowIsValid(state1_data.sel->get_index(i));
 
 		if (is_null0 && is_null1) {
-			both_null_sel.set_index(both_null_count++, i);
+			both_null_sel.push_index(i);
 		} else if (is_null0) {
-			copy_from_1_sel.set_index(copy_from_1_count++, i);
+			copy_from_1_sel.push_index(i);
 		} else if (is_null1) {
-			copy_from_0_sel.set_index(copy_from_0_count++, i);
+			copy_from_0_sel.push_index(i);
 		} else {
-			both_valid_sel.set_index(both_valid_count++, i);
+			both_valid_sel.push_index(i);
 		}
 	}
+
+	idx_t both_null_count = both_null_sel.size();
+	idx_t copy_from_0_count = copy_from_0_sel.size();
+	idx_t copy_from_1_count = copy_from_1_sel.size();
+	idx_t both_valid_count = both_valid_sel.size();
 
 	D_ASSERT(both_null_count + copy_from_0_count + copy_from_1_count + both_valid_count == input.size());
 

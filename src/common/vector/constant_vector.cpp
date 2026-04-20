@@ -70,8 +70,9 @@ const SelectionVector *ConstantVector::ZeroSelectionVector(idx_t count, Selectio
 		return ConstantVector::ZeroSelectionVector();
 	}
 	owned_sel.Initialize(count);
+	owned_sel.set_size(0);
 	for (idx_t i = 0; i < count; i++) {
-		owned_sel.set_index(i, 0);
+		owned_sel.push_index(0);
 	}
 	return &owned_sel;
 }
@@ -126,7 +127,7 @@ void ConstantVector::Reference(Vector &vector, const Vector &source, idx_t posit
 		auto array_size = ArrayType::GetSize(source_type);
 		SelectionVector sel(array_size);
 		for (idx_t i = 0; i < array_size; i++) {
-			sel.set_index(i, array_size * source_idx + i);
+			sel.push_index(array_size * source_idx + i);
 		}
 		target_child.Slice(sel, array_size);
 		target_child.Flatten(array_size); // since its constant we only have to flatten this much

@@ -15,28 +15,28 @@ struct InitialNestedLoopJoin {
 		auto left_entries = left.Values<T>(left_size);
 		auto right_entries = right.Values<T>(right_size);
 
-		idx_t result_count = 0;
+		lvector.set_size(0);
+		rvector.set_size(0);
 		for (; rpos < right_size; rpos++) {
 			auto right_entry = right_entries[rpos];
 			bool right_is_valid = right_entry.IsValid();
 			for (; lpos < left_size; lpos++) {
-				if (result_count == STANDARD_VECTOR_SIZE) {
+				if (lvector.size() == STANDARD_VECTOR_SIZE) {
 					// out of space!
-					return result_count;
+					return lvector.size();
 				}
 				auto left_entry = left_entries[lpos];
 				bool left_is_valid = left_entry.IsValid();
 				if (MATCH_OP::Operation(left_entries.GetValueUnsafe(lpos), right_entries.GetValueUnsafe(rpos),
 				                        !left_is_valid, !right_is_valid)) {
 					// emit tuple
-					lvector.set_index(result_count, lpos);
-					rvector.set_index(result_count, rpos);
-					result_count++;
+					lvector.push_index(lpos);
+					rvector.push_index(rpos);
 				}
 			}
 			lpos = 0;
 		}
-		return result_count;
+		return lvector.size();
 	}
 };
 
@@ -53,7 +53,8 @@ struct RefineNestedLoopJoin {
 		// refine lvector and rvector based on matches of subsequent conditions (in case there are multiple conditions
 		// in the join)
 		D_ASSERT(current_match_count > 0);
-		idx_t result_count = 0;
+		lvector.set_size(0);
+		rvector.set_size(0);
 		for (idx_t i = 0; i < current_match_count; i++) {
 			auto lidx = lvector.get_index(i);
 			auto ridx = rvector.get_index(i);
@@ -63,12 +64,11 @@ struct RefineNestedLoopJoin {
 			bool right_is_valid = right_entry.IsValid();
 			if (MATCH_OP::Operation(left_entries.GetValueUnsafe(lidx), right_entries.GetValueUnsafe(ridx),
 			                        !left_is_valid, !right_is_valid)) {
-				lvector.set_index(result_count, lidx);
-				rvector.set_index(result_count, ridx);
-				result_count++;
+				lvector.push_index(lidx);
+				rvector.push_index(ridx);
 			}
 		}
-		return result_count;
+		return lvector.size();
 	}
 };
 

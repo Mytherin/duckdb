@@ -886,7 +886,6 @@ public:
 	idx_t right_bin = 0;
 
 	//	Predicate evaluation
-	idx_t lhs_match_count;
 	bool fetch_next_left;
 
 	SortKeyPrefixComparison prefix;
@@ -1033,12 +1032,12 @@ void AsOfProbeBuffer::ScanLeft() {
 
 	// Filter out NULL matches
 	if (lhs_valid_mask.CanHaveNull()) {
-		const auto count = lhs_match_count;
-		lhs_match_count = 0;
+		const auto count = lhs_match_sel.size();
+		lhs_match_sel.set_size(0);
 		for (idx_t i = 0; i < count; ++i) {
 			const auto idx = lhs_match_sel.get_index(i);
 			if (lhs_valid_mask.RowIsValidUnsafe(idx)) {
-				lhs_match_sel.set_index(lhs_match_count++, idx);
+				lhs_match_sel.push_index(idx);
 			}
 		}
 	}
@@ -1069,7 +1068,7 @@ void AsOfProbeBuffer::ResolveJoin(idx_t *matches) {
 	using BLOCKS_ITERATOR = block_iterator_t<ExternalBlockIteratorState, SORT_KEY>;
 
 	// If there was no right partition, there are no matches
-	lhs_match_count = 0;
+	lhs_match_sel.set_size(0);
 	if (!right_itr) {
 		return;
 	}
@@ -1130,7 +1129,7 @@ void AsOfProbeBuffer::ResolveJoin(idx_t *matches) {
 		if (matches) {
 			matches[i] = first;
 		}
-		lhs_match_sel.set_index(lhs_match_count++, i);
+		lhs_match_sel.push_index(i);
 	}
 }
 
@@ -1143,7 +1142,7 @@ void AsOfProbeBuffer::ResolveSimpleJoin(ExecutionContext &context, DataChunk &ch
 
 	// Convert the match selection to simple join mask
 	bool found_match[STANDARD_VECTOR_SIZE] = {false};
-	for (idx_t i = 0; i < lhs_match_count; ++i) {
+	for (idx_t i = 0; i < lhs_match_sel.size(); ++i) {
 		found_match[lhs_match_sel.get_index(i)] = true;
 	}
 
@@ -1170,15 +1169,15 @@ void AsOfProbeBuffer::ResolveComplexJoin(ExecutionContext &context, DataChunk &c
 
 	//	Extract the rhs input columns from the match
 	rhs_input.Reset();
-	idx_t rhs_match_count = 0;
-	for (idx_t i = 0; i < lhs_match_count; ++i) {
+	rhs_match_sel.set_size(0);
+	for (idx_t i = 0; i < lhs_match_sel.size(); ++i) {
 		const auto idx = lhs_match_sel[i];
 		const auto match_pos = matches[idx];
 		// Skip to the range containing the match
 		if (match_pos >= rhs_scanner->Scanned()) {
-			if (rhs_match_count) {
-				rhs_input.Append(rhs_payload, false, &rhs_match_sel, rhs_match_count);
-				rhs_match_count = 0;
+			if (rhs_match_sel.size()) {
+				rhs_input.Append(rhs_payload, false, &rhs_match_sel, rhs_match_sel.size());
+				rhs_match_sel.set_size(0);
 			}
 			rhs_payload.Reset();
 			rhs_scanner->SeekRow(match_pos);
@@ -1186,13 +1185,13 @@ void AsOfProbeBuffer::ResolveComplexJoin(ExecutionContext &context, DataChunk &c
 		}
 		// Select the individual values
 		const auto source_offset = match_pos - rhs_scanner->Base();
-		rhs_match_sel.set_index(rhs_match_count++, source_offset);
+		rhs_match_sel.push_index(source_offset);
 	}
-	rhs_input.Append(rhs_payload, false, &rhs_match_sel, rhs_match_count);
+	rhs_input.Append(rhs_payload, false, &rhs_match_sel, rhs_match_sel.size());
 
 	//	Slice the left payload into the result
 	for (column_t i = 0; i < lhs_payload.ColumnCount(); ++i) {
-		chunk.data[i].Slice(lhs_payload.data[i], lhs_match_sel, lhs_match_count);
+		chunk.data[i].Slice(lhs_payload.data[i], lhs_match_sel, lhs_match_sel.size());
 	}
 
 	//	Reference the projected right payload into the result
@@ -1202,11 +1201,11 @@ void AsOfProbeBuffer::ResolveComplexJoin(ExecutionContext &context, DataChunk &c
 		auto &target = chunk.data[lhs_payload.ColumnCount() + col_idx];
 		target.Reference(source);
 	}
-	chunk.SetCardinality(lhs_match_count);
+	chunk.SetCardinality(lhs_match_sel.size());
 
 	//	Update the match masks for the rows we ended up with
 	left_outer.Reset();
-	for (idx_t i = 0; i < lhs_match_count; ++i) {
+	for (idx_t i = 0; i < lhs_match_sel.size(); ++i) {
 		const auto idx = lhs_match_sel.get_index(i);
 		left_outer.SetMatch(idx);
 		const auto first = matches[idx];
@@ -1609,13 +1608,13 @@ void AsOfLocalSourceState::ExecuteRightTask(ExecutionContext &context, DataChunk
 
 		// figure out which tuples didn't find a match in the RHS
 		const auto count = rhs_chunk.size();
-		idx_t result_count = 0;
+		rsel.set_size(0);
 		for (idx_t i = 0; i < count; i++) {
 			if (!rhs_matches[rhs_position + i]) {
-				rsel.set_index(result_count++, i);
+				rsel.push_index(i);
 			}
 		}
-		if (!result_count) {
+		if (!rsel.size()) {
 			continue;
 		}
 
@@ -1627,9 +1626,9 @@ void AsOfLocalSourceState::ExecuteRightTask(ExecutionContext &context, DataChunk
 		}
 		for (idx_t col_idx = 0; col_idx < op.right_projection_map.size(); ++col_idx) {
 			const auto rhs_idx = op.right_projection_map[col_idx];
-			chunk.data[left_column_count + col_idx].Slice(rhs_chunk.data[rhs_idx], rsel, result_count);
+			chunk.data[left_column_count + col_idx].Slice(rhs_chunk.data[rhs_idx], rsel, rsel.size());
 		}
-		chunk.SetCardinality(result_count);
+		chunk.SetCardinality(rsel.size());
 		return;
 	}
 

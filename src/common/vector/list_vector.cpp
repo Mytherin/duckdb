@@ -136,7 +136,6 @@ void VectorListBuffer::Verify(const LogicalType &type, const SelectionVector &se
 		}
 	}
 	SelectionVector child_sel(total_size);
-	idx_t child_count = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
 		idx = vector_type == VectorType::CONSTANT_VECTOR ? 0 : idx;
@@ -144,11 +143,11 @@ void VectorListBuffer::Verify(const LogicalType &type, const SelectionVector &se
 		if (validity.RowIsValid(idx)) {
 			D_ASSERT(le.offset + le.length <= child_size);
 			for (idx_t k = 0; k < le.length; k++) {
-				child_sel.set_index(child_count++, le.offset + k);
+				child_sel.push_index(le.offset + k);
 			}
 		}
 	}
-	child->Verify(child_sel, child_count);
+	child->Verify(child_sel, child_sel.size());
 }
 
 buffer_ptr<VectorBuffer> VectorListBuffer::SliceInternal(const LogicalType &type, idx_t offset, idx_t end) {
@@ -390,7 +389,6 @@ void ListVector::GetConsecutiveChildSelVector(Vector &list, SelectionVector &sel
 	auto list_data = list.Values<list_entry_t>(offset + count);
 
 	//	SelectionVector child_sel(info.second.length);
-	idx_t entry = 0;
 	for (idx_t i = offset; i < offset + count; i++) {
 		auto list_entry = list_data[i];
 		if (!list_entry.IsValid()) {
@@ -398,8 +396,8 @@ void ListVector::GetConsecutiveChildSelVector(Vector &list, SelectionVector &sel
 		}
 		auto &list_val = list_entry.GetValue();
 		for (idx_t k = 0; k < list_val.length; k++) {
-			//			child_sel.set_index(entry++, list_data[idx].offset + k);
-			sel.set_index(entry++, list_val.offset + k);
+			//			child_sel.push_index(list_data[idx].offset + k);
+			sel.push_index(list_val.offset + k);
 		}
 	}
 	//

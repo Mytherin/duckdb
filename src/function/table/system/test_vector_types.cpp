@@ -255,13 +255,12 @@ struct TestVectorDictionary {
 		for (idx_t i = current_chunk; i < info.entries.size(); i++) {
 			auto &chunk = *info.entries[i];
 			SelectionVector sel(STANDARD_VECTOR_SIZE);
-			idx_t sel_idx = 0;
 			for (idx_t k = 0; k < chunk.size(); k++) {
 				if (slice_entries.count(current_idx + k) > 0) {
-					sel.set_index(sel_idx++, k);
+					sel.push_index(k);
 				}
 			}
-			chunk.Slice(sel, sel_idx);
+			chunk.Slice(sel, sel.size());
 			current_idx += chunk.size();
 		}
 	}

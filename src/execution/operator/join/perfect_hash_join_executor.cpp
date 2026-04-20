@@ -227,19 +227,19 @@ bool PerfectHashJoinExecutor::TemplatedFillSelectionVectorBuild(Vector &source, 
 	auto max_value = perfect_join_statistics.build_max.GetValueUnsafe<T>();
 	auto entries = source.Values<T>(count);
 	// generate the selection vector
-	for (idx_t i = 0, sel_idx = 0; i < count; ++i) {
+	for (idx_t i = 0; i < count; ++i) {
 		auto input_value = entries.GetValueUnsafe(i);
 		// add index to selection vector if value in the range
 		if (min_value <= input_value && input_value <= max_value) {
 			auto idx = UnsafeNumericCast<idx_t>(input_value - min_value); // subtract min value to get the idx position
-			sel_vec.set_index(sel_idx, idx);
+			sel_vec.push_index(idx);
 			if (bitmap_build_idx.RowIsValidUnsafe(idx)) {
 				return false;
 			} else {
 				bitmap_build_idx.SetValidUnsafe(idx);
 				unique_keys++;
 			}
-			seq_sel_vec.set_index(sel_idx++, i);
+			seq_sel_vec.push_index(i);
 		}
 	}
 	return true;
@@ -277,17 +277,19 @@ OperatorResultType PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionConte
                                                                   OperatorState &state_p) {
 	auto &state = state_p.Cast<PerfectHashJoinState>();
 	// keeps track of how many probe keys have a match
-	idx_t probe_sel_count = 0;
-
 	// fetch the join keys from the chunk
 	state.join_keys.Reset();
 	state.probe_executor.Execute(input, state.join_keys);
 	// select the keys that are in the min-max range
 	auto &keys_vec = state.join_keys.data[0];
 	auto keys_count = state.join_keys.size();
+	// reset reused selection vectors
+	state.probe_sel_vec.set_size(0);
+	state.build_sel_vec.set_size(0);
 	// todo: add check for fast pass when probe is part of build domain
-	FillSelectionVectorSwitchProbe(keys_vec, keys_count, state.probe_sel_vec, probe_sel_count, &state.build_sel_vec);
+	FillSelectionVectorSwitchProbe(keys_vec, keys_count, state.probe_sel_vec, &state.build_sel_vec);
 
+	const auto probe_sel_count = state.probe_sel_vec.size();
 	// If build is dense and probe is in build's domain, just reference probe
 	if (perfect_join_statistics.is_build_dense && keys_count == probe_sel_count) {
 		result.Reference(lhs_output_columns);
@@ -305,60 +307,50 @@ OperatorResultType PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionConte
 }
 
 void PerfectHashJoinExecutor::FillSelectionVectorSwitchProbe(Vector &source, const idx_t &count,
-                                                             SelectionVector &probe_sel_vec, idx_t &probe_sel_count,
+                                                             SelectionVector &probe_sel_vec,
                                                              optional_ptr<SelectionVector> build_sel_vec) const {
 	if (build_sel_vec) {
-		FillSelectionVectorSwitchProbe<true>(source, count, probe_sel_vec, probe_sel_count, build_sel_vec.get());
+		FillSelectionVectorSwitchProbe<true>(source, count, probe_sel_vec, build_sel_vec.get());
 	} else {
-		FillSelectionVectorSwitchProbe<false>(source, count, probe_sel_vec, probe_sel_count, nullptr);
+		FillSelectionVectorSwitchProbe<false>(source, count, probe_sel_vec, nullptr);
 	}
 }
 
 template <bool BUILD_SEL_VEC>
 void PerfectHashJoinExecutor::FillSelectionVectorSwitchProbe(Vector &source, const idx_t &count,
-                                                             SelectionVector &probe_sel_vec, idx_t &probe_sel_count,
+                                                             SelectionVector &probe_sel_vec,
                                                              SelectionVector *build_sel_vec) const {
 	D_ASSERT(BUILD_SEL_VEC == static_cast<bool>(build_sel_vec));
 	switch (source.GetType().InternalType()) {
 	case PhysicalType::INT8:
-		TemplatedFillSelectionVectorProbe<int8_t, BUILD_SEL_VEC>(source, count, probe_sel_vec, probe_sel_count,
-		                                                         build_sel_vec);
+		TemplatedFillSelectionVectorProbe<int8_t, BUILD_SEL_VEC>(source, count, probe_sel_vec, build_sel_vec);
 		break;
 	case PhysicalType::INT16:
-		TemplatedFillSelectionVectorProbe<int16_t, BUILD_SEL_VEC>(source, count, probe_sel_vec, probe_sel_count,
-		                                                          build_sel_vec);
+		TemplatedFillSelectionVectorProbe<int16_t, BUILD_SEL_VEC>(source, count, probe_sel_vec, build_sel_vec);
 		break;
 	case PhysicalType::INT32:
-		TemplatedFillSelectionVectorProbe<int32_t, BUILD_SEL_VEC>(source, count, probe_sel_vec, probe_sel_count,
-		                                                          build_sel_vec);
+		TemplatedFillSelectionVectorProbe<int32_t, BUILD_SEL_VEC>(source, count, probe_sel_vec, build_sel_vec);
 		break;
 	case PhysicalType::INT64:
-		TemplatedFillSelectionVectorProbe<int64_t, BUILD_SEL_VEC>(source, count, probe_sel_vec, probe_sel_count,
-		                                                          build_sel_vec);
+		TemplatedFillSelectionVectorProbe<int64_t, BUILD_SEL_VEC>(source, count, probe_sel_vec, build_sel_vec);
 		break;
 	case PhysicalType::INT128:
-		TemplatedFillSelectionVectorProbe<hugeint_t, BUILD_SEL_VEC>(source, count, probe_sel_vec, probe_sel_count,
-		                                                            build_sel_vec);
+		TemplatedFillSelectionVectorProbe<hugeint_t, BUILD_SEL_VEC>(source, count, probe_sel_vec, build_sel_vec);
 		break;
 	case PhysicalType::UINT8:
-		TemplatedFillSelectionVectorProbe<uint8_t, BUILD_SEL_VEC>(source, count, probe_sel_vec, probe_sel_count,
-		                                                          build_sel_vec);
+		TemplatedFillSelectionVectorProbe<uint8_t, BUILD_SEL_VEC>(source, count, probe_sel_vec, build_sel_vec);
 		break;
 	case PhysicalType::UINT16:
-		TemplatedFillSelectionVectorProbe<uint16_t, BUILD_SEL_VEC>(source, count, probe_sel_vec, probe_sel_count,
-		                                                           build_sel_vec);
+		TemplatedFillSelectionVectorProbe<uint16_t, BUILD_SEL_VEC>(source, count, probe_sel_vec, build_sel_vec);
 		break;
 	case PhysicalType::UINT32:
-		TemplatedFillSelectionVectorProbe<uint32_t, BUILD_SEL_VEC>(source, count, probe_sel_vec, probe_sel_count,
-		                                                           build_sel_vec);
+		TemplatedFillSelectionVectorProbe<uint32_t, BUILD_SEL_VEC>(source, count, probe_sel_vec, build_sel_vec);
 		break;
 	case PhysicalType::UINT64:
-		TemplatedFillSelectionVectorProbe<uint64_t, BUILD_SEL_VEC>(source, count, probe_sel_vec, probe_sel_count,
-		                                                           build_sel_vec);
+		TemplatedFillSelectionVectorProbe<uint64_t, BUILD_SEL_VEC>(source, count, probe_sel_vec, build_sel_vec);
 		break;
 	case PhysicalType::UINT128:
-		TemplatedFillSelectionVectorProbe<uhugeint_t, BUILD_SEL_VEC>(source, count, probe_sel_vec, probe_sel_count,
-		                                                             build_sel_vec);
+		TemplatedFillSelectionVectorProbe<uhugeint_t, BUILD_SEL_VEC>(source, count, probe_sel_vec, build_sel_vec);
 		break;
 	default:
 		throw NotImplementedException("Type not supported");
@@ -367,9 +359,10 @@ void PerfectHashJoinExecutor::FillSelectionVectorSwitchProbe(Vector &source, con
 
 template <typename T, bool BUILD_SEL_VEC>
 void PerfectHashJoinExecutor::TemplatedFillSelectionVectorProbe(Vector &source, const idx_t &count,
-                                                                SelectionVector &probe_sel_vec, idx_t &probe_sel_count,
+                                                                SelectionVector &probe_sel_vec,
                                                                 SelectionVector *build_sel_vec) const {
-	D_ASSERT(probe_sel_count == 0);
+	D_ASSERT(probe_sel_vec.size() == 0);
+	D_ASSERT(!BUILD_SEL_VEC || build_sel_vec->size() == 0);
 	const auto min_value = perfect_join_statistics.build_min.GetValueUnsafe<T>();
 	const auto max_value = perfect_join_statistics.build_max.GetValueUnsafe<T>();
 
@@ -388,9 +381,9 @@ void PerfectHashJoinExecutor::TemplatedFillSelectionVectorProbe(Vector &source, 
 			// position check for matches in the build
 			if (bitmap_build_idx.RowIsValid(idx)) {
 				if (BUILD_SEL_VEC) {
-					build_sel_vec->set_index(probe_sel_count, idx);
+					build_sel_vec->push_index(idx);
 				}
-				probe_sel_vec.set_index(probe_sel_count++, i);
+				probe_sel_vec.push_index(i);
 			}
 		}
 	}

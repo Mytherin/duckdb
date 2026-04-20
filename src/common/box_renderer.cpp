@@ -785,7 +785,7 @@ void BoxRendererImplementation::FetchBottomCollection(RenderDataCollection &bott
 			// invert the rows
 			SelectionVector slice_sel(insert_count);
 			for (idx_t r = 0; r < insert_count; r++) {
-				slice_sel.set_index(r, offset + r);
+				slice_sel.push_index(offset + r);
 			}
 			chunk.Slice(slice_sel, insert_count);
 			chunk.Flatten();

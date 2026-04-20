@@ -189,7 +189,7 @@ OperatorResultType VerifyEmitSequenceVector(const DataChunk &input_p, DataChunk 
 			// dictionary vector
 			SelectionVector sel(max_length);
 			for (idx_t k = 0; k < max_length; k++) {
-				sel.set_index(k, state.const_idx + k);
+				sel.push_index(state.const_idx + k);
 			}
 			chunk.data[c].Slice(input.data[c], sel, max_length);
 		} else if (info.is_constant) {
