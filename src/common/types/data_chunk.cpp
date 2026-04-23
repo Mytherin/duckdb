@@ -128,6 +128,19 @@ void DataChunk::SetCardinality(idx_t count_p) {
 	this->count = count_p;
 }
 
+void DataChunk::CheckCardinality(idx_t count_p) {
+	for (auto &v : data) {
+		if (!v.HasSize()) {
+			throw InternalException("Vector does not have size defined!");
+		}
+		if (v.size() != count_p) {
+			throw InternalException("Vector has a different size than DataChunk (vector size %d, data chunk size %d)",
+			                        v.size(), count_p);
+		}
+	}
+	this->count = count_p;
+}
+
 void DataChunk::Reference(DataChunk &chunk) {
 	D_ASSERT(chunk.ColumnCount() <= ColumnCount());
 	for (idx_t i = 0; i < chunk.ColumnCount(); i++) {

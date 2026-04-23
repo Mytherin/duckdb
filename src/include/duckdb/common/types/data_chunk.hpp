@@ -61,6 +61,7 @@ public:
 	inline void SetCardinality(const DataChunk &other) {
 		SetCardinality(other.size());
 	}
+	void CheckCardinality(idx_t count_p);
 
 	DUCKDB_API Value GetValue(idx_t col_idx, idx_t index) const;
 	DUCKDB_API void SetValue(idx_t col_idx, idx_t index, const Value &val);
