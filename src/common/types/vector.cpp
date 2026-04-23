@@ -83,7 +83,8 @@ Vector::Vector(const Value &value) : type(value.type()) {
 	Reference(value);
 }
 
-Vector::Vector(Vector &&other) noexcept : type(std::move(other.type)), buffer(std::move(other.buffer)) {
+Vector::Vector(Vector &&other) noexcept
+    : type(std::move(other.type)), buffer(std::move(other.buffer)), count(other.count) {
 }
 
 bool Vector::HasSize() const {
