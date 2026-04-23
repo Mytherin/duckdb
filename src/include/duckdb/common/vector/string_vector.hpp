@@ -28,9 +28,9 @@ public:
 	explicit VectorStringBuffer(Allocator &allocator);
 	VectorStringBuffer(Allocator &allocator, capacity_t capacity);
 	explicit VectorStringBuffer(capacity_t capacity);
-	explicit VectorStringBuffer(data_ptr_t data_ptr_p, count_t count);
-	explicit VectorStringBuffer(AllocatedData &&data_p, count_t count);
-	VectorStringBuffer(AllocatedData &&data_p, count_t count, const VectorStringBuffer &other);
+	explicit VectorStringBuffer(data_ptr_t data_ptr_p, capacity_t capacity);
+	explicit VectorStringBuffer(AllocatedData &&data_p);
+	VectorStringBuffer(AllocatedData &&data_p, const VectorStringBuffer &other);
 
 public:
 	StringHeap &GetHeap() {
@@ -61,7 +61,7 @@ public:
 
 protected:
 	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, idx_t offset, idx_t end) override;
-	buffer_ptr<VectorBuffer> CreateBuffer(AllocatedData &&new_data, count_t count) const override;
+	buffer_ptr<VectorBuffer> CreateBuffer(AllocatedData &&new_data) const override;
 	void CopyInternal(const Vector &source, const SelectionVector &source_sel, idx_t source_count, idx_t source_offset,
 	                  idx_t target_offset, idx_t copy_count) override;
 	buffer_ptr<VectorBuffer> FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,

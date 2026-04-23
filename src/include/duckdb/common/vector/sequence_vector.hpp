@@ -18,10 +18,11 @@ public:
 
 	int64_t start;
 	int64_t increment;
+	idx_t seq_count;
 
 public:
 	idx_t Capacity() const override {
-		return Size();
+		return seq_count;
 	}
 	idx_t GetDataSize(const LogicalType &type, idx_t count) const override;
 	idx_t GetAllocationSize() const override;

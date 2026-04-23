@@ -17,8 +17,8 @@ class StandardVectorBuffer : public VectorBuffer {
 public:
 	StandardVectorBuffer(Allocator &allocator, capacity_t capacity, idx_t type_size);
 	explicit StandardVectorBuffer(capacity_t capacity, idx_t type_size);
-	explicit StandardVectorBuffer(data_ptr_t data_ptr_p, count_t count, idx_t type_size);
-	explicit StandardVectorBuffer(AllocatedData &&data_p, count_t count, idx_t type_size);
+	explicit StandardVectorBuffer(data_ptr_t data_ptr_p, capacity_t capacity, idx_t type_size);
+	explicit StandardVectorBuffer(AllocatedData &&data_p, idx_t type_size);
 
 public:
 	data_ptr_t GetData() override {
@@ -57,7 +57,7 @@ protected:
 	buffer_ptr<VectorBuffer> FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
 	                                              idx_t count) const override;
 
-	virtual buffer_ptr<VectorBuffer> CreateBuffer(AllocatedData &&new_data, count_t count) const;
+	virtual buffer_ptr<VectorBuffer> CreateBuffer(AllocatedData &&new_data) const;
 
 protected:
 	ValidityMask validity;
@@ -132,16 +132,6 @@ struct FlatVector {
 			throw InternalException("FlatVector::GetCapacity requires a flat vector buffer");
 		}
 		return buffer.Capacity();
-	}
-	static void SetSize(Vector &vector, idx_t new_size) {
-		auto &buffer_ref = vector.GetBufferRef();
-		if (!buffer_ref) {
-			if (new_size != 0) {
-				throw InternalException("Calling FlatVector::SetSize on a vector without a buffer with non-zero size");
-			}
-			return;
-		}
-		buffer_ref->SetVectorSize(new_size);
 	}
 	template <class T>
 	static inline const T *GetDataUnsafe(const Vector &vector) {

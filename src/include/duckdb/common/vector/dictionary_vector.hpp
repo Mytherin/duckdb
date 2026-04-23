@@ -38,7 +38,7 @@ public:
 
 public:
 	idx_t Capacity() const override {
-		return Size();
+		return sel_count;
 	}
 	const SelectionVector &GetSelVector() const {
 		return sel_vector;
@@ -95,6 +95,7 @@ protected:
 private:
 	SelectionVector sel_vector;
 	buffer_ptr<DictionaryEntry> entry;
+	idx_t sel_count;
 };
 
 class SelectionDataHolder : public AuxiliaryDataHolder {

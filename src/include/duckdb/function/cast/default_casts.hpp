@@ -114,7 +114,7 @@ struct BoundCastInfo {
 
 	bool Cast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) const {
 		auto all_ok = function(source, result, count, parameters);
-		FlatVector::SetSize(result, count);
+		result.SetSize(count);
 		return all_ok;
 	}
 

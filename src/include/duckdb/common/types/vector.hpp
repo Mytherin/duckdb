@@ -58,6 +58,7 @@ public:
 	//! FIXME: should be removed - all vectors need to have a size eventually
 	bool HasSize() const;
 	idx_t size() const; // NOLINT
+	void SetSize(idx_t new_size);
 	//! Checks if a vector has enough space for the given count - throws an internal error otherwise
 	DUCKDB_API void CheckCapacity(idx_t capacity) const;
 
@@ -224,6 +225,8 @@ protected:
 	LogicalType type;
 	//! The main buffer holding the data of the vector
 	mutable buffer_ptr<VectorBuffer> buffer;
+	//! The amount of rows in the vector
+	optional_idx count;
 };
 
 } // namespace duckdb

@@ -45,7 +45,7 @@ Vector::Vector(LogicalType type_p, idx_t capacity, VectorDataInitialization init
 	Initialize(initialize, capacity);
 }
 
-Vector::Vector(LogicalType type_p, data_ptr_t dataptr, idx_t count) : type(std::move(type_p)) {
+Vector::Vector(LogicalType type_p, data_ptr_t dataptr, idx_t count_p) : type(std::move(type_p)), count(count_p) {
 	if (!dataptr) {
 		return;
 	}
@@ -56,10 +56,10 @@ Vector::Vector(LogicalType type_p, data_ptr_t dataptr, idx_t count) : type(std::
 		throw InternalException("Cannot create a nested vector from a single data pointer");
 	}
 	if (type.InternalType() == PhysicalType::VARCHAR) {
-		buffer = make_buffer<VectorStringBuffer>(dataptr, count_t(count));
+		buffer = make_buffer<VectorStringBuffer>(dataptr, capacity_t(count_p));
 	} else {
 		auto type_size = GetTypeIdSize(type.InternalType());
-		buffer = make_buffer<StandardVectorBuffer>(dataptr, count_t(count), type_size);
+		buffer = make_buffer<StandardVectorBuffer>(dataptr, capacity_t(count_p), type_size);
 	}
 }
 
@@ -87,17 +87,15 @@ Vector::Vector(Vector &&other) noexcept : type(std::move(other.type)), buffer(st
 }
 
 bool Vector::HasSize() const {
-	if (!buffer) {
-		return true;
-	}
-	return buffer->HasSize();
+	return count.IsValid();
 }
 
 idx_t Vector::size() const {
-	if (!buffer) {
-		return 0;
-	}
-	return buffer->Size();
+	 return count.GetIndex();
+}
+
+void Vector::SetSize(idx_t new_size) {
+	count = new_size;
 }
 
 void Vector::CheckCapacity(idx_t capacity) const {
@@ -130,6 +128,7 @@ void Vector::Reference(const Vector &other) {
 		                        GetType(), other.GetType());
 	}
 	D_ASSERT(other.GetType() == GetType());
+	count = other.count;
 	ConstReference(other);
 }
 
@@ -153,6 +152,7 @@ void Vector::Reinterpret(const Vector &other) {
 	//! e.g DOUBLE[] to BIGINT[], the type of the LIST would say BIGINT but the child Vector says DOUBLE
 	D_ASSERT((not_nested && type_size_equal) || type_is_same);
 #endif
+	count = other.count;
 	ConstReference(other);
 	if (GetVectorType() == VectorType::DICTIONARY_VECTOR && other_type != this_type) {
 		Vector new_vector(this_type, nullptr);
@@ -164,6 +164,9 @@ void Vector::Reinterpret(const Vector &other) {
 }
 
 void Vector::ConstReference(const Vector &other) const {
+	if (count != other.count) {
+		throw InternalException("ConstReference used to refer to a vector with a different count");
+	}
 	AssignSharedPointer(buffer, other.buffer);
 }
 
@@ -176,6 +179,7 @@ void Vector::Slice(const Vector &other, idx_t offset, idx_t end) {
 	if (!buffer) {
 		buffer = other.buffer;
 	}
+	this->count = end - offset;
 }
 
 void Vector::Slice(const Vector &other, const SelectionVector &sel, idx_t count) {
@@ -183,39 +187,39 @@ void Vector::Slice(const Vector &other, const SelectionVector &sel, idx_t count)
 	Slice(sel, count);
 }
 
-void Vector::Slice(const SelectionVector &sel, idx_t count) {
-	if (!sel.IsSet() || count == 0) {
-		return;
+void Vector::Slice(const SelectionVector &sel, idx_t sel_count) {
+	if (sel.IsSet() && sel_count > 0) {
+		auto new_buffer = buffer->Slice(GetType(), sel, sel_count);
+		if (new_buffer) {
+			buffer = std::move(new_buffer);
+		}
 	}
-	auto new_buffer = buffer->Slice(GetType(), sel, count);
-	if (new_buffer) {
-		buffer = std::move(new_buffer);
-	}
+	this->count = sel_count;
 }
 
-void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
-	if (!sel.IsSet() || count == 0) {
-		return;
+void Vector::Slice(const SelectionVector &sel, idx_t sel_count, SelCache &cache) {
+	if (sel.IsSet() && sel_count > 0) {
+		auto new_buffer = buffer->SliceWithCache(cache, GetType(), sel, sel_count);
+		if (new_buffer) {
+			buffer = std::move(new_buffer);
+		}
 	}
-	auto new_buffer = buffer->SliceWithCache(cache, GetType(), sel, count);
-	if (new_buffer) {
-		buffer = std::move(new_buffer);
-	}
+	this->count = sel_count;
 }
 
-void Vector::Dictionary(idx_t dictionary_size, const SelectionVector &sel, idx_t count) {
+void Vector::Dictionary(idx_t dictionary_size, const SelectionVector &sel, idx_t sel_count) {
 	if (!HasSize() || dictionary_size != size()) {
 		throw InternalException("Vector::Dictionary called with mismatching dictionary size");
 	}
-	Slice(sel, count);
+	Slice(sel, sel_count);
 }
 
-void Vector::Dictionary(const Vector &dict, idx_t dictionary_size, const SelectionVector &sel, idx_t count) {
+void Vector::Dictionary(const Vector &dict, idx_t dictionary_size, const SelectionVector &sel, idx_t sel_count) {
 	if (!dict.HasSize() || dict.size() != dictionary_size) {
 		throw InternalException("Vector::Dictionary called with mismatching dictionary size");
 	}
 	Reference(dict);
-	Dictionary(dictionary_size, sel, count);
+	Dictionary(dictionary_size, sel, sel_count);
 }
 
 void Vector::Dictionary(buffer_ptr<DictionaryEntry> reusable_dict, const SelectionVector &sel, idx_t sel_count) {
@@ -250,6 +254,7 @@ void Vector::Initialize(VectorDataInitialization data_initialize, idx_t capacity
 			memset(data, 0, capacity * type_size);
 		}
 	}
+	count = 0ULL;
 }
 
 void Vector::AddAuxiliaryData(unique_ptr<AuxiliaryDataHolder> data) {
@@ -298,15 +303,29 @@ void Vector::Reserve(idx_t to_reserve) {
 }
 
 void Vector::Append(const Value &value) {
-	buffer->AppendValue(GetType(), value, VectorAppendMode::ALLOW_RESIZE);
+	if (!HasSize()) {
+		throw InternalException("Can only append to vector with a size");
+	}
+	auto append_mode = VectorAppendMode::ALLOW_RESIZE;
+	auto new_capacity = size() + 1;
+	buffer->Reserve(new_capacity, append_mode);
+	buffer->SetValue(type, size(), value);
+	count = new_capacity;
 }
 
-void Vector::Append(const Vector &source, idx_t count) {
-	buffer->Append(source, *FlatVector::IncrementalSelectionVector(), count, VectorAppendMode::ALLOW_RESIZE);
+void Vector::Append(const Vector &source, idx_t append_count) {
+	Append(source, *FlatVector::IncrementalSelectionVector(), append_count);
 }
 
-void Vector::Append(const Vector &source, const SelectionVector &sel, idx_t count) {
-	buffer->Append(source, sel, count, VectorAppendMode::ALLOW_RESIZE);
+void Vector::Append(const Vector &source, const SelectionVector &sel, idx_t sel_count) {
+	if (!HasSize()) {
+		throw InternalException("Can only append to vector with a size");
+	}
+	auto append_mode = VectorAppendMode::ALLOW_RESIZE;
+	auto new_capacity = size() + sel_count;
+	buffer->Reserve(new_capacity, append_mode);
+	buffer->Copy(source, sel, sel_count, 0, size(), sel_count);
+	count = new_capacity;
 }
 
 void Vector::Copy(const Vector &source, const SelectionVector &source_sel, idx_t source_count, idx_t source_offset,
@@ -464,6 +483,7 @@ void Vector::Shred(Vector &shredded_data, idx_t capacity) {
 	if (shredded_type.id() != LogicalTypeId::STRUCT || StructType::GetChildCount(shredded_type) != 2) {
 		throw InternalException("Vector::Shred parameter must be a struct with two children");
 	}
+	shredded_data.SetSize(capacity);
 	this->buffer = make_buffer<ShreddedVectorBuffer>(shredded_data, capacity);
 }
 

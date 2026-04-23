@@ -5,8 +5,7 @@ namespace duckdb {
 
 SequenceBuffer::SequenceBuffer(int64_t start_p, int64_t increment_p, idx_t count_p)
     : VectorBuffer(VectorType::SEQUENCE_VECTOR, VectorBufferType::SEQUENCE_BUFFER), start(start_p),
-      increment(increment_p) {
-	this->v_size = count_p;
+      increment(increment_p), seq_count(count_p) {
 }
 
 idx_t SequenceBuffer::GetDataSize(const LogicalType &type, idx_t count) const {
@@ -45,9 +44,7 @@ buffer_ptr<VectorBuffer> SequenceBuffer::FlattenSliceInternal(const LogicalType 
                                                               idx_t count) const {
 	Vector flattened_vector(type, count);
 	VectorOperations::GenerateSequence(flattened_vector, count, sel, start, increment);
-	auto result = flattened_vector.GetBufferRef();
-	result->SetVectorSize(count);
-	return result;
+	return flattened_vector.GetBufferRef();
 }
 
 void SequenceVector::GetSequence(const Vector &vector, int64_t &start, int64_t &increment) {

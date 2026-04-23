@@ -8,26 +8,21 @@ namespace duckdb {
 
 DictionaryBuffer::DictionaryBuffer(const SelectionVector &sel, idx_t sel_count_p, buffer_ptr<DictionaryEntry> entry_p)
     : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER), sel_vector(sel),
-      entry(std::move(entry_p)) {
-	v_size = sel_count_p;
+      entry(std::move(entry_p)), sel_count(sel_count_p) {
 }
 DictionaryBuffer::DictionaryBuffer(buffer_ptr<SelectionData> data, idx_t sel_count_p,
                                    buffer_ptr<DictionaryEntry> entry_p)
     : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER), sel_vector(std::move(data)),
-      entry(std::move(entry_p)) {
-	v_size = sel_count_p;
+      entry(std::move(entry_p)), sel_count(sel_count_p) {
 }
 DictionaryBuffer::DictionaryBuffer(const SelectionVector &sel, idx_t sel_count_p)
-    : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER), sel_vector(sel) {
-	v_size = sel_count_p;
+    : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER), sel_vector(sel), sel_count(sel_count_p) {
 }
 DictionaryBuffer::DictionaryBuffer(buffer_ptr<SelectionData> data, idx_t sel_count_p)
-    : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER), sel_vector(std::move(data)) {
-	v_size = sel_count_p;
+    : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER), sel_vector(std::move(data)), sel_count(sel_count_p) {
 }
 DictionaryBuffer::DictionaryBuffer(idx_t count)
-    : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER), sel_vector(count) {
-	v_size = count;
+    : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER), sel_vector(count), sel_count(count) {
 }
 
 idx_t DictionaryBuffer::GetDataSize(const LogicalType &type, idx_t count) const {
@@ -123,7 +118,7 @@ buffer_ptr<VectorBuffer> DictionaryBuffer::SliceInternal(const LogicalType &type
 }
 
 Value DictionaryBuffer::GetValue(const LogicalType &type, idx_t index) const {
-	if (index >= Size()) {
+	if (index >= sel_count) {
 		throw InternalException("DictionaryBuffer::GetValue out of range for selection vector");
 	}
 	auto resolved_index = sel_vector.get_index(index);
@@ -157,7 +152,7 @@ buffer_ptr<VectorBuffer> DictionaryBuffer::FlattenSliceInternal(const LogicalTyp
 
 buffer_ptr<DictionaryEntry> DictionaryVector::CreateReusableDictionary(const LogicalType &type, const idx_t &size) {
 	auto entry = make_buffer<DictionaryEntry>(Vector(type, size));
-	FlatVector::SetSize(entry->data, size);
+	entry->data.SetSize(size);
 	entry->id = UUID::ToString(UUID::GenerateRandomUUID());
 	return entry;
 }

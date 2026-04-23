@@ -35,7 +35,6 @@ VectorStructBuffer::VectorStructBuffer(VectorStructBuffer &other, const Selectio
 		validity.Resize(count);
 	}
 	validity.CopySel(original_validity, sel, 0, 0, count);
-	v_size = count;
 }
 
 void VectorStructBuffer::SetVectorType(VectorType new_vector_type) {
@@ -106,7 +105,6 @@ buffer_ptr<VectorBuffer> VectorStructBuffer::SliceInternal(const LogicalType &ty
 	auto count = count_t(end - offset);
 	auto result = make_buffer<VectorStructBuffer>(std::move(result_children), capacity_t(count));
 	result->GetValidityMask().Slice(validity, offset, count);
-	result->SetVectorSize(count);
 	return result;
 }
 
@@ -228,7 +226,6 @@ buffer_ptr<VectorBuffer> VectorStructBuffer::FlattenSliceInternal(const LogicalT
 	// copy validity using sel
 	auto &result_validity = result->GetValidityMask();
 	result_validity.CopySel(validity, sel, 0, 0, count);
-	result->SetVectorSize(count);
 	return result;
 }
 

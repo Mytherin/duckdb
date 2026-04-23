@@ -18,23 +18,17 @@ StandardVectorBuffer::StandardVectorBuffer(Allocator &allocator, capacity_t capa
 		// resize the validity
 		validity.Resize(capacity);
 	}
-	v_size = 0ULL;
 }
 StandardVectorBuffer::StandardVectorBuffer(capacity_t capacity, idx_t type_size_p)
     : StandardVectorBuffer(Allocator::DefaultAllocator(), capacity, type_size_p) {
 }
-StandardVectorBuffer::StandardVectorBuffer(data_ptr_t data_ptr_p, count_t count, idx_t type_size_p)
+StandardVectorBuffer::StandardVectorBuffer(data_ptr_t data_ptr_p, capacity_t capacity, idx_t type_size_p)
     : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STANDARD_BUFFER), data_ptr(data_ptr_p),
-      type_size(type_size_p), capacity(count) {
-	SetVectorSize(count);
+      type_size(type_size_p), capacity(capacity) {
 }
-StandardVectorBuffer::StandardVectorBuffer(AllocatedData &&data_p, count_t count, idx_t type_size_p)
+StandardVectorBuffer::StandardVectorBuffer(AllocatedData &&data_p, idx_t type_size_p)
     : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STANDARD_BUFFER), data_ptr(data_p.get()),
       type_size(type_size_p), capacity(data_p.GetSize() / type_size), allocated_data(std::move(data_p)) {
-	if (count > capacity) {
-		throw InternalException("Count is out of range for capacity");
-	}
-	SetVectorSize(count);
 }
 
 void StandardVectorBuffer::SetVectorType(VectorType new_vector_type) {
@@ -70,11 +64,10 @@ void StandardVectorBuffer::Verify(const LogicalType &type, const SelectionVector
 
 buffer_ptr<VectorBuffer> StandardVectorBuffer::SliceInternal(const LogicalType &type, idx_t offset, idx_t end) {
 	D_ASSERT(end <= capacity);
-	auto count = count_t(end - offset);
+	auto count = end - offset;
 	auto offset_ptr = data_ptr + type_size * offset;
-	auto result = make_buffer<StandardVectorBuffer>(offset_ptr, count, type_size);
+	auto result = make_buffer<StandardVectorBuffer>(offset_ptr, capacity_t(count), type_size);
 	result->GetValidityMask().Slice(validity, offset, count);
-	result->SetVectorSize(count);
 	return result;
 }
 
@@ -85,8 +78,8 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::SliceInternal(const LogicalType &
 	return make_buffer<DictionaryBuffer>(sel, count, std::move(entry));
 }
 
-buffer_ptr<VectorBuffer> StandardVectorBuffer::CreateBuffer(AllocatedData &&new_data, count_t count) const {
-	return make_buffer<StandardVectorBuffer>(std::move(new_data), count, type_size);
+buffer_ptr<VectorBuffer> StandardVectorBuffer::CreateBuffer(AllocatedData &&new_data) const {
+	return make_buffer<StandardVectorBuffer>(std::move(new_data), type_size);
 }
 
 void StandardVectorBuffer::Resize(idx_t current_size, idx_t new_size) {
@@ -169,7 +162,7 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::FlattenSliceInternal(const Logica
 	// copy data using sel
 	FlattenVectorBuffer(new_data.get(), data_ptr, sel, count, type_size);
 
-	auto result = CreateBuffer(std::move(new_data), count_t(count));
+	auto result = CreateBuffer(std::move(new_data));
 	// copy validity using sel
 	auto &result_validity = result->GetValidityMask();
 	result_validity.Resize(allocated_count);
@@ -440,16 +433,15 @@ void FlatVector::SetData(Vector &vector, data_ptr_t data, count_t count) {
 	auto old_validity = std::move(vector.BufferMutable().GetValidityMask());
 	if (vector.GetType().InternalType() == PhysicalType::LIST) {
 		auto &current_buffer = vector.BufferMutable().Cast<VectorListBuffer>();
-		vector.SetBuffer(make_buffer<VectorListBuffer>(data, count, current_buffer.GetChild()));
+		vector.SetBuffer(make_buffer<VectorListBuffer>(data, capacity_t(count), current_buffer.GetChild()));
 	} else if (vector.GetType().InternalType() == PhysicalType::VARCHAR) {
-		vector.SetBuffer(make_buffer<VectorStringBuffer>(data, count));
+		vector.SetBuffer(make_buffer<VectorStringBuffer>(data, capacity_t(count)));
 	} else {
 		auto type_size = GetTypeIdSize(vector.GetType().InternalType());
-		vector.SetBuffer(make_buffer<StandardVectorBuffer>(data, count, type_size));
+		vector.SetBuffer(make_buffer<StandardVectorBuffer>(data, capacity_t(count), type_size));
 	}
 	vector.BufferMutable().GetValidityMask() = std::move(old_validity);
-	// set the size of the new buffer so child->size() works for list parents using GetChildSize()
-	vector.BufferMutable().SetVectorSize(count);
+	vector.SetSize(count);
 }
 
 void FlatVector::SetNull(Vector &vector, idx_t idx, bool is_null) {

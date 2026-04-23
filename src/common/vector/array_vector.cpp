@@ -126,8 +126,6 @@ buffer_ptr<VectorBuffer> VectorArrayBuffer::FlattenSliceInternal(const LogicalTy
 	// copy over the validity
 	auto &result_validity = result->GetValidityMask();
 	result_validity.CopySel(validity, sel, 0, 0, count);
-
-	result->SetVectorSize(count);
 	return result;
 }
 
@@ -137,7 +135,6 @@ buffer_ptr<VectorBuffer> VectorArrayBuffer::SliceInternal(const LogicalType &typ
 
 	auto result = make_buffer<VectorArrayBuffer>(std::move(new_child), array_size, capacity_t(count));
 	result->GetValidityMask().Slice(validity, offset, count);
-	result->SetVectorSize(count);
 	return result;
 }
 

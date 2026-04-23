@@ -95,14 +95,6 @@ public:
 	virtual const ValidityMask &GetValidityMask() const {
 		throw InternalException("VectorBuffer does not have a ValidityMask");
 	}
-	//! FIXME: should be removed
-	bool HasSize() const {
-		return v_size.IsValid();
-	}
-	idx_t Size() const {
-		return v_size.GetIndex();
-	}
-	void SetVectorSize(idx_t new_size);
 
 	void AddAuxiliaryData(unique_ptr<AuxiliaryDataHolder> aux_data_p) {
 		if (!auxiliary_data) {
@@ -160,10 +152,6 @@ public:
 	virtual void SetValue(const LogicalType &type, idx_t index, const Value &val);
 	//! Resize if the vector does not have enough capacity, or throw an error, depending on VectorAppendMode
 	void Reserve(idx_t required_capacity, VectorAppendMode append_mode);
-	//! Append a value to the vector (flat / constant vectors only)
-	void AppendValue(const LogicalType &type, const Value &val, VectorAppendMode append_mode);
-	//! Append a vector to this buffer, sliced by the source_sel
-	void Append(const Vector &source, const SelectionVector &sel, idx_t append_size, VectorAppendMode append_mode);
 	//! Copy data from another vector into this vectors' buffer
 	void Copy(const Vector &source, const SelectionVector &source_sel, idx_t source_count, idx_t source_offset,
 	          idx_t target_offset, idx_t copy_count);
@@ -197,8 +185,6 @@ protected:
 	VectorType vector_type;
 	VectorBufferType buffer_type;
 	buffer_ptr<AuxiliaryDataSet> auxiliary_data;
-	//! FIXME: optional_idx only temporarily...
-	optional_idx v_size;
 
 public:
 	template <class TARGET>
