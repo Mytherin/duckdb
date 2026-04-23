@@ -92,7 +92,7 @@ bool Vector::HasSize() const {
 }
 
 idx_t Vector::size() const {
-	 return count.GetIndex();
+	return count.GetIndex();
 }
 
 void Vector::SetSize(idx_t new_size) {
