@@ -18,6 +18,7 @@ struct VectorWriter {
 	VectorWriter(Vector &vector, idx_t count, idx_t offset)
 	    : data(FlatVector::GetDataMutable<T>(vector)), validity(FlatVector::ValidityMutable(vector)),
 	      count(offset + count), current_idx(offset) {
+		FlatVector::SetSize(vector, count);
 	}
 	~VectorWriter() {
 		// ensure that all values we said we were going to write have been written
