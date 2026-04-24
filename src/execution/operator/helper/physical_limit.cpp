@@ -246,6 +246,10 @@ Value PhysicalLimit::GetDelimiter(ExecutionContext &context, DataChunk &input, c
 	input.SetCardinality(1);
 	limit_executor.Execute(input, limit_chunk);
 	input.SetCardinality(input_size);
+	// restore vector sizes in case Execute shared buffers with input
+	for (idx_t c = 0; c < input.ColumnCount(); c++) {
+		FlatVector::SetSize(input.data[c], input_size);
+	}
 	auto limit_value = limit_chunk.GetValue(0, 0);
 	return limit_value;
 }

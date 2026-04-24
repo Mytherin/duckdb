@@ -1408,6 +1408,7 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &probe_data, DataChu
 		auto &result_vector = result.data.back();
 		// first set the null mask based on whether there were NULL values in the join key
 		result_vector.SetVectorType(VectorType::FLAT_VECTOR);
+		FlatVector::SetSize(result_vector, probe_data.size());
 		auto bool_result = FlatVector::GetDataMutable<bool>(result_vector);
 		auto &mask = FlatVector::ValidityMutable(result_vector);
 

@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
@@ -315,10 +316,12 @@ idx_t VariantColumnData::ScanWithCallback(
 
 idx_t VariantColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                               idx_t target_count) {
-	return ScanWithCallback(state, result, target_count,
+	auto result_count = ScanWithCallback(state, result, target_count,
 	                        [&](ColumnData &col, ColumnScanState &child_state, Vector &target_vector, idx_t count) {
 		                        return col.Scan(transaction, vector_index, child_state, target_vector, count);
 	                        });
+	FlatVector::SetSize(result, result_count);
+	return result_count;
 }
 
 idx_t VariantColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset) {
@@ -330,6 +333,7 @@ idx_t VariantColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t
 		    return col.ScanCount(child_state, target_vector, count, result_offset);
 	    });
 	result.Flatten(result_count);
+	FlatVector::SetSize(result, result_count);
 	return result_count;
 }
 

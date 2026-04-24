@@ -172,6 +172,7 @@ void ArrayColumnData::Select(TransactionData transaction, idx_t vector_index, Co
 		validity->Skip(state.child_states[0], skip_amount);
 		child_column->Skip(state.child_states[1], skip_amount * array_size);
 	}
+	FlatVector::SetSize(result, sel_count);
 }
 
 void ArrayColumnData::Skip(ColumnScanState &state, idx_t count) {
