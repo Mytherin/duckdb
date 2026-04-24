@@ -269,6 +269,7 @@ idx_t ColumnDataCollectionSegment::ReadVector(ChunkManagementState &state, Vecto
 			VectorOperations::Copy(result, result, vcount, 0, 0);
 		}
 	}
+	FlatVector::SetSize(result, vcount);
 	return vcount;
 }
 

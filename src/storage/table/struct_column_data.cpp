@@ -154,6 +154,7 @@ idx_t StructColumnData::Scan(TransactionData transaction, idx_t vector_index, Co
 				throw InternalException("StructColumnData::Scan returned a constant but not NULL vector ");
 			}
 			// constant NULL struct - we don't need to scan any children, everything is already NULL
+			FlatVector::SetSize(result, scan_count);
 			return scan_count;
 		}
 	}
@@ -162,7 +163,7 @@ idx_t StructColumnData::Scan(TransactionData transaction, idx_t vector_index, Co
 		auto &target_vector = GetFieldVectorForScan(result, child.vector_index);
 		if (!child.should_scan) {
 			// if we are not scanning this vector - set it to NULL
-			ConstantVector::SetNull(target_vector, count_t(target_count));
+			ConstantVector::SetNull(target_vector, count_t(scan_count));
 			continue;
 		}
 		ScanChild(state, target_vector, [&](Vector &child_result) {
@@ -170,6 +171,7 @@ idx_t StructColumnData::Scan(TransactionData transaction, idx_t vector_index, Co
 			return scan_count;
 		});
 	}
+	FlatVector::SetSize(result, scan_count);
 	return scan_count;
 }
 
