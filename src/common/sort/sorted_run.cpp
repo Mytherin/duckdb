@@ -113,6 +113,7 @@ void SortedRunScanState::TemplatedScan(const SortedRun &sorted_run, const Vector
 				break;
 			}
 			chunk.data[opc.output_col_idx].Reference(decoded_key_entries[opc.layout_col_idx]);
+			FlatVector::SetSize(chunk.data[opc.output_col_idx], count);
 		}
 
 		gathered_payload = true;
@@ -142,6 +143,7 @@ void SortedRunScanState::TemplatedScan(const SortedRun &sorted_run, const Vector
 			                    count, opc.layout_col_idx, chunk.data[opc.output_col_idx],
 			                    *FlatVector::IncrementalSelectionVector(),
 			                    payload_state.chunk_state.cached_cast_vectors[opc.layout_col_idx]);
+			FlatVector::SetSize(chunk.data[opc.output_col_idx], count);
 		}
 	}
 

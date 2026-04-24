@@ -115,6 +115,7 @@ void RowOperations::FinalizeStates(RowOperationsState &state, TupleDataLayout &l
 		auto &aggr = aggregates[i];
 		AggregateInputData aggr_input_data(aggr.GetFunctionData(), state.allocator);
 		aggr.function.GetStateFinalizeCallback()(addresses_copy, aggr_input_data, target, result.size(), 0);
+		FlatVector::SetSize(target, result.size());
 
 		// Move to the next aggregate state
 		VectorOperations::AddInPlace(addresses_copy, UnsafeNumericCast<int64_t>(aggr.payload_size), result.size());

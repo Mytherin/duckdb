@@ -1,4 +1,5 @@
 #include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/storage/table/array_column_data.hpp"
 #include "duckdb/storage/statistics/array_stats.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
@@ -90,6 +91,7 @@ idx_t ArrayColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t c
 	// Scan child column
 	auto &child_vec = ArrayVector::GetChildMutable(result);
 	child_column->ScanCount(state.child_states[1], child_vec, count * array_size, result_offset * array_size);
+	FlatVector::SetSize(result, result_offset + scan_count);
 	return scan_count;
 }
 

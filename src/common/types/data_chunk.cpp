@@ -302,6 +302,9 @@ void DataChunk::Slice(const SelectionVector &sel_vector, idx_t count_p) {
 	SelCache merge_cache;
 	for (idx_t c = 0; c < ColumnCount(); c++) {
 		data[c].Slice(sel_vector, count_p, merge_cache);
+		if (data[c].GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			FlatVector::SetSize(data[c], count_p);
+		}
 	}
 }
 
@@ -318,6 +321,9 @@ void DataChunk::Slice(const DataChunk &other, idx_t offset, idx_t end) {
 void DataChunk::Slice(const DataChunk &other, const SelectionVector &sel, idx_t count_p, idx_t col_offset) {
 	D_ASSERT(other.ColumnCount() <= col_offset + ColumnCount());
 	this->count = count_p;
+	if (count_p == 0) {
+		return;
+	}
 	SelCache merge_cache;
 	for (idx_t c = 0; c < other.ColumnCount(); c++) {
 		if (other.data[c].GetVectorType() == VectorType::DICTIONARY_VECTOR) {
@@ -371,8 +377,8 @@ void DataChunk::Hash(vector<idx_t> &column_ids, Vector &result) {
 void DataChunk::Verify(optional_ptr<DatabaseInstance> database_instance) {
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		if (data[i].HasSize() && data[i].size() != size()) {
-			throw InternalException("DataChunk::Verify - size mismatch: vector has size %d but chunk has size %d",
-			                        data[i].size(), size());
+			throw InternalException("DataChunk::Verify - size mismatch: vector %d (%s) has size %d but chunk has size %d",
+			                        i, data[i].GetType().ToString(), data[i].size(), size());
 		}
 	}
 #ifdef DEBUG

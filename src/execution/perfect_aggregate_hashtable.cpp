@@ -279,6 +279,7 @@ void PerfectAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 	for (idx_t i = 0; i < grouping_columns; i++) {
 		shift -= required_bits[i];
 		ReconstructGroupVector(group_values, group_minima[i], required_bits[i], shift, entry_count, result.data[i]);
+		FlatVector::SetSize(result.data[i], entry_count);
 	}
 	// then construct the payloads
 	result.SetCardinality(entry_count);

@@ -957,6 +957,10 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &probe_data, DataChunk &resu
 	default:
 		throw InternalException("Unhandled join type in JoinHashTable");
 	}
+	// ensure all output vectors have the chunk cardinality
+	for (idx_t i = 0; i < result.ColumnCount(); i++) {
+		FlatVector::SetSize(result.data[i], result.size());
+	}
 }
 
 bool ScanStructure::PointersExhausted() const {
@@ -1193,6 +1197,7 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &probe_data, DataCh
 		for (idx_t i = 0; i < ht.lhs_output_in_probe.size(); i++) {
 			idx_t probe_col_idx = ht.lhs_output_in_probe[i];
 			result.data[i].Slice(probe_data.data[probe_col_idx], lhs_sel_vector, base_count);
+			FlatVector::SetSize(result.data[i], base_count);
 		}
 		result.SetCardinality(base_count);
 
@@ -1202,6 +1207,7 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &probe_data, DataCh
 			const auto output_col_idx = ht.output_columns[i];
 			D_ASSERT(vector.GetType() == ht.layout_ptr->GetTypes()[output_col_idx]);
 			GatherResult(vector, base_count, output_col_idx);
+			FlatVector::SetSize(vector, base_count);
 		}
 	}
 }
@@ -1329,6 +1335,7 @@ void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &pro
 
 	auto &mark_vector = result.data.back();
 	mark_vector.SetVectorType(VectorType::FLAT_VECTOR);
+	FlatVector::SetSize(mark_vector, probe_data.size());
 
 	// first we set the NULL values from the join keys
 	// if there is any NULL in the keys, the result is NULL
@@ -1520,6 +1527,7 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &probe_data, DataC
 		const auto output_col_idx = ht.output_columns[i];
 		D_ASSERT(vector.GetType() == ht.layout_ptr->GetTypes()[output_col_idx]);
 		GatherResult(vector, result_sel, result_sel, result_count, output_col_idx);
+		FlatVector::SetSize(vector, probe_data.size());
 	}
 	result.SetCardinality(probe_data.size());
 
@@ -1587,6 +1595,7 @@ void ScanStructure::NextUniqueLeftJoin(DataChunk &keys, DataChunk &probe_data, D
 		const auto output_col_idx = ht.output_columns[i];
 		D_ASSERT(vector.GetType() == ht.layout_ptr->GetTypes()[output_col_idx]);
 		GatherResult(vector, result_sel, result_sel, result_count, output_col_idx);
+		FlatVector::SetSize(vector, probe_size);
 	}
 
 	// single pass - done

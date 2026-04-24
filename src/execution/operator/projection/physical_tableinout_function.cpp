@@ -1,4 +1,5 @@
 #include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/operator/projection/physical_tableinout_function.hpp"
 
 namespace duckdb {
@@ -88,6 +89,9 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 	if (projected_input.empty()) {
 		// straightforward case - no need to project input
 		auto result = function.in_out_function(context, data, input, chunk);
+		for (idx_t i = 0; i < chunk.ColumnCount(); i++) {
+			FlatVector::SetSize(chunk.data[i], chunk.size());
+		}
 		if (this->ordinality_idx.IsValid()) {
 			const idx_t ordinality = chunk.size();
 			SetOrdinality(chunk, this->ordinality_idx, state.current_ordinality_idx, ordinality);
@@ -119,13 +123,16 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 	D_ASSERT(chunk.ColumnCount() > projected_input.size());
 	D_ASSERT(state.row_index > 0);
 	idx_t base_idx = chunk.ColumnCount() - projected_input.size();
+	auto result = function.in_out_function(context, data, state.input_chunk, chunk);
+	for (idx_t i = 0; i < base_idx; i++) {
+		FlatVector::SetSize(chunk.data[i], chunk.size());
+	}
 	for (idx_t project_idx = 0; project_idx < projected_input.size(); project_idx++) {
 		auto source_idx = projected_input[project_idx];
 		auto target_idx = base_idx + project_idx;
 		ConstantVector::Reference(chunk.data[target_idx], count_t(chunk.size()), input.data[source_idx],
 		                          state.row_index - 1, 1);
 	}
-	auto result = function.in_out_function(context, data, state.input_chunk, chunk);
 	if (this->ordinality_idx.IsValid()) {
 		const idx_t ordinality = chunk.size();
 		SetOrdinality(chunk, this->ordinality_idx, state.current_ordinality_idx, ordinality);

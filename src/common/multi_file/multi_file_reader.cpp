@@ -3,6 +3,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -443,6 +444,7 @@ void MultiFileReader::FinalizeChunk(ClientContext &context, const MultiFileBindD
 	for (idx_t i = 0; i < executor.expressions.size(); i++) {
 		try {
 			executor.ExecuteExpression(i, output_chunk.data[i]);
+			FlatVector::SetSize(output_chunk.data[i], input_chunk.size());
 		} catch (std::exception &ex) {
 			// error while converting - try to create a nice error message
 			ErrorData error(ex);

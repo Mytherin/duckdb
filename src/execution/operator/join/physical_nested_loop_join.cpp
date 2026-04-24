@@ -81,6 +81,7 @@ void PhysicalJoin::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &left
 	}
 	auto &mark_vector = result.data.back();
 	mark_vector.SetVectorType(VectorType::FLAT_VECTOR);
+	FlatVector::SetSize(mark_vector, left.size());
 	// first we set the NULL values from the join keys
 	// if there is any NULL in the keys, the result is NULL
 	auto bool_result = FlatVector::GetDataMutable<bool>(mark_vector);
