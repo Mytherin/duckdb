@@ -29,8 +29,10 @@ add_library(
   utrie2.cpp
   utrie2_builder.cpp
   uvector.cpp
-  wintz.cpp
 )
+if(WIN32)
+  target_sources(duckdb_icu_common PRIVATE wintz.cpp)
+endif()
 add_library_unity(
   duckdb_icu_common_unity
   OBJECT

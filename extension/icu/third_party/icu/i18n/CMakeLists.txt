@@ -87,10 +87,10 @@ add_library(
   units_router.cpp
   upluralrules.cpp
   vtzone.cpp
-  windtfmt.cpp
-  winnmfmt.cpp
-  wintzimpl.cpp
 )
+if(WIN32)
+  target_sources(duckdb_icu_i18n PRIVATE windtfmt.cpp winnmfmt.cpp wintzimpl.cpp)
+endif()
 add_library_unity(
   duckdb_icu_i18n_unity
   OBJECT
