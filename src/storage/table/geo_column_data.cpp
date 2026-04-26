@@ -1,4 +1,5 @@
 #include "duckdb/storage/table/geo_column_data.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/storage/table/standard_column_data.hpp"
 
 #include "duckdb/storage/statistics/struct_stats.hpp"
@@ -69,6 +70,7 @@ idx_t GeoColumnData::Scan(TransactionData transaction, idx_t vector_index, Colum
 
 	// Now reassemble
 	Reassemble(scan_chunk.data[0], result, scan_count, storage_type, 0);
+	FlatVector::SetSize(result, scan_count);
 	return scan_count;
 }
 
@@ -378,6 +380,7 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 
 			auto to_scan = MinValue(total_count - scanned, static_cast<idx_t>(STANDARD_VECTOR_SIZE));
 			Scan(TransactionData::Committed(), vector_index++, scan_state, scan_chunk.data[0], to_scan);
+			scan_chunk.SetCardinality(to_scan);
 
 			// Verify the scan chunk
 			scan_chunk.Verify();
@@ -472,6 +475,7 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 
 		auto to_scan = MinValue(total_count - scanned, static_cast<idx_t>(STANDARD_VECTOR_SIZE));
 		Scan(TransactionData::Committed(), vector_index++, scan_state, scan_chunk.data[0], to_scan);
+		scan_chunk.SetCardinality(to_scan);
 
 		// Verify the scan chunk
 		scan_chunk.Verify();

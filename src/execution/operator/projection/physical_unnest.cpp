@@ -229,6 +229,7 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
 					// input values come from different rows - we need to slice
 					chunk.data[col_idx].Slice(input.data[col_idx], state.input_sel, result_length);
 				}
+				FlatVector::SetSize(chunk.data[col_idx], result_length);
 			}
 			col_offset = input.ColumnCount();
 		}
@@ -245,6 +246,7 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
 			}
 			auto &child_vector = ListVector::GetChild(list_vector);
 			result_vector.Slice(child_vector, state.unnest_sels[col_idx], result_length);
+			FlatVector::SetSize(result_vector, result_length);
 			if (state.null_counts[col_idx] > 0) {
 				// we have NULL values that we need to set - flatten
 				result_vector.Flatten(result_length);

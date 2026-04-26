@@ -994,6 +994,7 @@ void WindowLocalSourceState::GetData(ExecutionContext &context, DataChunk &resul
 		}
 		OperatorSinkInput sink {*gestates[expr_idx], *local_states[expr_idx], interrupt};
 		executor.Evaluate(context, position, eval_chunk, result, sink);
+		FlatVector::SetSize(result, input_chunk.size());
 	}
 	output_chunk.SetCardinality(input_chunk);
 	output_chunk.Verify(context.client.db);

@@ -319,6 +319,7 @@ void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataCh
 		} else {
 			throw NotImplementedException("GetStreamingData for %s", ExpressionTypeToString(expr.GetExpressionType()));
 		}
+		FlatVector::SetSize(result, output.size());
 	}
 }
 

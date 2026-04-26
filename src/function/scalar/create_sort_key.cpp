@@ -1158,6 +1158,9 @@ void DecodeSortKeyRecursive(DecodeSortKeyData decode_data[], DecodeSortKeyVector
 	default:
 		throw NotImplementedException("Unsupported type %s in DecodeSortKey", result.GetType());
 	}
+	if (result.GetVectorType() == VectorType::FLAT_VECTOR) {
+		FlatVector::SetSize(result, result_offset + count);
+	}
 }
 
 } // namespace

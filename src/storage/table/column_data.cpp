@@ -1,6 +1,7 @@
 #include "duckdb/storage/table/column_data.hpp"
 
 #include "duckdb/common/exception/transaction_exception.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/function/compression_function.hpp"
@@ -339,7 +340,9 @@ idx_t ColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnSc
 
 idx_t ColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                        idx_t scan_count) {
-	return ScanVector(transaction, vector_index, state, result, scan_count, state.update_scan_type);
+	auto result_count = ScanVector(transaction, vector_index, state, result, scan_count, state.update_scan_type);
+	FlatVector::SetSize(result, result_count);
+	return result_count;
 }
 
 idx_t ColumnData::GetVectorCount(idx_t vector_index) const {
@@ -382,6 +385,7 @@ void ColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnS
                         SelectionVector &sel, idx_t s_count) {
 	Scan(transaction, vector_index, state, result);
 	result.Slice(sel, s_count);
+	FlatVector::SetSize(result, s_count);
 }
 
 void ColumnData::Skip(ColumnScanState &state, idx_t s_count) {

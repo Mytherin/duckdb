@@ -96,6 +96,7 @@ void ListFinalize(Vector &states_vector, AggregateInputData &aggr_input_data, Ve
 
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 
+	FlatVector::SetSize(result, offset + count);
 	auto &mask = FlatVector::ValidityMutable(result);
 	auto result_data = FlatVector::ScatterWriter<list_entry_t>(result);
 	size_t total_len = ListVector::GetListSize(result);

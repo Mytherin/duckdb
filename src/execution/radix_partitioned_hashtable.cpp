@@ -416,6 +416,10 @@ void RadixPartitionedHashTable::PopulateGroupChunk(DataChunk &group_chunk, DataC
 		// Reference from input_chunk[group.index] -> group_chunk[chunk_index]
 		group_chunk.data[chunk_index++].Reference(input_chunk.data[bound_ref_expr.index]);
 	}
+	if (grouping_set.empty() && !group_chunk.data.empty()) {
+		// fake group: adjust size to input
+		FlatVector::SetSize(group_chunk.data[0], input_chunk.size());
+	}
 	group_chunk.SetCardinality(input_chunk.size());
 	group_chunk.Verify();
 }

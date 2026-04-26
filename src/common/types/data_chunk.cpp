@@ -148,11 +148,13 @@ void DataChunk::Copy(DataChunk &other, idx_t offset) const {
 	D_ASSERT(ColumnCount() == other.ColumnCount());
 	D_ASSERT(other.size() == 0);
 
+	idx_t new_size = size() - offset;
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		D_ASSERT(other.data[i].GetVectorType() == VectorType::FLAT_VECTOR);
 		VectorOperations::Copy(data[i], other.data[i], size(), offset, 0);
+		FlatVector::SetSize(other.data[i], new_size);
 	}
-	other.SetCardinality(size() - offset);
+	other.SetCardinality(new_size);
 }
 
 void DataChunk::Copy(DataChunk &other, const SelectionVector &sel, const idx_t source_count, const idx_t offset) const {
@@ -160,11 +162,13 @@ void DataChunk::Copy(DataChunk &other, const SelectionVector &sel, const idx_t s
 	D_ASSERT(other.size() == 0);
 	D_ASSERT(source_count <= size());
 
+	idx_t new_size = source_count - offset;
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		D_ASSERT(other.data[i].GetVectorType() == VectorType::FLAT_VECTOR);
 		VectorOperations::Copy(data[i], other.data[i], sel, source_count, offset, 0);
+		FlatVector::SetSize(other.data[i], new_size);
 	}
-	other.SetCardinality(source_count - offset);
+	other.SetCardinality(new_size);
 }
 
 void DataChunk::Split(DataChunk &other, idx_t split_idx) {
@@ -298,10 +302,15 @@ void DataChunk::Deserialize(Deserializer &deserializer) {
 }
 
 void DataChunk::Slice(const SelectionVector &sel_vector, idx_t count_p) {
+	if (count_p == 0) {
+		Reset();
+		return;
+	}
 	this->count = count_p;
 	SelCache merge_cache;
 	for (idx_t c = 0; c < ColumnCount(); c++) {
 		data[c].Slice(sel_vector, count_p, merge_cache);
+		FlatVector::SetSize(data[c], count_p);
 	}
 }
 
@@ -318,6 +327,9 @@ void DataChunk::Slice(const DataChunk &other, idx_t offset, idx_t end) {
 void DataChunk::Slice(const DataChunk &other, const SelectionVector &sel, idx_t count_p, idx_t col_offset) {
 	D_ASSERT(other.ColumnCount() <= col_offset + ColumnCount());
 	this->count = count_p;
+	if (count_p == 0) {
+		return;
+	}
 	SelCache merge_cache;
 	for (idx_t c = 0; c < other.ColumnCount(); c++) {
 		if (other.data[c].GetVectorType() == VectorType::DICTIONARY_VECTOR) {
@@ -371,8 +383,8 @@ void DataChunk::Hash(vector<idx_t> &column_ids, Vector &result) {
 void DataChunk::Verify(optional_ptr<DatabaseInstance> database_instance) {
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		if (data[i].HasSize() && data[i].size() != size()) {
-			throw InternalException("DataChunk::Verify - size mismatch: vector has size %d but chunk has size %d",
-			                        data[i].size(), size());
+			throw InternalException("DataChunk::Verify - size mismatch: vector %d (%s) has size %d but chunk has size %d",
+			                        i, data[i].GetType().ToString(), data[i].size(), size());
 		}
 	}
 #ifdef DEBUG

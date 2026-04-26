@@ -451,6 +451,9 @@ void RowGroupCollection::Fetch(TransactionData transaction, DataChunk &result, c
 		                           result, count);
 		count++;
 	}
+	for (idx_t col_idx = 0; col_idx < result.ColumnCount(); col_idx++) {
+		FlatVector::SetSize(result.data[col_idx], count);
+	}
 	result.SetCardinality(count);
 }
 

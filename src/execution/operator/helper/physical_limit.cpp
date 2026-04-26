@@ -2,6 +2,7 @@
 
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/types/batched_data_collection.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/operator/helper/physical_streaming_limit.hpp"
 #include "duckdb/main/config.hpp"
@@ -207,6 +208,9 @@ bool PhysicalLimit::HandleOffset(DataChunk &input, idx_t &current_offset, idx_t 
 			}
 			// set up a slice of the input chunks
 			input.Slice(input, sel, chunk_count);
+			for (idx_t c = 0; c < input.ColumnCount(); c++) {
+				FlatVector::SetSize(input.data[c], chunk_count);
+			}
 		} else {
 			current_offset += input_size;
 			return false;
@@ -221,8 +225,10 @@ bool PhysicalLimit::HandleOffset(DataChunk &input, idx_t &current_offset, idx_t 
 			// we copy the entire chunk
 			chunk_count = input.size();
 		}
-		// instead of copying we just change the pointer in the current chunk
-		input.Reference(input);
+		// reduce the cardinality of the chunk
+		if (chunk_count < input.size()) {
+			input.Slice(0, chunk_count);
+		}
 		input.SetCardinality(chunk_count);
 	}
 
@@ -240,6 +246,10 @@ Value PhysicalLimit::GetDelimiter(ExecutionContext &context, DataChunk &input, c
 	input.SetCardinality(1);
 	limit_executor.Execute(input, limit_chunk);
 	input.SetCardinality(input_size);
+	// restore vector sizes in case Execute shared buffers with input
+	for (idx_t c = 0; c < input.ColumnCount(); c++) {
+		FlatVector::SetSize(input.data[c], input_size);
+	}
 	auto limit_value = limit_chunk.GetValue(0, 0);
 	return limit_value;
 }

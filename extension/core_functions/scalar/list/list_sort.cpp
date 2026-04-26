@@ -80,6 +80,9 @@ static void SinkDataChunk(const Sort &sort, ExecutionContext &context, OperatorS
 	chunk.data[0].Reference(lists_indices);
 	chunk.data[1].Reference(slice);
 	chunk.data[2].Reference(payload_vector);
+	for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
+		FlatVector::SetSize(chunk.data[c], offset_lists_indices);
+	}
 	chunk.SetCardinality(offset_lists_indices);
 	chunk.Verify(context.client.db);
 

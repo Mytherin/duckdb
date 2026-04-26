@@ -1134,6 +1134,9 @@ void ParquetMetaDataOperator::Function(ClientContext &context, TableFunctionInpu
 			break;
 		}
 	}
+	for (idx_t i = 0; i < output.ColumnCount(); i++) {
+		FlatVector::SetSize(output.data[i], output_count);
+	}
 }
 
 OperatorPartitionData ParquetMetaDataOperator::GetPartitionData(ClientContext &context,

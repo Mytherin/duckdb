@@ -236,8 +236,12 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 			}
 		}
 	}
-	arguments.SetCardinality(all_constant ? 1 : count);
-	arguments.Verify(context ? context->db : nullptr);
+	auto arguments_count = all_constant ? 1 : count;
+	arguments.SetCardinality(arguments_count);
+	if (!all_constant) {
+		// arguments vectors may be shared with input - only Verify when sizes match
+		arguments.Verify(context ? context->db : nullptr);
+	}
 
 	auto &execute_function_state = state->Cast<ExecuteFunctionState>();
 	auto dictionary_executed = expr.function.HasFunctionCallback() && !all_constant &&

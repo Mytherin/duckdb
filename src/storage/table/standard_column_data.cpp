@@ -1,4 +1,5 @@
 #include "duckdb/storage/table/standard_column_data.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/storage/table/append_state.hpp"
@@ -64,6 +65,7 @@ idx_t StandardColumnData::Scan(TransactionData transaction, idx_t vector_index, 
 	    ScanVector(transaction, vector_index, state, result, target_count, scan_type, state.update_scan_type);
 	validity->ScanVector(transaction, vector_index, state.child_states[0], result, target_count, scan_type,
 	                     state.update_scan_type);
+	FlatVector::SetSize(result, scan_count);
 	return scan_count;
 }
 
@@ -113,6 +115,7 @@ void StandardColumnData::Select(TransactionData transaction, idx_t vector_index,
 	}
 	SelectVector(state, result, target_count, sel, sel_count);
 	validity->SelectVector(state.child_states[0], result, target_count, sel, sel_count);
+	FlatVector::SetSize(result, sel_count);
 }
 
 void StandardColumnData::InitializeAppend(ColumnAppendState &state) {

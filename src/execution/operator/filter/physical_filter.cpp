@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/filter/physical_filter.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/parallel/thread_context.hpp"
@@ -49,6 +50,9 @@ OperatorResultType PhysicalFilter::ExecuteInternal(ExecutionContext &context, Da
 		chunk.Reference(input);
 	} else {
 		chunk.Slice(input, state.sel, result_count);
+	}
+	for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
+		FlatVector::SetSize(chunk.data[c], chunk.size());
 	}
 	return OperatorResultType::NEED_MORE_INPUT;
 }

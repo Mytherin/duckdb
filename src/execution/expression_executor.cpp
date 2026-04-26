@@ -1,5 +1,6 @@
 #include "duckdb/execution/expression_executor.hpp"
 
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
@@ -282,6 +283,7 @@ void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state,
 	default:
 		throw InternalException("Attempting to execute expression of unknown type!");
 	}
+	FlatVector::SetSize(result, count);
 	Verify(expr, result, count);
 }
 

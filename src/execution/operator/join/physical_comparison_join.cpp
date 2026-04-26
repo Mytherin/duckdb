@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/join/physical_comparison_join.hpp"
 
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 
 namespace duckdb {
 
@@ -129,6 +130,7 @@ void PhysicalComparisonJoin::ConstructEmptyJoinResult(JoinType join_type, bool h
 		for (idx_t i = 0; i < input.ColumnCount(); i++) {
 			result.data[i].Reference(input.data[i]);
 		}
+		FlatVector::SetSize(result_vector, input.size());
 		// for the MARK vector:
 		// if the HT has no NULL values (i.e. empty result set), return a vector that has false for every input
 		// entry if the HT has NULL values (i.e. result set had values, but all were NULL), return a vector that

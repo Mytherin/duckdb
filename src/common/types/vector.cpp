@@ -181,6 +181,7 @@ void Vector::Slice(const Vector &other, idx_t offset, idx_t end) {
 void Vector::Slice(const Vector &other, const SelectionVector &sel, idx_t count) {
 	Reference(other);
 	Slice(sel, count);
+	FlatVector::SetSize(*this, count);
 }
 
 void Vector::Slice(const SelectionVector &sel, idx_t count) {
@@ -686,6 +687,7 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 	if (vtype == VectorType::CONSTANT_VECTOR) {
 		Vector::Deserialize(deserializer, 1); // read a vector of size 1
 		Vector::SetVectorType(VectorType::CONSTANT_VECTOR);
+		FlatVector::SetSize(*this, count);
 		return;
 	} else if (vtype == VectorType::DICTIONARY_VECTOR) {
 		SelectionVector sel(count);
@@ -824,6 +826,7 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 			throw InternalException("Unimplemented variable width type for Vector::Deserialize!");
 		}
 	}
+	FlatVector::SetSize(*this, count);
 }
 
 void Vector::SetVectorType(VectorType new_vector_type) {

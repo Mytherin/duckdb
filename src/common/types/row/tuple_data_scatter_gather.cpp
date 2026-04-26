@@ -1368,6 +1368,18 @@ void TupleDataCollection::Gather(Vector &row_locations, const SelectionVector &s
 	const auto &gather_function = gather_functions[column_id];
 	gather_function.Gather(layout, row_locations, column_id, scan_sel, scan_count, result, target_sel,
 	                       cached_cast_vector);
+	if (result.GetVectorType() == VectorType::FLAT_VECTOR) {
+		idx_t max_target_idx = scan_count;
+		if (target_sel.IsSet()) {
+			max_target_idx = 0;
+			for (idx_t i = 0; i < scan_count; i++) {
+				max_target_idx = MaxValue<idx_t>(max_target_idx, target_sel.get_index(i) + 1);
+			}
+		}
+		if (!result.HasSize() || result.size() < max_target_idx) {
+			FlatVector::SetSize(result, max_target_idx);
+		}
+	}
 	result.Verify(target_sel, scan_count);
 }
 

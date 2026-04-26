@@ -374,6 +374,7 @@ static OperatorResultType RangeDateTimeFunction(ExecutionContext &context, Table
 			state.initialized_row = false;
 			continue;
 		}
+		FlatVector::SetSize(output.data[0], size);
 		output.SetCardinality(size);
 		return OperatorResultType::HAVE_MORE_OUTPUT;
 	}
