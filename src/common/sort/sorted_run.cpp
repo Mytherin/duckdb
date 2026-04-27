@@ -56,29 +56,52 @@ void SortedRunScanState::Clear() {
 }
 
 template <class SORT_KEY, class PHYSICAL_TYPE>
-void TemplatedGetKeyAndPayload(SORT_KEY *const *const sort_keys, SORT_KEY *temp_keys, const idx_t &count,
-                               DataChunk &key, data_ptr_t *const payload_ptrs) {
-	const auto key_data = FlatVector::GetDataMutable<PHYSICAL_TYPE>(key.data[0]);
+void TemplatedGetKey(SORT_KEY *const *const sort_keys, SORT_KEY *temp_keys, const idx_t &count, DataChunk &key) {
+	auto key_data = FlatVector::Writer<PHYSICAL_TYPE>(key.data[0], count);
 	for (idx_t i = 0; i < count; i++) {
 		auto &sort_key = temp_keys[i];
 		sort_key = *sort_keys[i];
-		sort_key.Deconstruct(key_data[i]);
-		if (SORT_KEY::HAS_PAYLOAD) {
-			payload_ptrs[i] = sort_key.GetPayload();
-		}
+		PHYSICAL_TYPE result_key;
+		sort_key.Deconstruct(result_key);
+		key_data.WriteValue(result_key);
+	}
+}
+
+template <class SORT_KEY, class PHYSICAL_TYPE>
+void TemplatedGetKeyAndPayload(SORT_KEY *const *const sort_keys, SORT_KEY *temp_keys, const idx_t &count,
+                               DataChunk &key, Vector &payload_pointers) {
+	auto key_data = FlatVector::Writer<PHYSICAL_TYPE>(key.data[0], count);
+	auto payload_writer = FlatVector::Writer<data_ptr_t>(payload_pointers, count);
+	for (idx_t i = 0; i < count; i++) {
+		auto &sort_key = temp_keys[i];
+		sort_key = *sort_keys[i];
+		PHYSICAL_TYPE result_key;
+		sort_key.Deconstruct(result_key);
+		key_data.WriteValue(result_key);
+		payload_writer.WriteValue(sort_key.GetPayload());
+	}
+}
+
+template <class SORT_KEY, class PHYSICAL_TYPE>
+void GetKeyAndPayload(SORT_KEY *const *const sort_keys, SORT_KEY *temp_keys, const idx_t &count, DataChunk &key,
+                      Vector &payload_pointers) {
+	if (SORT_KEY::HAS_PAYLOAD) {
+		TemplatedGetKeyAndPayload<SORT_KEY, PHYSICAL_TYPE>(sort_keys, temp_keys, count, key, payload_pointers);
+	} else {
+		TemplatedGetKey<SORT_KEY, PHYSICAL_TYPE>(sort_keys, temp_keys, count, key);
 	}
 	key.SetCardinality(count);
 }
 
 template <class SORT_KEY>
 void GetKeyAndPayload(SORT_KEY *const *const sort_keys, SORT_KEY *temp_keys, const idx_t &count, DataChunk &key,
-                      data_ptr_t *const payload_ptrs) {
+                      Vector &payload_pointers) {
 	const auto type_id = key.data[0].GetType().id();
 	switch (type_id) {
 	case LogicalTypeId::BLOB:
-		return TemplatedGetKeyAndPayload<SORT_KEY, string_t>(sort_keys, temp_keys, count, key, payload_ptrs);
+		return GetKeyAndPayload<SORT_KEY, string_t>(sort_keys, temp_keys, count, key, payload_pointers);
 	case LogicalTypeId::BIGINT:
-		return TemplatedGetKeyAndPayload<SORT_KEY, int64_t>(sort_keys, temp_keys, count, key, payload_ptrs);
+		return GetKeyAndPayload<SORT_KEY, int64_t>(sort_keys, temp_keys, count, key, payload_pointers);
 	default:
 		throw NotImplementedException("GetKeyAndPayload for %s", EnumUtil::ToString(type_id));
 	}
@@ -93,7 +116,6 @@ void SortedRunScanState::TemplatedScan(const SortedRun &sorted_run, const Vector
 	idx_t opc_idx = 0;
 
 	const auto sort_keys = FlatVector::GetData<SORT_KEY *const>(sort_key_pointers);
-	const auto payload_ptrs = FlatVector::GetDataMutable<data_ptr_t>(payload_state.chunk_state.row_locations);
 	bool gathered_payload = false;
 
 	// Decode from key
@@ -101,7 +123,7 @@ void SortedRunScanState::TemplatedScan(const SortedRun &sorted_run, const Vector
 		key.Reset();
 		key_buffer.resize(count * sizeof(SORT_KEY));
 		auto temp_keys = reinterpret_cast<SORT_KEY *>(key_buffer.data());
-		GetKeyAndPayload(sort_keys, temp_keys, count, key, payload_ptrs);
+		GetKeyAndPayload(sort_keys, temp_keys, count, key, payload_state.chunk_state.row_locations);
 
 		decoded_key.Reset();
 		key_executor.Execute(key, decoded_key);
@@ -122,8 +144,9 @@ void SortedRunScanState::TemplatedScan(const SortedRun &sorted_run, const Vector
 	if (opc_idx != output_projection_columns.size()) {
 		if (!gathered_payload) {
 			// Gather row pointers from keys
+			auto payload_ptrs = FlatVector::Writer<data_ptr_t>(payload_state.chunk_state.row_locations, count);
 			for (idx_t i = 0; i < count; i++) {
-				payload_ptrs[i] = sort_keys[i]->GetPayload();
+				payload_ptrs.WriteValue(sort_keys[i]->GetPayload());
 			}
 		}
 
