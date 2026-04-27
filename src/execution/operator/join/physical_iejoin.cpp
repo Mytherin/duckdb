@@ -595,7 +595,6 @@ idx_t IEJoinUnion::AppendKey(ExecutionContext &context, InterruptState &interrup
 		if (table_idx + scan_count > valid) {
 			if (table_idx >= valid) {
 				scan_count = 0;
-				;
 			} else {
 				scan_count = valid - table_idx;
 				scanned.SetCardinality(scan_count);

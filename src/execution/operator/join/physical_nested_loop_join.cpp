@@ -460,9 +460,13 @@ OperatorResultType PhysicalNestedLoopJoin::ResolveComplexJoin(ExecutionContext &
 			if (predicate) {
 				auto &sel = state.pred_matches;
 				match_count = state.pred_executor.SelectExpression(chunk, sel);
-				chunk.Slice(sel, match_count);
-				lvector.SliceInPlace(sel, match_count);
-				rvector.SliceInPlace(sel, match_count);
+				if (match_count == 0) {
+					chunk.Reset();
+				} else {
+					chunk.Slice(sel, match_count);
+					lvector.SliceInPlace(sel, match_count);
+					rvector.SliceInPlace(sel, match_count);
+				}
 			}
 
 			state.left_outer.SetMatches(lvector, match_count);
