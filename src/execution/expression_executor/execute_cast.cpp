@@ -38,6 +38,7 @@ void ExpressionExecutor::Execute(const BoundCastExpression &expr, ExpressionStat
 	parameters.cast_source = expr.child.get();
 	parameters.cast_target = expr;
 	bool all_constant = child.GetVectorType() == VectorType::CONSTANT_VECTOR;
+	idx_t cast_count = count;
 	if (all_constant) {
 		// if the input is constant we only need to cast one value
 		if (ConstantVector::IsNull(child) && result.GetType().id() != LogicalTypeId::UNION) {
@@ -46,11 +47,12 @@ void ExpressionExecutor::Execute(const BoundCastExpression &expr, ExpressionStat
 			ConstantVector::SetNull(result, count_t(count));
 			return;
 		}
-		count = 1;
+		cast_count = 1;
 	}
-	expr.bound_cast.Cast(child, result, count, parameters);
+	expr.bound_cast.Cast(child, result, cast_count, parameters);
 	if (all_constant) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		FlatVector::SetSize(result, count_t(count));
 	}
 }
 
