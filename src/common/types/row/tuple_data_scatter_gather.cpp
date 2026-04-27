@@ -1383,6 +1383,9 @@ void TupleDataGatherFunction::Gather(const TupleDataLayout &layout, Vector &row_
                                      const SelectionVector &scan_sel, const idx_t scan_count, Vector &target,
                                      const SelectionVector &target_sel, optional_ptr<Vector> list_vector) const {
 	function(layout, row_locations, col_idx, scan_sel, scan_count, target, target_sel, list_vector, child_functions);
+	if (!list_vector) {
+		FlatVector::SetSize(target, scan_count);
+	}
 }
 
 #ifdef DUCKDB_SMALLER_BINARY
