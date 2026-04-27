@@ -146,7 +146,7 @@ public:
 	DUCKDB_API void Append(const Value &value, VectorAppendMode append_mode = VectorAppendMode::ERROR_ON_NO_SPACE);
 	DUCKDB_API void Append(const Vector &source, idx_t count,
 	                       VectorAppendMode append_mode = VectorAppendMode::ERROR_ON_NO_SPACE);
-	DUCKDB_API void Append(const Vector &source, const SelectionVector &sel, idx_t count,
+	DUCKDB_API void Append(const Vector &source, const SelectionVector &sel, idx_t count, idx_t source_offset = 0,
 	                       VectorAppendMode append_mode = VectorAppendMode::ERROR_ON_NO_SPACE);
 	DUCKDB_API void Copy(const Vector &source, const SelectionVector &source_sel, idx_t source_count,
 	                     idx_t source_offset, idx_t target_offset, idx_t copy_count);

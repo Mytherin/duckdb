@@ -103,8 +103,8 @@ idx_t PositionalJoinGlobalState::CopyData(DataChunk &output, const idx_t count, 
 			const auto copy_size = MinValue(needed, available);
 			const auto source_count = source_offset + copy_size;
 			for (idx_t i = 0; i < source.ColumnCount(); ++i) {
-				VectorOperations::Copy(source.data[i], output.data[col_offset + i], source_count, source_offset,
-				                       target_offset);
+				output.data[col_offset + i].Append(source.data[i], *FlatVector::IncrementalSelectionVector(),
+				                                   source_count, source_offset);
 			}
 			target_offset += copy_size;
 			source_offset += copy_size;

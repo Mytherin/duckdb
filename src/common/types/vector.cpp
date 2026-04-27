@@ -293,11 +293,12 @@ void Vector::Append(const Value &value, VectorAppendMode append_mode) {
 }
 
 void Vector::Append(const Vector &source, idx_t count, VectorAppendMode append_mode) {
-	buffer->Append(source, *FlatVector::IncrementalSelectionVector(), count, append_mode);
+	buffer->Append(source, *FlatVector::IncrementalSelectionVector(), count, 0ULL, append_mode);
 }
 
-void Vector::Append(const Vector &source, const SelectionVector &sel, idx_t count, VectorAppendMode append_mode) {
-	buffer->Append(source, sel, count, append_mode);
+void Vector::Append(const Vector &source, const SelectionVector &sel, idx_t count, idx_t source_offset,
+                    VectorAppendMode append_mode) {
+	buffer->Append(source, sel, count, source_offset, append_mode);
 }
 
 void Vector::Copy(const Vector &source, const SelectionVector &source_sel, idx_t source_count, idx_t source_offset,

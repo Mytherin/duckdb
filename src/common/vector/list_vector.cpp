@@ -52,7 +52,7 @@ void VectorListBuffer::AppendToChild(const Vector &to_append, idx_t to_append_si
 }
 
 void VectorListBuffer::AppendToChild(const Vector &to_append, const SelectionVector &sel, idx_t to_append_size) {
-	child->Append(to_append, sel, to_append_size, VectorAppendMode::ALLOW_RESIZE);
+	child->Append(to_append, sel, to_append_size, 0ULL, VectorAppendMode::ALLOW_RESIZE);
 }
 
 void VectorListBuffer::PushBack(const Value &insert) {

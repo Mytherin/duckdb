@@ -172,7 +172,8 @@ public:
 	//! Append a value to the vector (flat / constant vectors only)
 	void AppendValue(const LogicalType &type, const Value &val, VectorAppendMode append_mode);
 	//! Append a vector to this buffer, sliced by the source_sel
-	void Append(const Vector &source, const SelectionVector &sel, idx_t append_size, VectorAppendMode append_mode);
+	void Append(const Vector &source, const SelectionVector &sel, idx_t append_size, idx_t source_offset,
+	            VectorAppendMode append_mode);
 	//! Copy data from another vector into this vectors' buffer
 	void Copy(const Vector &source, const SelectionVector &source_sel, idx_t source_count, idx_t source_offset,
 	          idx_t target_offset, idx_t copy_count);

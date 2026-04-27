@@ -250,14 +250,14 @@ void VectorBuffer::AppendValue(const LogicalType &type, const Value &val, Vector
 	v_size = v_size.GetIndex() + 1;
 }
 
-void VectorBuffer::Append(const Vector &source, const SelectionVector &sel, idx_t append_size,
+void VectorBuffer::Append(const Vector &source, const SelectionVector &sel, idx_t append_size, idx_t source_offset,
                           VectorAppendMode append_mode) {
 	if (!HasSize()) {
 		throw InternalException("Cannot append to vector without size");
 	}
 	auto current_size = Size();
 	Reserve(current_size + append_size, append_mode);
-	Copy(source, sel, append_size, 0, current_size, append_size);
+	Copy(source, sel, append_size, source_offset, current_size, append_size);
 	v_size = v_size.GetIndex() + append_size;
 }
 

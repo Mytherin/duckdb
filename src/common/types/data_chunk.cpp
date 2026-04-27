@@ -221,7 +221,7 @@ void DataChunk::Append(const DataChunk &other, const SelectionVector &sel, idx_t
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		FlatVector::SetSize(data[i], size());
 		if (sel.IsSet()) {
-			data[i].Append(other.data[i], sel, sel_count, append_mode);
+			data[i].Append(other.data[i], sel, sel_count, 0ULL, append_mode);
 		} else {
 			data[i].Append(other.data[i], other.size(), append_mode);
 		}
