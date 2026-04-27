@@ -49,7 +49,7 @@ void PhysicalRangeJoin::LocalSortedTable::Sink(ExecutionContext &context, DataCh
 		primary.Reference(keys.data[0]);
 		has_null += keys.size();
 	} else {
-		VectorOperations::Copy(keys.data[0], primary, keys.size(), 0, 0);
+		primary.Append(keys.data[0], keys.size());
 		// Count the NULLs so we can exclude them later
 		has_null += MergeNulls(primary, global_table.op.conditions);
 	}
