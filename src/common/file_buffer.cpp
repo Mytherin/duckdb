@@ -56,9 +56,6 @@ FileBuffer::~FileBuffer() {
 
 void FileBuffer::ReallocBuffer(idx_t new_size) {
 	if (internal_buffer && !owns_internal_buffer) {
-		// We adopted a pointer into an externally-managed mapping (via Read(MemoryMappedFile&))
-		// and cannot resize it. Surface this rather than silently allocating a new owned buffer
-		// and dropping the mapped pointer.
 		throw InternalException(
 		    "Cannot resize a FileBuffer that does not own its internal buffer (it points into a memory-mapped region)");
 	}
@@ -120,9 +117,8 @@ void FileBuffer::Read(QueryContext context, FileHandle &handle, uint64_t locatio
 
 void FileBuffer::Read(QueryContext context, MemoryMappedFile &handle, uint64_t location) {
 	D_ASSERT(type != FileBufferType::TINY_BUFFER);
-	// Zero-copy: drop our own buffer and point at the mapped region directly. The mapping
-	// must outlive this FileBuffer; subsequent in-place modifications go through the mapping.
-	auto src = const_cast<data_ptr_t>(handle.GetData(location, internal_size));
+	// Zero-copy: adopt a pointer into the mapping. The mapping must outlive this FileBuffer.
+	auto src = handle.GetDataMutable(location, internal_size);
 	const idx_t header_size = internal_size - size;
 	if (internal_buffer && owns_internal_buffer) {
 		allocator.FreeData(internal_buffer, internal_size);

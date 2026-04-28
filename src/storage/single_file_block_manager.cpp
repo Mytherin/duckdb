@@ -472,9 +472,7 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 		db.GetDatabase().GetEncryptionUtil(options.read_only);
 	}
 
-	// open the RDBMS handle. In MAP mode the memory-mapped handle is the only handle the
-	// block manager opens; otherwise we open the file directly. Open the mmap up front so
-	// that the header writes below can be routed through it.
+	// MAP mode opens only the mmap; other modes open the FileHandle.
 	auto &fs = FileSystem::Get(db);
 	if (options.io_mode == FileIOMode::MMAP) {
 		OpenMemoryMappedFile(true);
@@ -584,8 +582,7 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 	auto flags = GetFileFlags(false);
 
-	// In MAP mode the memory-mapped handle is the only handle the block manager opens;
-	// otherwise we open the file directly.
+	// MAP mode opens only the mmap; other modes open the FileHandle.
 	auto &fs = FileSystem::Get(db);
 	if (options.io_mode == FileIOMode::MMAP) {
 		OpenMemoryMappedFile(false);
@@ -778,8 +775,7 @@ void SingleFileBlockManager::ChecksumAndWrite(QueryContext context, FileBuffer &
 
 	Store<uint64_t>(checksum, block.InternalBuffer() + delta);
 
-	// encrypt if required (encryption is incompatible with MAP mode, so this branch always
-	// uses the FileHandle path)
+	// Encryption is mutually exclusive with MAP mode.
 	unique_ptr<FileBuffer> temp_buffer_manager;
 	if (options.encryption_options.encryption_enabled && !skip_block_header) {
 		D_ASSERT(!mmap_handle);
@@ -801,19 +797,10 @@ void SingleFileBlockManager::OpenMemoryMappedFile(bool create_new) {
 		return;
 	}
 	if (options.encryption_options.encryption_enabled) {
-		// Encrypted databases decrypt blocks in place after Read; with zero-copy mmap that
-		// would write decrypted bytes back through the mapping (corrupting the file). Fall
-		// back to buffered I/O in this case.
+		// In-place decryption would write decrypted bytes back through the mapping.
 		throw InvalidInputException("MMAP=true is not supported for encrypted databases");
 	}
-	// Reserve a virtual region for the mapping. The file is sparsely extended to this size
-	// up front so writes anywhere within it are visible through the mapping without ever
-	// needing to remap. Virtual address space is the only resource consumed up front;
-	// physical pages are demand-faulted on access. 256 GiB is large enough for the
-	// vast majority of analytical databases while leaving plenty of VA headroom for many
-	// concurrent attaches on systems with the typical 128 TiB user-space VA limit (~512
-	// concurrent databases). Users with larger databases can override via the
-	// MMAP_RESERVE_SIZE attach option.
+	// Default reserve covers the bulk of analytical databases; users override via MMAP_RESERVE_SIZE.
 	static constexpr idx_t MMAP_DEFAULT_RESERVE_SIZE = idx_t(256) * 1024 * 1024 * 1024; // 256 GiB
 	MMapOptions mmap_options;
 	mmap_options.reserve_size =
@@ -1269,9 +1256,7 @@ void SingleFileBlockManager::Truncate() {
 	free_list.erase(free_list.lower_bound(max_block), free_list.end());
 	auto new_size = NumericCast<idx_t>(BLOCK_START + NumericCast<idx_t>(max_block) * GetBlockAllocSize());
 	if (mmap_handle) {
-		// In MAP mode the file remains sparsely extended to the mmap reserve size and is never
-		// truncated during operation. Punch a hole over the now-unused tail so the disk space
-		// is released; the mapping stays put.
+		// File stays at reserve size in MAP mode; punch a hole to release the tail.
 		mmap_handle->Trim(new_size, mmap_handle->Size() - new_size);
 	} else {
 		handle->Truncate(NumericCast<int64_t>(new_size));
