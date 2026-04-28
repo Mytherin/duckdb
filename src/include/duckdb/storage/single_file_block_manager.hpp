@@ -46,8 +46,7 @@ struct EncryptionOptions {
 
 struct StorageManagerOptions {
 	bool read_only = false;
-	bool use_direct_io = false;
-	//! How to perform I/O against the database file (buffered syscalls vs memory-mapped reads).
+	//! How to perform I/O against the database file (buffered syscalls, mmap, or direct I/O).
 	FileIOMode io_mode = FileIOMode::BUFFERED_IO;
 	DebugInitialize debug_initialize = DebugInitialize::NO_INITIALIZE;
 	optional_idx block_alloc_size;

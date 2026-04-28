@@ -341,7 +341,7 @@ FileOpenFlags SingleFileBlockManager::GetFileFlags(bool create_new) const {
 			result |= FileFlags::FILE_FLAGS_FILE_CREATE;
 		}
 	}
-	if (options.use_direct_io) {
+	if (options.io_mode == FileIOMode::DIRECT_IO) {
 		result |= FileFlags::FILE_FLAGS_DIRECT_IO;
 	}
 	// database files can be read from in parallel

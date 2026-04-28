@@ -328,7 +328,9 @@ void TemporaryFileHandle::CreateFileIfNotExists(TemporaryFileLock &) {
 	}
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto open_flags = FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE;
-	if (db.config.options.use_direct_io) {
+	// Temp files follow the global `default_io_mode` setting for direct I/O, since they are
+	// not opened through ATTACH and have no per-file IO_MODE option of their own.
+	if (Settings::Get<DefaultIoModeSetting>(db) == FileIOMode::DIRECT_IO) {
 		open_flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
 	}
 	handle = fs.OpenFile(path, open_flags);

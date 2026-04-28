@@ -20,10 +20,15 @@ enum class CompressInMemory { AUTOMATIC, COMPRESS, DO_NOT_COMPRESS };
 
 //! How to perform I/O against the database file.
 enum class FileIOMode : uint8_t {
-	//! Use buffered read()/write() (or pread/pwrite) syscalls through a FileHandle.
+	//! Use buffered read()/write() (or pread/pwrite) syscalls through a FileHandle. The
+	//! kernel's page cache is used as usual.
 	BUFFERED_IO,
 	//! Memory-map the file and route reads through the mapped region.
 	MMAP,
+	//! Use unbuffered (direct) I/O via the FileHandle (O_DIRECT on Linux, FILE_FLAG_NO_BUFFERING
+	//! on Windows, F_NOCACHE on macOS). Bypasses the kernel page cache; reads and writes go
+	//! straight to disk.
+	DIRECT_IO,
 };
 
 struct StorageOptions {

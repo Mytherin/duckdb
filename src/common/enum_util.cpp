@@ -2261,19 +2261,20 @@ FileGlobOptions EnumUtil::FromString<FileGlobOptions>(const char *value) {
 const StringUtil::EnumStringLiteral *GetFileIOModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(FileIOMode::BUFFERED_IO), "BUFFERED_IO" },
-		{ static_cast<uint32_t>(FileIOMode::MMAP), "MMAP" }
+		{ static_cast<uint32_t>(FileIOMode::MMAP), "MMAP" },
+		{ static_cast<uint32_t>(FileIOMode::DIRECT_IO), "DIRECT_IO" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<FileIOMode>(FileIOMode value) {
-	return StringUtil::EnumToString(GetFileIOModeValues(), 2, "FileIOMode", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetFileIOModeValues(), 3, "FileIOMode", static_cast<uint32_t>(value));
 }
 
 template<>
 FileIOMode EnumUtil::FromString<FileIOMode>(const char *value) {
-	return static_cast<FileIOMode>(StringUtil::StringToEnum(GetFileIOModeValues(), 2, "FileIOMode", value));
+	return static_cast<FileIOMode>(StringUtil::StringToEnum(GetFileIOModeValues(), 3, "FileIOMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetFileLockTypeValues() {
