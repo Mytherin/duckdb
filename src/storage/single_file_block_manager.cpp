@@ -806,14 +806,18 @@ void SingleFileBlockManager::OpenMemoryMappedFile(bool create_new) {
 		// back to buffered I/O in this case.
 		throw InvalidInputException("MMAP=true is not supported for encrypted databases");
 	}
-	// Reserve a large virtual region for the mapping. The file is sparsely extended to this
-	// size up front so writes anywhere within it are visible through the mapping without
-	// ever needing to remap. Virtual address space is the only resource consumed up front;
-	// physical pages are demand-faulted on access. 4 TiB comfortably covers realistic
-	// analytical databases (multi-TB) while leaving plenty of headroom for many concurrent
-	// attaches on systems with the typical 128 TiB user-space VA limit.
+	// Reserve a virtual region for the mapping. The file is sparsely extended to this size
+	// up front so writes anywhere within it are visible through the mapping without ever
+	// needing to remap. Virtual address space is the only resource consumed up front;
+	// physical pages are demand-faulted on access. 256 GiB is large enough for the
+	// vast majority of analytical databases while leaving plenty of VA headroom for many
+	// concurrent attaches on systems with the typical 128 TiB user-space VA limit (~512
+	// concurrent databases). Users with larger databases can override via the
+	// MMAP_RESERVE_SIZE attach option.
+	static constexpr idx_t MMAP_DEFAULT_RESERVE_SIZE = idx_t(256) * 1024 * 1024 * 1024; // 256 GiB
 	MMapOptions mmap_options;
-	mmap_options.reserve_size = idx_t(4) * 1024 * 1024 * 1024 * 1024; // 4 TiB
+	mmap_options.reserve_size =
+	    options.mmap_reserve_size.IsValid() ? options.mmap_reserve_size.GetIndex() : MMAP_DEFAULT_RESERVE_SIZE;
 	FileOpenFlags mmap_flags;
 	if (options.read_only) {
 		D_ASSERT(!create_new);
@@ -838,7 +842,8 @@ void SingleFileBlockManager::EnsureMappedSize(idx_t required_size) const {
 	}
 	if (required_size > mmap_handle->Size()) {
 		throw IOException("Database file \"%s\" would grow to %llu bytes, which exceeds the memory-mapped reserved "
-		                  "size of %llu bytes. Re-attach without MMAP=true to allow further growth.",
+		                  "size of %llu bytes. Re-attach with a larger MMAP_RESERVE_SIZE, or without "
+		                  "IO_MODE='MMAP', to allow further growth.",
 		                  path, required_size, mmap_handle->Size());
 	}
 }

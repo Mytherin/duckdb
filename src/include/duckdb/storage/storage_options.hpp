@@ -47,6 +47,9 @@ struct StorageOptions {
 	//! Empty when no IO_MODE was specified at attach time; the StorageManager fills in the
 	//! per-database value from the `default_io_mode` setting in that case.
 	optional<FileIOMode> io_mode;
+	//! Size of the virtual mapping for IO_MODE 'MMAP'. Empty when MMAP_RESERVE_SIZE was not
+	//! specified at attach time; the StorageManager picks a default in that case.
+	optional_idx mmap_reserve_size;
 
 	//! Whether the database is encrypted
 	bool encryption = false;

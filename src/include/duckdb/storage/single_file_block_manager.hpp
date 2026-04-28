@@ -48,6 +48,9 @@ struct StorageManagerOptions {
 	bool read_only = false;
 	//! How to perform I/O against the database file (buffered syscalls, mmap, or direct I/O).
 	FileIOMode io_mode = FileIOMode::BUFFERED_IO;
+	//! Size of the mmap reserved region (only used when io_mode == MMAP). Empty means use the
+	//! built-in default.
+	optional_idx mmap_reserve_size;
 	DebugInitialize debug_initialize = DebugInitialize::NO_INITIALIZE;
 	optional_idx block_alloc_size;
 	optional_idx storage_version;

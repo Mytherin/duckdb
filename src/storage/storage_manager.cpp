@@ -139,6 +139,9 @@ void StorageOptions::Initialize(unordered_map<string, Value> &options) {
 				    "Unrecognized IO_MODE \"%s\". Valid values are 'BUFFERED_IO', 'MMAP', or 'DIRECT_IO'.",
 				    entry.second.ToString());
 			}
+		} else if (entry.first == "mmap_reserve_size") {
+			// Accept human-readable byte sizes ("256GB", "1TB") as well as plain integer counts.
+			mmap_reserve_size = DBConfig::ParseMemoryLimit(entry.second.ToString());
 		} else {
 			throw BinderException("Unrecognized option for attach \"%s\"", entry.first);
 		}
@@ -409,6 +412,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		resolved_io_mode = FileIOMode::BUFFERED_IO;
 	}
 	options.io_mode = resolved_io_mode;
+	options.mmap_reserve_size = storage_options.mmap_reserve_size;
 	options.debug_initialize = config.options.debug_initialize;
 	options.storage_version = storage_options.storage_version;
 
