@@ -809,11 +809,11 @@ void SingleFileBlockManager::OpenMemoryMappedFile(bool create_new) {
 	// Reserve a large virtual region for the mapping. The file is sparsely extended to this
 	// size up front so writes anywhere within it are visible through the mapping without
 	// ever needing to remap. Virtual address space is the only resource consumed up front;
-	// physical pages are demand-faulted on access. 64 TiB comfortably covers any realistic
-	// single-database workload while leaving VA headroom for a couple of concurrent attaches
-	// on systems with the typical 128 TiB user-space VA limit.
+	// physical pages are demand-faulted on access. 4 TiB comfortably covers realistic
+	// analytical databases (multi-TB) while leaving plenty of headroom for many concurrent
+	// attaches on systems with the typical 128 TiB user-space VA limit.
 	MMapOptions mmap_options;
-	mmap_options.reserve_size = idx_t(64) * 1024 * 1024 * 1024 * 1024; // 64 TiB
+	mmap_options.reserve_size = idx_t(4) * 1024 * 1024 * 1024 * 1024; // 4 TiB
 	FileOpenFlags mmap_flags;
 	if (options.read_only) {
 		D_ASSERT(!create_new);

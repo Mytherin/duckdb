@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/logging/logger.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
@@ -396,8 +397,18 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 
 	StorageManagerOptions options;
 	options.read_only = read_only;
-	options.io_mode =
-	    storage_options.io_mode ? *storage_options.io_mode : Settings::Get<DefaultIoModeSetting>(config);
+	// Encryption decrypts blocks in place, which is incompatible with MMAP mode (it would
+	// corrupt the file through the mapping). If MMAP is requested for an encrypted database
+	// — either explicitly via IO_MODE or implicitly via the default_io_mode setting — log a
+	// warning and fall back to buffered I/O.
+	auto resolved_io_mode = storage_options.io_mode ? *storage_options.io_mode : Settings::Get<DefaultIoModeSetting>(config);
+	if (storage_options.encryption && resolved_io_mode == FileIOMode::MMAP) {
+		DUCKDB_LOG_WARNING(db.GetDatabase(),
+		                   "MMAP IO_MODE is incompatible with encryption; falling back to BUFFERED_IO for \"%s\"",
+		                   path);
+		resolved_io_mode = FileIOMode::BUFFERED_IO;
+	}
+	options.io_mode = resolved_io_mode;
 	options.debug_initialize = config.options.debug_initialize;
 	options.storage_version = storage_options.storage_version;
 
