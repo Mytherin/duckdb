@@ -203,6 +203,13 @@ void MainHeader::CheckMagicBytes(QueryContext context, FileHandle &handle) {
 	}
 }
 
+void MainHeader::CheckMagicBytes(MemoryMappedFile &handle) {
+	auto magic_bytes = handle.GetData(MainHeader::MAGIC_BYTE_OFFSET, MainHeader::MAGIC_BYTE_SIZE);
+	if (memcmp(magic_bytes, MainHeader::MAGIC_BYTES, MainHeader::MAGIC_BYTE_SIZE) != 0) {
+		throw IOException("The file \"%s\" exists, but it is not a valid DuckDB database file!", handle.GetPath());
+	}
+}
+
 MainHeader MainHeader::Read(ReadStream &source) {
 	data_t magic_bytes[MAGIC_BYTE_SIZE];
 
@@ -465,9 +472,15 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 		db.GetDatabase().GetEncryptionUtil(options.read_only);
 	}
 
-	// open the RDBMS handle
+	// open the RDBMS handle. In MAP mode the memory-mapped handle is the only handle the
+	// block manager opens; otherwise we open the file directly. Open the mmap up front so
+	// that the header writes below can be routed through it.
 	auto &fs = FileSystem::Get(db);
-	handle = fs.OpenFile(path, flags);
+	if (options.io_mode == FileIOMode::MAP) {
+		OpenMemoryMappedFile(true);
+	} else {
+		handle = fs.OpenFile(path, flags);
+	}
 	header_buffer.Clear();
 
 	options.version_number = GetVersionNumber();
@@ -557,7 +570,11 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	ChecksumAndWrite(context, header_buffer, Storage::FILE_HEADER_SIZE * 2ULL);
 
 	// ensure that writing to disk is completed before returning
-	handle->Sync();
+	if (mmap_handle) {
+		mmap_handle->Sync();
+	} else {
+		handle->Sync();
+	}
 	// we start with h2 as active_header, this way our initial write will be in h1
 	iteration_count = 0;
 	active_header = 1;
@@ -567,15 +584,24 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 	auto flags = GetFileFlags(false);
 
-	// open the RDBMS handle
+	// In MAP mode the memory-mapped handle is the only handle the block manager opens;
+	// otherwise we open the file directly.
 	auto &fs = FileSystem::Get(db);
-	handle = fs.OpenFile(path, flags);
-	if (!handle) {
-		// this can only happen in read-only mode - as that is when we set FILE_FLAGS_NULL_IF_NOT_EXISTS
-		throw IOException("Cannot open database \"%s\" in read-only mode: database does not exist", path);
+	if (options.io_mode == FileIOMode::MAP) {
+		OpenMemoryMappedFile(false);
+	} else {
+		handle = fs.OpenFile(path, flags);
+		if (!handle) {
+			// this can only happen in read-only mode - as that is when we set FILE_FLAGS_NULL_IF_NOT_EXISTS
+			throw IOException("Cannot open database \"%s\" in read-only mode: database does not exist", path);
+		}
 	}
 
-	MainHeader::CheckMagicBytes(context, *handle);
+	if (mmap_handle) {
+		MainHeader::CheckMagicBytes(*mmap_handle);
+	} else {
+		MainHeader::CheckMagicBytes(context, *handle);
+	}
 	// otherwise, we check the metadata of the file
 	ReadAndChecksum(context, header_buffer, 0, true);
 
@@ -716,7 +742,11 @@ void SingleFileBlockManager::CheckChecksum(FileBuffer &block, uint64_t location,
 void SingleFileBlockManager::ReadAndChecksum(QueryContext context, FileBuffer &block, uint64_t location,
                                              bool skip_block_header) const {
 	// read the buffer from disk
-	block.Read(context, *handle, location);
+	if (mmap_handle) {
+		block.Read(context, *mmap_handle, location);
+	} else {
+		block.Read(context, *handle, location);
+	}
 
 	//! calculate delta header bytes (if any)
 	uint64_t delta = GetBlockHeaderSize() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
@@ -748,16 +778,68 @@ void SingleFileBlockManager::ChecksumAndWrite(QueryContext context, FileBuffer &
 
 	Store<uint64_t>(checksum, block.InternalBuffer() + delta);
 
-	// encrypt if required
+	// encrypt if required (encryption is incompatible with MAP mode, so this branch always
+	// uses the FileHandle path)
 	unique_ptr<FileBuffer> temp_buffer_manager;
 	if (options.encryption_options.encryption_enabled && !skip_block_header) {
+		D_ASSERT(!mmap_handle);
 		auto key_id = options.encryption_options.derived_key_id;
 		temp_buffer_manager =
 		    make_uniq<FileBuffer>(BlockAllocator::Get(db), block.GetBufferType(), block.Size(), GetBlockHeaderSize());
 		EncryptionEngine::EncryptBlock(db, key_id, block, *temp_buffer_manager, delta);
 		temp_buffer_manager->Write(context, *handle, location);
+	} else if (mmap_handle) {
+		EnsureMappedSize(location + block.AllocSize());
+		block.Write(context, *mmap_handle, location);
 	} else {
 		block.Write(context, *handle, location);
+	}
+}
+
+void SingleFileBlockManager::OpenMemoryMappedFile(bool create_new) {
+	if (options.io_mode != FileIOMode::MAP) {
+		return;
+	}
+	if (options.encryption_options.encryption_enabled) {
+		// Encrypted databases decrypt blocks in place after Read; with zero-copy mmap that
+		// would write decrypted bytes back through the mapping (corrupting the file). Fall
+		// back to buffered I/O in this case.
+		throw InvalidInputException("MMAP=true is not supported for encrypted databases");
+	}
+	// Reserve a large virtual region for the mapping. The file is sparsely extended to this
+	// size up front so writes anywhere within it are visible through the mapping without
+	// ever needing to remap. Virtual address space is the only resource consumed up front;
+	// physical pages are demand-faulted on access. 64 TiB comfortably covers any realistic
+	// single-database workload while leaving VA headroom for a couple of concurrent attaches
+	// on systems with the typical 128 TiB user-space VA limit.
+	MMapOptions mmap_options;
+	mmap_options.reserve_size = idx_t(64) * 1024 * 1024 * 1024 * 1024; // 64 TiB
+	FileOpenFlags mmap_flags;
+	if (options.read_only) {
+		D_ASSERT(!create_new);
+		mmap_flags = FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS | FileLockType::READ_LOCK;
+	} else {
+		mmap_flags = FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_WRITE | FileLockType::WRITE_LOCK;
+		if (create_new) {
+			mmap_flags |= FileFlags::FILE_FLAGS_FILE_CREATE;
+		}
+	}
+	auto &fs = FileSystem::Get(db);
+	mmap_handle = fs.MemoryMapFile(path, mmap_flags, mmap_options);
+	if (!mmap_handle) {
+		// Only happens in read-only mode, where FILE_FLAGS_NULL_IF_NOT_EXISTS is set.
+		throw IOException("Cannot open database \"%s\" in read-only mode: database does not exist", path);
+	}
+}
+
+void SingleFileBlockManager::EnsureMappedSize(idx_t required_size) const {
+	if (!mmap_handle) {
+		return;
+	}
+	if (required_size > mmap_handle->Size()) {
+		throw IOException("Database file \"%s\" would grow to %llu bytes, which exceeds the memory-mapped reserved "
+		                  "size of %llu bytes. Re-attach without MMAP=true to allow further growth.",
+		                  path, required_size, mmap_handle->Size());
 	}
 }
 
@@ -1051,6 +1133,9 @@ idx_t SingleFileBlockManager::FreeBlocks() {
 }
 
 bool SingleFileBlockManager::IsRemote() {
+	if (mmap_handle) {
+		return !mmap_handle->OnDiskFile();
+	}
 	return !handle->OnDiskFile();
 }
 
@@ -1105,7 +1190,11 @@ void SingleFileBlockManager::ReadBlock(data_ptr_t internal_buffer, uint64_t bloc
 void SingleFileBlockManager::ReadBlock(Block &block, bool skip_block_header) const {
 	// read the buffer from disk
 	auto location = GetBlockLocation(block.id);
-	block.Read(QueryContext(), *handle, location);
+	if (mmap_handle) {
+		block.Read(QueryContext(), *mmap_handle, location);
+	} else {
+		block.Read(QueryContext(), *handle, location);
+	}
 
 	//! calculate delta header bytes (if any)
 	uint64_t delta = GetBlockHeaderSize() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
@@ -1130,7 +1219,11 @@ void SingleFileBlockManager::ReadBlocks(FileBuffer &buffer, block_id_t start_blo
 
 	// read the buffer from disk
 	auto location = GetBlockLocation(start_block);
-	buffer.Read(QueryContext(), *handle, location);
+	if (mmap_handle) {
+		buffer.Read(QueryContext(), *mmap_handle, location);
+	} else {
+		buffer.Read(QueryContext(), *handle, location);
+	}
 
 	// for each of the blocks - verify the checksum
 	auto ptr = buffer.InternalBuffer();
@@ -1169,7 +1262,15 @@ void SingleFileBlockManager::Truncate() {
 	}
 	// truncate the file
 	free_list.erase(free_list.lower_bound(max_block), free_list.end());
-	handle->Truncate(NumericCast<int64_t>(BLOCK_START + NumericCast<idx_t>(max_block) * GetBlockAllocSize()));
+	auto new_size = NumericCast<idx_t>(BLOCK_START + NumericCast<idx_t>(max_block) * GetBlockAllocSize());
+	if (mmap_handle) {
+		// In MAP mode the file remains sparsely extended to the mmap reserve size and is never
+		// truncated during operation. Punch a hole over the now-unused tail so the disk space
+		// is released; the mapping stays put.
+		mmap_handle->Trim(new_size, mmap_handle->Size() - new_size);
+	} else {
+		handle->Truncate(NumericCast<int64_t>(new_size));
+	}
 }
 
 vector<MetadataHandle> SingleFileBlockManager::GetFreeListBlocks() {
@@ -1314,7 +1415,11 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 	}
 
 	// We need to fsync BEFORE we write the header to ensure that all the previous blocks are written as well
-	handle->Sync();
+	if (mmap_handle) {
+		mmap_handle->Sync();
+	} else {
+		handle->Sync();
+	}
 
 	header_buffer.Clear();
 	// if we are upgrading the database from version 64 -> version 65, we need to re-write the main header
@@ -1339,13 +1444,21 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 	// switch active header to the other header
 	active_header = 1 - active_header;
 	//! Ensure the header write ends up on disk
-	handle->Sync();
+	if (mmap_handle) {
+		mmap_handle->Sync();
+	} else {
+		handle->Sync();
+	}
 	// Release the free fully freed blocks to the filesystem.
 	TrimFreeBlocks(fully_freed_blocks);
 }
 
 void SingleFileBlockManager::FileSync() {
-	handle->Sync();
+	if (mmap_handle) {
+		mmap_handle->Sync();
+	} else {
+		handle->Sync();
+	}
 }
 
 void SingleFileBlockManager::UnregisterBlock(block_id_t id) {
@@ -1363,7 +1476,13 @@ void SingleFileBlockManager::UnregisterBlock(block_id_t id) {
 
 void SingleFileBlockManager::TrimFreeBlockRange(block_id_t start, block_id_t end) {
 	auto block_count = NumericCast<idx_t>(end + 1 - start);
-	handle->Trim(BLOCK_START + (NumericCast<idx_t>(start) * GetBlockAllocSize()), block_count * GetBlockAllocSize());
+	auto offset = BLOCK_START + (NumericCast<idx_t>(start) * GetBlockAllocSize());
+	auto length = block_count * GetBlockAllocSize();
+	if (mmap_handle) {
+		mmap_handle->Trim(offset, length);
+	} else {
+		handle->Trim(offset, length);
+	}
 }
 
 void SingleFileBlockManager::TrimFreeBlocks(const set<block_id_t> &blocks) {

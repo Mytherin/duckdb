@@ -15,6 +15,7 @@ namespace duckdb {
 
 class BlockAllocator;
 class BlockManager;
+class MemoryMappedFile;
 class QueryContext;
 
 struct FileHandle;
@@ -46,8 +47,14 @@ public:
 public:
 	//! Read into the FileBuffer from the location.
 	void Read(QueryContext context, FileHandle &handle, uint64_t location);
+	//! Read into the FileBuffer from the location in a memory-mapped file (memcpy from
+	//! the mapped region into the FileBuffer).
+	void Read(QueryContext context, MemoryMappedFile &handle, uint64_t location);
 	//! Write the FileBuffer to the location.
 	void Write(QueryContext context, FileHandle &handle, const uint64_t location);
+	//! Write the FileBuffer to the location in a memory-mapped file (memcpy from the
+	//! FileBuffer into the mapped region). Sync() the file to flush to disk.
+	void Write(QueryContext context, MemoryMappedFile &handle, uint64_t location);
 
 	void Clear();
 
@@ -91,6 +98,10 @@ protected:
 	//! The aligned size as passed to the constructor.
 	//! This is the size that is read from or written to disk.
 	uint64_t internal_size;
+	//! Whether this FileBuffer owns the memory backing internal_buffer (and should free it
+	//! in the destructor). Set to false by Read(MemoryMappedFile&), which adopts a pointer
+	//! into an externally-managed mapping; the mapping must outlive the FileBuffer.
+	bool owns_internal_buffer = true;
 
 	void ReallocBuffer(idx_t new_size);
 	void Init();

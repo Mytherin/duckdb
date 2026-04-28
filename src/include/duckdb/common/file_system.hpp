@@ -39,6 +39,8 @@ class FileSystem;
 class Logger;
 class ClientContext;
 class QueryContext;
+class MemoryMappedFile;
+struct MMapOptions;
 class MultiFileList;
 
 enum class FileType {
@@ -151,6 +153,14 @@ public:
 	                                                   optional_ptr<FileOpener> opener = nullptr);
 	DUCKDB_API unique_ptr<FileHandle> OpenFile(const OpenFileInfo &path, FileOpenFlags flags,
 	                                           optional_ptr<FileOpener> opener = nullptr);
+
+	//! Open a memory-mapped view of the file at [path]. The returned handle exposes the file
+	//! contents through a mapped pointer; reads/writes happen via memcpy through that pointer.
+	//! See MMapOptions for tunables (notably the reserve size). Throws if the underlying
+	//! filesystem does not support memory mapping.
+	DUCKDB_API virtual unique_ptr<MemoryMappedFile> MemoryMapFile(const OpenFileInfo &path, FileOpenFlags flags,
+	                                                              const MMapOptions &options,
+	                                                              optional_ptr<FileOpener> opener = nullptr);
 
 	//! Read exactly nr_bytes from the specified location in the file. Fails if nr_bytes could not be read. This is
 	//! equivalent to calling SetFilePointer(location) followed by calling Read().

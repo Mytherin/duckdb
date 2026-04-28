@@ -10,7 +10,9 @@
 
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/block.hpp"
+#include "duckdb/storage/storage_options.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/memory_mapped_file.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/vector.hpp"
@@ -45,6 +47,8 @@ struct EncryptionOptions {
 struct StorageManagerOptions {
 	bool read_only = false;
 	bool use_direct_io = false;
+	//! How to perform I/O against the database file (buffered syscalls vs memory-mapped reads).
+	FileIOMode io_mode = FileIOMode::BUFFERED_IO;
 	DebugInitialize debug_initialize = DebugInitialize::NO_INITIALIZE;
 	optional_idx block_alloc_size;
 	optional_idx storage_version;
@@ -153,6 +157,15 @@ private:
 	void ChecksumAndWrite(QueryContext context, FileBuffer &handle, uint64_t location,
 	                      bool skip_block_header = false) const;
 
+	//! Open `mmap_handle` over the database file when `options.io_mode == MAP`. In MAP mode
+	//! this is the only file handle the block manager opens — `handle` stays null. The
+	//! [create_new] flag mirrors GetFileFlags(create_new) and decides whether the file is
+	//! created if missing.
+	void OpenMemoryMappedFile(bool create_new);
+	//! When mmap is enabled, verify that a write at [required_size] fits inside the reserved
+	//! mapping. Throws if not. No-op when mmap is not enabled.
+	void EnsureMappedSize(idx_t required_size) const;
+
 	idx_t GetBlockLocation(block_id_t block_id) const;
 
 	// Encrypt, Store, Decrypt the canary
@@ -190,6 +203,11 @@ private:
 	string path;
 	//! The file handle
 	unique_ptr<FileHandle> handle;
+	//! Optional memory-mapped view of the database file (used when options.io_mode == MAP).
+	//! Reads are routed through this mapping; writes still go through `handle`. The mapping
+	//! covers a fixed virtual region (the reserve size) for the lifetime of the block manager,
+	//! so the pointer is stable and no synchronization is required between readers and writers.
+	unique_ptr<MemoryMappedFile> mmap_handle;
 	//! The buffer used to read/write to the headers
 	FileBuffer header_buffer;
 	//! The list of free blocks that can be written to currently

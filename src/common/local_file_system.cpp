@@ -300,6 +300,64 @@ static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
 }
 #endif
 
+void LocalFileSystem::TryAcquireFileLock(FileSystem &fs, int fd, const string &path, FileOpenFlags flags) {
+	if (flags.Lock() == FileLockType::NO_LOCK) {
+		return;
+	}
+	// only attempt locking on regular files (not FIFOs/sockets)
+	auto file_type = StatsInternal(fd, path).file_type;
+	if (file_type == FileType::FILE_TYPE_FIFO || file_type == FileType::FILE_TYPE_SOCKET) {
+		return;
+	}
+	struct flock fl;
+	memset(&fl, 0, sizeof fl);
+	fl.l_type = flags.Lock() == FileLockType::READ_LOCK ? F_RDLCK : F_WRLCK;
+	fl.l_whence = SEEK_SET;
+	fl.l_start = 0;
+	fl.l_len = 0;
+	int rc = fcntl(fd, F_SETLK, &fl);
+	int retained_errno = errno;
+	bool has_error = rc == -1;
+	string extended_error;
+	if (has_error) {
+		if (retained_errno == ENOTSUP) {
+			if (flags.Lock() == FileLockType::READ_LOCK) {
+				// file lock not supported here; ignore for read-only
+				return;
+			}
+			extended_error = "File locks are not supported for this file system, cannot open the file in "
+			                 "read-write mode. Try opening the file in read-only mode";
+		}
+	}
+	if (!has_error) {
+		return;
+	}
+	if (extended_error.empty()) {
+		// who is holding the lock?
+		rc = fcntl(fd, F_GETLK, &fl);
+		if (rc == -1) {
+			extended_error = strerror(errno);
+		} else {
+			extended_error = AdditionalProcessInfo(fs, fl.l_pid);
+		}
+		if (flags.Lock() == FileLockType::WRITE_LOCK) {
+			// could we get a read lock?
+			fl.l_type = F_RDLCK;
+			rc = fcntl(fd, F_SETLK, &fl);
+			if (rc != -1) {
+				extended_error += ". However, you would be able to open this database in read-only mode, e.g. by "
+				                  "using the -readonly parameter in the CLI";
+			}
+		}
+	}
+	if (close(fd) == -1) {
+		extended_error += ". Also, failed closing file";
+	}
+	extended_error += ". See also https://duckdb.org/docs/current/connect/concurrency";
+	throw IOException({{"errno", std::to_string(retained_errno)}}, "Could not set lock on file \"%s\": %s", path,
+	                  extended_error);
+}
+
 bool LocalFileSystem::IsPrivateFile(const string &path_p, FileOpener *opener) {
 	auto path = FileSystem::ExpandPath(path_p, opener);
 
@@ -401,65 +459,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 	}
 #endif
 
-	if (flags.Lock() != FileLockType::NO_LOCK) {
-		// set lock on file
-		// but only if it is not an input/output stream
-		auto file_type = StatsInternal(fd, path_p).file_type;
-		if (file_type != FileType::FILE_TYPE_FIFO && file_type != FileType::FILE_TYPE_SOCKET) {
-			struct flock fl;
-			memset(&fl, 0, sizeof fl);
-			fl.l_type = flags.Lock() == FileLockType::READ_LOCK ? F_RDLCK : F_WRLCK;
-			fl.l_whence = SEEK_SET;
-			fl.l_start = 0;
-			fl.l_len = 0;
-			rc = fcntl(fd, F_SETLK, &fl);
-			// Retain the original error.
-			int retained_errno = errno;
-			bool has_error = rc == -1;
-			string extended_error;
-			if (has_error) {
-				if (retained_errno == ENOTSUP) {
-					// file lock not supported for this file system
-					if (flags.Lock() == FileLockType::READ_LOCK) {
-						// for read-only, we ignore not-supported errors
-						has_error = false;
-						errno = 0;
-					} else {
-						extended_error = "File locks are not supported for this file system, cannot open the file in "
-						                 "read-write mode. Try opening the file in read-only mode";
-					}
-				}
-			}
-			if (has_error) {
-				if (extended_error.empty()) {
-					// try to find out who is holding the lock using F_GETLK
-					rc = fcntl(fd, F_GETLK, &fl);
-					if (rc == -1) { // fnctl does not want to help us
-						extended_error = strerror(errno);
-					} else {
-						extended_error = AdditionalProcessInfo(*this, fl.l_pid);
-					}
-					if (flags.Lock() == FileLockType::WRITE_LOCK) {
-						// maybe we can get a read lock instead and tell this to the user.
-						fl.l_type = F_RDLCK;
-						rc = fcntl(fd, F_SETLK, &fl);
-						if (rc != -1) { // success!
-							extended_error +=
-							    ". However, you would be able to open this database in read-only mode, e.g. by "
-							    "using the -readonly parameter in the CLI";
-						}
-					}
-				}
-				rc = close(fd);
-				if (rc == -1) {
-					extended_error += ". Also, failed closing file";
-				}
-				extended_error += ". See also https://duckdb.org/docs/current/connect/concurrency";
-				throw IOException({{"errno", std::to_string(retained_errno)}}, "Could not set lock on file \"%s\": %s",
-				                  path, extended_error);
-			}
-		}
-	}
+	TryAcquireFileLock(*this, fd, path, flags);
 
 	auto file_handle = make_uniq<UnixFileHandle>(*this, path, fd, flags);
 	if (opener) {
@@ -831,6 +831,15 @@ constexpr char PIPE_PREFIX[] = "\\\\.\\pipe\\";
 
 static const std::wstring WINDOWS_LOCAL_LONG_PATH_PREFIX = L"\\\\?\\";
 static const std::wstring WINDOWS_UNC_LONG_PATH_PREFIX = L"\\\\?\\UNC\\";
+
+// On Windows, file-level locking is established at CreateFile time via share_mode rather
+// than via fcntl on an existing fd. The POSIX-style helper is therefore a no-op.
+void LocalFileSystem::TryAcquireFileLock(FileSystem &fs, int fd, const string &path, FileOpenFlags flags) {
+	(void)fs;
+	(void)fd;
+	(void)path;
+	(void)flags;
+}
 
 // Returns the last Win32 error, in string format. Returns an empty string if there is no error.
 std::string LocalFileSystem::GetLastErrorAsString() {

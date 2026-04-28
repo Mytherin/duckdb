@@ -17,6 +17,14 @@ namespace duckdb {
 
 enum class CompressInMemory { AUTOMATIC, COMPRESS, DO_NOT_COMPRESS };
 
+//! How to perform I/O against the database file.
+enum class FileIOMode : uint8_t {
+	//! Use buffered read()/write() (or pread/pwrite) syscalls through a FileHandle.
+	BUFFERED_IO,
+	//! Memory-map the file and route reads through the mapped region.
+	MAP,
+};
+
 struct StorageOptions {
 	//! The allocation size of blocks for this attached database file (if any)
 	optional_idx block_alloc_size;
@@ -28,6 +36,9 @@ struct StorageOptions {
 	optional_idx block_header_size;
 
 	CompressInMemory compress_in_memory = CompressInMemory::AUTOMATIC;
+
+	//! How to perform I/O against the database file (buffered syscalls vs memory-mapped reads).
+	FileIOMode io_mode = FileIOMode::BUFFERED_IO;
 
 	//! Whether the database is encrypted
 	bool encryption = false;

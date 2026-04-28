@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
@@ -124,6 +125,16 @@ void StorageOptions::Initialize(unordered_map<string, Value> &options) {
 			}
 		} else if (entry.first == "debug_encryption_version") {
 			encryption_version = EncryptionTypes::StringToVersion(entry.second.ToString());
+		} else if (entry.first == "io_mode") {
+			auto io_mode_str = StringUtil::Upper(entry.second.ToString());
+			if (io_mode_str == "BUFFERED_IO") {
+				io_mode = FileIOMode::BUFFERED_IO;
+			} else if (io_mode_str == "MMAP") {
+				io_mode = FileIOMode::MAP;
+			} else {
+				throw BinderException("Unrecognized IO_MODE \"%s\". Valid values are 'BUFFERED_IO' or 'MMAP'.",
+				                      entry.second.ToString());
+			}
 		} else {
 			throw BinderException("Unrecognized option for attach \"%s\"", entry.first);
 		}
@@ -383,6 +394,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 	StorageManagerOptions options;
 	options.read_only = read_only;
 	options.use_direct_io = config.options.use_direct_io;
+	options.io_mode = storage_options.io_mode;
 	options.debug_initialize = config.options.debug_initialize;
 	options.storage_version = storage_options.storage_version;
 
