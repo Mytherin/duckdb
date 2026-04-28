@@ -404,7 +404,8 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 	// corrupt the file through the mapping). If MMAP is requested for an encrypted database
 	// — either explicitly via IO_MODE or implicitly via the default_io_mode setting — log a
 	// warning and fall back to buffered I/O.
-	auto resolved_io_mode = storage_options.io_mode ? *storage_options.io_mode : Settings::Get<DefaultIoModeSetting>(config);
+	auto resolved_io_mode =
+	    storage_options.io_mode ? *storage_options.io_mode : Settings::Get<DefaultIoModeSetting>(config);
 	if (storage_options.encryption && resolved_io_mode == FileIOMode::MMAP) {
 		DUCKDB_LOG_WARNING(db.GetDatabase(),
 		                   "MMAP IO_MODE is incompatible with encryption; falling back to BUFFERED_IO for \"%s\"",
