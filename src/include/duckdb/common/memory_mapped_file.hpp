@@ -30,8 +30,7 @@ public:
 
 	//! Bounds-checked pointer to [location, location + nr_bytes) within the mapping.
 	DUCKDB_API const_data_ptr_t GetData(idx_t location, idx_t nr_bytes) const;
-	//! Bounds-checked mutable pointer; writes through it fault at the kernel level if the
-	//! mapping was opened read-only.
+	//! Bounds-checked mutable pointer; throws if the mapping was opened read-only.
 	DUCKDB_API data_ptr_t GetDataMutable(idx_t location, idx_t nr_bytes);
 
 	DUCKDB_API virtual void Sync() = 0;

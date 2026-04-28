@@ -47,7 +47,7 @@ public:
 public:
 	//! Read into the FileBuffer from the location.
 	void Read(QueryContext context, FileHandle &handle, uint64_t location);
-	//! Zero-copy: adopt a pointer into the mapping at [location]. Mapping must outlive this.
+	//! Read into the FileBuffer from a memory-mapped file at the location.
 	void Read(QueryContext context, MemoryMappedFile &handle, uint64_t location);
 	//! Write the FileBuffer to the location.
 	void Write(QueryContext context, FileHandle &handle, const uint64_t location);
@@ -74,6 +74,11 @@ public:
 	}
 	uint64_t Size() const {
 		return size;
+	}
+	//! Whether this FileBuffer owns its underlying memory; false if it adopted a pointer
+	//! into a memory-mapped region. The buffer manager's reuse path requires owned memory.
+	bool OwnsInternalBuffer() const {
+		return owns_internal_buffer;
 	}
 	data_ptr_t InternalBuffer() {
 		return internal_buffer;

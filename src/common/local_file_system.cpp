@@ -391,7 +391,6 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 	flags.Verify();
 
 	int open_flags = 0;
-	int rc;
 	bool open_read = flags.OpenForReading();
 	bool open_write = flags.OpenForWriting();
 	if (open_read && open_write) {
@@ -456,7 +455,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 #if defined(__DARWIN__) || defined(__APPLE__)
 	if (flags.DirectIO()) {
 		// OSX requires fcntl for Direct IO
-		rc = fcntl(fd, F_NOCACHE, 1);
+		int rc = fcntl(fd, F_NOCACHE, 1);
 		if (rc == -1) {
 			throw IOException("Could not enable direct IO for file \"%s\": %s", path, strerror(errno));
 		}
