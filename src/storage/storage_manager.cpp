@@ -130,7 +130,7 @@ void StorageOptions::Initialize(unordered_map<string, Value> &options) {
 			if (io_mode_str == "BUFFERED_IO") {
 				io_mode = FileIOMode::BUFFERED_IO;
 			} else if (io_mode_str == "MMAP") {
-				io_mode = FileIOMode::MAP;
+				io_mode = FileIOMode::MMAP;
 			} else {
 				throw BinderException("Unrecognized IO_MODE \"%s\". Valid values are 'BUFFERED_IO' or 'MMAP'.",
 				                      entry.second.ToString());
@@ -394,7 +394,8 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 	StorageManagerOptions options;
 	options.read_only = read_only;
 	options.use_direct_io = config.options.use_direct_io;
-	options.io_mode = storage_options.io_mode;
+	options.io_mode =
+	    storage_options.io_mode ? *storage_options.io_mode : Settings::Get<DefaultIoModeSetting>(config);
 	options.debug_initialize = config.options.debug_initialize;
 	options.storage_version = storage_options.storage_version;
 

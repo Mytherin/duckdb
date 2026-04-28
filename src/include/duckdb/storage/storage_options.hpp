@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/encryption_state.hpp"
@@ -22,7 +23,7 @@ enum class FileIOMode : uint8_t {
 	//! Use buffered read()/write() (or pread/pwrite) syscalls through a FileHandle.
 	BUFFERED_IO,
 	//! Memory-map the file and route reads through the mapped region.
-	MAP,
+	MMAP,
 };
 
 struct StorageOptions {
@@ -38,7 +39,9 @@ struct StorageOptions {
 	CompressInMemory compress_in_memory = CompressInMemory::AUTOMATIC;
 
 	//! How to perform I/O against the database file (buffered syscalls vs memory-mapped reads).
-	FileIOMode io_mode = FileIOMode::BUFFERED_IO;
+	//! Empty when no IO_MODE was specified at attach time; the StorageManager fills in the
+	//! per-database value from the `default_io_mode` setting in that case.
+	optional<FileIOMode> io_mode;
 
 	//! Whether the database is encrypted
 	bool encryption = false;

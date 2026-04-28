@@ -116,6 +116,13 @@ void DebugWindowModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) 
 }
 
 //===----------------------------------------------------------------------===//
+// Default Io Mode
+//===----------------------------------------------------------------------===//
+void DefaultIoModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	EnumUtil::FromString<FileIOMode>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
 // Deprecated Using Key Syntax
 //===----------------------------------------------------------------------===//
 void DeprecatedUsingKeySyntaxSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {

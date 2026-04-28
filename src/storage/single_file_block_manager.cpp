@@ -476,7 +476,7 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	// block manager opens; otherwise we open the file directly. Open the mmap up front so
 	// that the header writes below can be routed through it.
 	auto &fs = FileSystem::Get(db);
-	if (options.io_mode == FileIOMode::MAP) {
+	if (options.io_mode == FileIOMode::MMAP) {
 		OpenMemoryMappedFile(true);
 	} else {
 		handle = fs.OpenFile(path, flags);
@@ -587,7 +587,7 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 	// In MAP mode the memory-mapped handle is the only handle the block manager opens;
 	// otherwise we open the file directly.
 	auto &fs = FileSystem::Get(db);
-	if (options.io_mode == FileIOMode::MAP) {
+	if (options.io_mode == FileIOMode::MMAP) {
 		OpenMemoryMappedFile(false);
 	} else {
 		handle = fs.OpenFile(path, flags);
@@ -797,7 +797,7 @@ void SingleFileBlockManager::ChecksumAndWrite(QueryContext context, FileBuffer &
 }
 
 void SingleFileBlockManager::OpenMemoryMappedFile(bool create_new) {
-	if (options.io_mode != FileIOMode::MAP) {
+	if (options.io_mode != FileIOMode::MMAP) {
 		return;
 	}
 	if (options.encryption_options.encryption_enabled) {

@@ -218,6 +218,8 @@ enum class FileExpandResult : uint8_t;
 
 enum class FileGlobOptions : uint8_t;
 
+enum class FileIOMode : uint8_t;
+
 enum class FileLockType : uint8_t;
 
 enum class FileNameSegmentType : uint8_t;
@@ -809,6 +811,9 @@ const char* EnumUtil::ToChars<FileExpandResult>(FileExpandResult value);
 
 template<>
 const char* EnumUtil::ToChars<FileGlobOptions>(FileGlobOptions value);
+
+template<>
+const char* EnumUtil::ToChars<FileIOMode>(FileIOMode value);
 
 template<>
 const char* EnumUtil::ToChars<FileLockType>(FileLockType value);
@@ -1557,6 +1562,9 @@ FileExpandResult EnumUtil::FromString<FileExpandResult>(const char *value);
 
 template<>
 FileGlobOptions EnumUtil::FromString<FileGlobOptions>(const char *value);
+
+template<>
+FileIOMode EnumUtil::FromString<FileIOMode>(const char *value);
 
 template<>
 FileLockType EnumUtil::FromString<FileLockType>(const char *value);
