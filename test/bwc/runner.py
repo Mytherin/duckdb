@@ -358,8 +358,11 @@ if __name__ == "__main__":
     logger.info(f"Report database created at '{report_db_path}'")
 
     # Install DuckDB CLIs and test suites for all supported versions
+    worker_id = 1
     with ThreadPoolExecutor(max_workers=10) as executor:
-        list(executor.map(lambda version: install_assets(version, bwc_tests_base_dir), supported_duckdb_versions))
+        worker_dir = os.path.join(bwc_tests_base_dir, f'worker_{worker_id}')
+        worker_id += 1
+        list(executor.map(lambda version: install_assets(version, worker_dir), supported_duckdb_versions))
 
     nb_tests_run = 0
     nb_success = 0
