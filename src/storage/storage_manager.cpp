@@ -140,7 +140,6 @@ void StorageOptions::Initialize(unordered_map<string, Value> &options) {
 				    entry.second.ToString());
 			}
 		} else if (entry.first == "mmap_reserve_size") {
-			// Accept human-readable byte sizes ("256GB", "1TB") as well as plain integer counts.
 			mmap_reserve_size = DBConfig::ParseMemoryLimit(entry.second.ToString());
 		} else {
 			throw BinderException("Unrecognized option for attach \"%s\"", entry.first);
@@ -400,10 +399,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 
 	StorageManagerOptions options;
 	options.read_only = read_only;
-	// Encryption decrypts blocks in place, which is incompatible with MMAP mode (it would
-	// corrupt the file through the mapping). If MMAP is requested for an encrypted database
-	// — either explicitly via IO_MODE or implicitly via the default_io_mode setting — log a
-	// warning and fall back to buffered I/O.
+	// MMAP + encryption would corrupt the file (in-place decryption); demote to BUFFERED_IO.
 	auto resolved_io_mode =
 	    storage_options.io_mode ? *storage_options.io_mode : Settings::Get<DefaultIoModeSetting>(config);
 	if (storage_options.encryption && resolved_io_mode == FileIOMode::MMAP) {

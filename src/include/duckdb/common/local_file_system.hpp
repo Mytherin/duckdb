@@ -130,11 +130,6 @@ private:
 	//! Set the file pointer of a file handle to a specified location. Reads and writes will happen from this location
 	void SetFilePointer(FileHandle &handle, idx_t location);
 	idx_t GetFilePointer(FileHandle &handle);
-
-	//! Internal helper used by OpenFile and MemoryMapFile to acquire a POSIX advisory lock on
-	//! the freshly-opened fd per FileOpenFlags::Lock(). Throws (and closes the fd) on failure.
-	//! No-op on Windows — there, locking is established at CreateFile time via share_mode.
-	static void TryAcquireFileLock(FileSystem &fs, int fd, const string &path, FileOpenFlags flags);
 };
 
 } // namespace duckdb

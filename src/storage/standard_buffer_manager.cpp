@@ -48,12 +48,12 @@ unique_ptr<FileBuffer> StandardBufferManager::ConstructManagedBuffer(idx_t size,
 	if (type == FileBufferType::BLOCK) {
 		throw InternalException("ConstructManagedBuffer cannot be used to construct blocks");
 	}
-	if (source) {
+	if (source && source->OwnsInternalBuffer()) {
 		auto tmp = std::move(source);
 		D_ASSERT(tmp->AllocSize() == BufferManager::GetAllocSize(size + block_header_size));
 		result = make_uniq<FileBuffer>(*tmp, type, block_header_size);
 	} else {
-		// non re-usable buffer: allocate a new buffer
+		// non re-usable buffer (or mmap-backed, which we cannot rewrite): allocate a new buffer
 		result = make_uniq<FileBuffer>(BlockAllocator::Get(db), type, size, block_header_size);
 	}
 	result->Initialize(DBConfig::GetConfig(db).options.debug_initialize);

@@ -18,16 +18,12 @@ namespace duckdb {
 
 enum class CompressInMemory { AUTOMATIC, COMPRESS, DO_NOT_COMPRESS };
 
-//! How to perform I/O against the database file.
 enum class FileIOMode : uint8_t {
-	//! Use buffered read()/write() (or pread/pwrite) syscalls through a FileHandle. The
-	//! kernel's page cache is used as usual.
+	//! Buffered pread/pwrite via FileHandle (default).
 	BUFFERED_IO,
-	//! Memory-map the file and route reads through the mapped region.
+	//! Memory-map the file; reads/writes go through the mapped region.
 	MMAP,
-	//! Use unbuffered (direct) I/O via the FileHandle (O_DIRECT on Linux, FILE_FLAG_NO_BUFFERING
-	//! on Windows, F_NOCACHE on macOS). Bypasses the kernel page cache; reads and writes go
-	//! straight to disk.
+	//! Unbuffered I/O (O_DIRECT / FILE_FLAG_NO_BUFFERING / F_NOCACHE).
 	DIRECT_IO,
 };
 
@@ -43,12 +39,9 @@ struct StorageOptions {
 
 	CompressInMemory compress_in_memory = CompressInMemory::AUTOMATIC;
 
-	//! How to perform I/O against the database file (buffered syscalls vs memory-mapped reads).
-	//! Empty when no IO_MODE was specified at attach time; the StorageManager fills in the
-	//! per-database value from the `default_io_mode` setting in that case.
+	//! IO_MODE attach option; empty falls back to the default_io_mode setting.
 	optional<FileIOMode> io_mode;
-	//! Size of the virtual mapping for IO_MODE 'MMAP'. Empty when MMAP_RESERVE_SIZE was not
-	//! specified at attach time; the StorageManager picks a default in that case.
+	//! MMAP_RESERVE_SIZE attach option; empty uses the StorageManager default.
 	optional_idx mmap_reserve_size;
 
 	//! Whether the database is encrypted

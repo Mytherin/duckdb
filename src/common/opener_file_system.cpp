@@ -11,6 +11,9 @@ unique_ptr<MemoryMappedFile> OpenerFileSystem::MemoryMapFile(const OpenFileInfo 
                                                              optional_ptr<FileOpener> opener) {
 	VerifyNoOpener(opener);
 	VerifyCanAccessFile(path.path);
+	if (IsDuckDBExtensionName(path.path)) {
+		VerifyCanAccessExtension(path.path, flags);
+	}
 	return GetFileSystem().MemoryMapFile(path, flags, options, GetOpener());
 }
 
