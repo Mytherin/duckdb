@@ -24,9 +24,6 @@ const_data_ptr_t MemoryMappedFile::GetData(idx_t location, idx_t nr_bytes) const
 }
 
 data_ptr_t MemoryMappedFile::GetDataMutable(idx_t location, idx_t nr_bytes) {
-	if (!flags.OpenForWriting()) {
-		throw IOException("MemoryMappedFile::GetDataMutable: file \"%s\" was not opened for writing", path);
-	}
 	if (location + nr_bytes > size) {
 		throw IOException("MemoryMappedFile::GetDataMutable: out-of-bounds access in file \"%s\" "
 		                  "(location=%llu, nr_bytes=%llu, size=%llu)",

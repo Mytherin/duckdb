@@ -118,9 +118,8 @@ void FileBuffer::Read(QueryContext context, FileHandle &handle, uint64_t locatio
 
 void FileBuffer::Read(QueryContext context, MemoryMappedFile &handle, uint64_t location) {
 	D_ASSERT(type != FileBufferType::TINY_BUFFER);
-	// Zero-copy: adopt a pointer into the mapping. The mapping must outlive this FileBuffer.
-	// const_cast is safe: read-only mappings are protected at the kernel level so writes fault.
-	auto src = const_cast<data_ptr_t>(handle.GetData(location, internal_size));
+	// Zero-copy: adopt a pointer into the mapping.
+	auto src = handle.GetDataMutable(location, internal_size);
 	const idx_t header_size = internal_size - size;
 	if (internal_buffer && owns_internal_buffer) {
 		allocator.FreeData(internal_buffer, internal_size);
