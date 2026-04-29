@@ -88,6 +88,9 @@ public:
 
 	MemoryRequirement CalculateMemory(uint64_t user_size, uint64_t block_header_size) const;
 	void Initialize(DebugInitialize info);
+	bool OwnsInternalBuffer() const {
+		return owns_internal_buffer;
+	}
 
 protected:
 	//! The type of the buffer.

@@ -20,6 +20,11 @@ namespace duckdb {
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
 static void WriteGarbageIntoBuffer(BlockLock &lock, BlockHandle &block) {
 	auto &buffer = block.GetMemory().GetBuffer(lock);
+	if (!buffer.OwnsInternalBuffer()) {
+		// don't write garbage into mmap buffers
+		// this would directly be written back into the file
+		return;
+	}
 	memset(buffer->buffer, 0xa5, buffer->size); // 0xa5 is default memory in debug mode
 }
 
