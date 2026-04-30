@@ -43,7 +43,7 @@ public:
 public:
 	idx_t GetAllocationSize() const override;
 	void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const override;
-	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, idx_t count) const override;
+	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type) const override;
 	Value GetValue(const LogicalType &type, idx_t index) const override;
 	void SetValue(const LogicalType &type, idx_t index, const Value &val) override;
 	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
