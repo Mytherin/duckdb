@@ -19,10 +19,25 @@ public:
 public:
 	BoundComparisonExpression(ExpressionType type, unique_ptr<Expression> left, unique_ptr<Expression> right);
 
-	unique_ptr<Expression> left;
-	unique_ptr<Expression> right;
-
 public:
+	const Expression &Left() const {
+		return *left;
+	}
+	const Expression &Right() const {
+		return *right;
+	}
+	const unique_ptr<Expression> &LeftRef() const {
+		return left;
+	}
+	const unique_ptr<Expression> &RightRef() const {
+		return right;
+	}
+	unique_ptr<Expression> &LeftMutable() {
+		return left;
+	}
+	unique_ptr<Expression> &RightMutable() {
+		return right;
+	}
 	string ToString() const override;
 
 	bool Equals(const BaseExpression &other) const override;
@@ -37,5 +52,9 @@ public:
 	                                  const LogicalType &right_type, ExpressionType comparison_type);
 	static bool TryBindComparison(ClientContext &context, const LogicalType &left_type, const LogicalType &right_type,
 	                              LogicalType &result_type, ExpressionType comparison_type);
+
+private:
+	unique_ptr<Expression> left;
+	unique_ptr<Expression> right;
 };
 } // namespace duckdb
