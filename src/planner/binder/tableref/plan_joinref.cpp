@@ -153,13 +153,13 @@ static bool CreateJoinCondition(Expression &expr, const unordered_set<TableIndex
                                 const unordered_set<TableIndex> &right_bindings, vector<JoinCondition> &conditions) {
 	// comparison
 	auto &comparison = expr.Cast<BoundComparisonExpression>();
-	auto left_side = JoinSide::GetJoinSide(*comparison.left, left_bindings, right_bindings);
-	auto right_side = JoinSide::GetJoinSide(*comparison.right, left_bindings, right_bindings);
+	auto left_side = JoinSide::GetJoinSide(comparison.Left(), left_bindings, right_bindings);
+	auto right_side = JoinSide::GetJoinSide(comparison.Right(), left_bindings, right_bindings);
 	if (left_side != JoinSide::BOTH && right_side != JoinSide::BOTH) {
 		// join condition can be divided in a left/right side
 		auto comp_type = expr.GetExpressionType();
-		auto left = std::move(comparison.left);
-		auto right = std::move(comparison.right);
+		auto left = std::move(comparison.LeftMutable());
+		auto right = std::move(comparison.RightMutable());
 		if (left_side == JoinSide::RIGHT) {
 			// left = right, right = left, flip the comparison symbol and reverse sides
 			swap(left, right);

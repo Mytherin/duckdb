@@ -96,13 +96,13 @@ idx_t ExpressionHeuristics::ExpressionCost(const BoundCastExpression &expr) {
 			cast_cost = 5;
 		}
 	}
-	return Cost(*expr.child) + cast_cost;
+	return Cost(expr.Child()) + cast_cost;
 }
 
 idx_t ExpressionHeuristics::ExpressionCost(const BoundComparisonExpression &expr) {
 	// COMPARE_EQUAL, COMPARE_NOTEQUAL, COMPARE_GREATERTHAN, COMPARE_GREATERTHANOREQUALTO, COMPARE_LESSTHAN,
 	// COMPARE_LESSTHANOREQUALTO
-	return Cost(*expr.left) + 5 + Cost(*expr.right);
+	return Cost(expr.Left()) + 5 + Cost(expr.Right());
 }
 
 idx_t ExpressionHeuristics::ExpressionCost(const BoundConjunctionExpression &expr) {

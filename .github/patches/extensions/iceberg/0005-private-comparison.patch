@@ -1,0 +1,15 @@
+diff --git a/src/iceberg_predicate.cpp b/src/iceberg_predicate.cpp
+index c6fa6b3c..880bfa46 100644
+--- a/src/iceberg_predicate.cpp
++++ b/src/iceberg_predicate.cpp
+@@ -213,8 +213,8 @@ bool MatchBoundsTemplated(ClientContext &context, const TableFilter &filter, con
+ 			auto &compare_expr = expr.Cast<BoundComparisonExpression>();
+ 			if (transform.Type() == IcebergTransformType::IDENTITY) {
+ 				//! No further processing has been done on the stats (lower/upper bounds)
+-				auto &left = *compare_expr.left;
+-				auto &right = *compare_expr.right;
++				auto &left = compare_expr.Left();
++				auto &right = compare_expr.Right();
+ 
+ 				bool left_foldable = left.IsFoldable();
+ 				bool right_foldable = right.IsFoldable();

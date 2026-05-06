@@ -176,7 +176,7 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const 
 		auto constant_value = bindings[2].get().Cast<BoundConstantExpression>().value;
 		auto comparison_type = comparison.GetExpressionType();
 
-		if (comparison.left->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+		if (comparison.Left().GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 			// The expression is on the right side, we flip the comparison expression.
 			comparison_type = FlipComparisonExpression(comparison_type);
 		}

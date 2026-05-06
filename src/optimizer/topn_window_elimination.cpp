@@ -523,10 +523,10 @@ bool TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 	}
 
 	auto &filter_comparison = filter.expressions[0]->Cast<BoundComparisonExpression>();
-	if (filter_comparison.right->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+	if (filter_comparison.Right().GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
 		return false;
 	}
-	auto &filter_value = filter_comparison.right->Cast<BoundConstantExpression>();
+	auto &filter_value = filter_comparison.Right().Cast<BoundConstantExpression>();
 	if (filter_value.value.type() != LogicalType::BIGINT) {
 		return false;
 	}
@@ -556,10 +556,10 @@ bool TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 		return false;
 	}
 
-	if (filter_comparison.left->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+	if (filter_comparison.Left().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 		return false;
 	}
-	VisitExpression(&filter_comparison.left);
+	VisitExpression(&filter_comparison.LeftMutable());
 
 	reference<LogicalOperator> child = *filter.children[0];
 	while (child.get().type == LogicalOperatorType::LOGICAL_PROJECTION) {
@@ -840,8 +840,8 @@ TopNWindowElimination::ExtractOptimizerParameters(const LogicalWindow &window, c
 	TopNWindowEliminationParameters params;
 
 	auto &filter_expr = filter.expressions[0]->Cast<BoundComparisonExpression>();
-	auto &limit_expr = filter_expr.right;
-	params.limit = limit_expr->Cast<BoundConstantExpression>().value.GetValue<int64_t>();
+	auto &limit_expr = filter_expr.Right();
+	params.limit = limit_expr.Cast<BoundConstantExpression>().value.GetValue<int64_t>();
 	if (filter_expr.GetExpressionType() == ExpressionType::COMPARE_LESSTHAN) {
 		--params.limit;
 	}

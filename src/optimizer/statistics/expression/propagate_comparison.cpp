@@ -93,8 +93,8 @@ FilterPropagateResult StatisticsPropagator::PropagateComparison(BaseStatistics &
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundComparisonExpression &expr,
                                                                      unique_ptr<Expression> &expr_ptr) {
-	auto left_stats = PropagateExpression(expr.left);
-	auto right_stats = PropagateExpression(expr.right);
+	auto left_stats = PropagateExpression(expr.LeftMutable());
+	auto right_stats = PropagateExpression(expr.RightMutable());
 	if (!left_stats || !right_stats) {
 		return nullptr;
 	}
@@ -109,15 +109,15 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundCompar
 		return PropagateExpression(expr_ptr);
 	case FilterPropagateResult::FILTER_TRUE_OR_NULL: {
 		vector<unique_ptr<Expression>> children;
-		children.push_back(std::move(expr.left));
-		children.push_back(std::move(expr.right));
+		children.push_back(std::move(expr.LeftMutable()));
+		children.push_back(std::move(expr.RightMutable()));
 		expr_ptr = ExpressionRewriter::ConstantOrNull(std::move(children), Value::BOOLEAN(true));
 		return nullptr;
 	}
 	case FilterPropagateResult::FILTER_FALSE_OR_NULL: {
 		vector<unique_ptr<Expression>> children;
-		children.push_back(std::move(expr.left));
-		children.push_back(std::move(expr.right));
+		children.push_back(std::move(expr.LeftMutable()));
+		children.push_back(std::move(expr.RightMutable()));
 		expr_ptr = ExpressionRewriter::ConstantOrNull(std::move(children), Value::BOOLEAN(false));
 		return nullptr;
 	}

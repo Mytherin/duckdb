@@ -118,12 +118,12 @@ static unique_ptr<TableFilter> TrySerializeComparisonToLegacyFilter(const BoundC
 	const Expression *subject = nullptr;
 	const Value *constant = nullptr;
 	auto comparison_type = comparison.GetExpressionType();
-	if (comparison.right->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
-		subject = comparison.left.get();
-		constant = &comparison.right->Cast<BoundConstantExpression>().value;
-	} else if (comparison.left->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
-		subject = comparison.right.get();
-		constant = &comparison.left->Cast<BoundConstantExpression>().value;
+	if (comparison.Right().GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+		subject = &comparison.Left();
+		constant = &comparison.Right().Cast<BoundConstantExpression>().value;
+	} else if (comparison.Left().GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+		subject = &comparison.Right();
+		constant = &comparison.Left().Cast<BoundConstantExpression>().value;
 		comparison_type = FlipComparisonType(comparison_type);
 	} else {
 		return nullptr;

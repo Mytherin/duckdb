@@ -1187,11 +1187,11 @@ static bool TryGetCastChild(unique_ptr<Expression> &expr, optional_ptr<unique_pt
 	}
 	D_ASSERT(expr->GetExpressionClass() == ExpressionClass::BOUND_CAST);
 	auto &cast = expr->Cast<BoundCastExpression>();
-	if (cast.try_cast) {
+	if (cast.IsTryCast()) {
 		return false;
 	}
 
-	child = cast.child;
+	child = cast.ChildMutable();
 	return true;
 }
 

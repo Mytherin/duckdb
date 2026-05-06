@@ -35,7 +35,7 @@ bool QueryGraphManager::Build(JoinOrderOptimizer &optimizer, LogicalOperator &op
 	return true;
 }
 
-void QueryGraphManager::GetColumnBinding(Expression &root_expr, ColumnBinding &binding) {
+void QueryGraphManager::GetColumnBinding(const Expression &root_expr, ColumnBinding &binding) {
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
 	    root_expr, [&](const BoundColumnRefExpression &colref) {
 		    D_ASSERT(colref.depth == 0);
@@ -85,10 +85,10 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 			auto &comparison = filter->Cast<BoundComparisonExpression>();
 			// extract the bindings that are required for the left and right side of the comparison
 			unordered_set<RelationIndex> left_bindings, right_bindings;
-			relation_manager.ExtractBindings(*comparison.left, left_bindings);
-			relation_manager.ExtractBindings(*comparison.right, right_bindings);
-			GetColumnBinding(*comparison.left, filter_info->left_binding);
-			GetColumnBinding(*comparison.right, filter_info->right_binding);
+			relation_manager.ExtractBindings(comparison.Left(), left_bindings);
+			relation_manager.ExtractBindings(comparison.Right(), right_bindings);
+			GetColumnBinding(comparison.Left(), filter_info->left_binding);
+			GetColumnBinding(comparison.Right(), filter_info->right_binding);
 			if (!left_bindings.empty() && !right_bindings.empty()) {
 				// both the left and the right side have bindings
 				// first create the relation sets, if they do not exist
@@ -126,15 +126,15 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 				}
 				auto &comparison = child_comp->Cast<BoundComparisonExpression>();
 				// extract the bindings that are required for the left and right side of the comparison
-				relation_manager.ExtractBindings(*comparison.left, left_bindings);
-				relation_manager.ExtractBindings(*comparison.right, right_bindings);
+				relation_manager.ExtractBindings(comparison.Left(), left_bindings);
+				relation_manager.ExtractBindings(comparison.Right(), right_bindings);
 				if (!filter_info->left_binding.table_index.IsValid() &&
 				    !filter_info->left_binding.column_index.IsValid()) {
-					GetColumnBinding(*comparison.left, filter_info->left_binding);
+					GetColumnBinding(comparison.Left(), filter_info->left_binding);
 				}
 				if (!filter_info->right_binding.table_index.IsValid() &&
 				    !filter_info->right_binding.column_index.IsValid()) {
-					GetColumnBinding(*comparison.right, filter_info->right_binding);
+					GetColumnBinding(comparison.Right(), filter_info->right_binding);
 				}
 			}
 			if (!left_bindings.empty() && !right_bindings.empty()) {
@@ -217,8 +217,8 @@ unique_ptr<LogicalOperator> QueryGraphManager::Reconstruct(unique_ptr<LogicalOpe
 
 static JoinCondition MaybeInvertConditions(unique_ptr<Expression> condition, bool invert) {
 	auto &comparison = condition->Cast<BoundComparisonExpression>();
-	auto left = !invert ? std::move(comparison.left) : std::move(comparison.right);
-	auto right = !invert ? std::move(comparison.right) : std::move(comparison.left);
+	auto left = !invert ? std::move(comparison.LeftMutable()) : std::move(comparison.RightMutable());
+	auto right = !invert ? std::move(comparison.RightMutable()) : std::move(comparison.LeftMutable());
 	auto comp_type = condition->GetExpressionType();
 	if (invert) {
 		// reverse comparison expression if we reverse the order of the children
@@ -391,8 +391,8 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 				D_ASSERT(filter->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON);
 				auto &comparison = filter->Cast<BoundComparisonExpression>();
 				// we need to figure out which side is which by looking at the relations available to us
-				auto left = !invert ? std::move(comparison.left) : std::move(comparison.right);
-				auto right = !invert ? std::move(comparison.right) : std::move(comparison.left);
+				auto left = !invert ? std::move(comparison.LeftMutable()) : std::move(comparison.RightMutable());
+				auto right = !invert ? std::move(comparison.RightMutable()) : std::move(comparison.LeftMutable());
 				auto comp_type = comparison.GetExpressionType();
 				if (invert) {
 					// reverse comparison expression if we reverse the order of the children

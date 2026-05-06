@@ -12,8 +12,8 @@ namespace duckdb {
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundComparisonExpression &expr,
                                                                 ExpressionExecutorState &root) {
 	auto result = make_uniq<ExpressionState>(expr, root);
-	result->AddChild(*expr.left);
-	result->AddChild(*expr.right);
+	result->AddChild(expr.Left());
+	result->AddChild(expr.Right());
 
 	result->Finalize();
 	return result;
@@ -26,8 +26,8 @@ void ExpressionExecutor::Execute(const BoundComparisonExpression &expr, Expressi
 	auto &left = state->intermediate_chunk.data[0];
 	auto &right = state->intermediate_chunk.data[1];
 
-	Execute(*expr.left, state->child_states[0].get(), sel, count, left);
-	Execute(*expr.right, state->child_states[1].get(), sel, count, right);
+	Execute(expr.Left(), state->child_states[0].get(), sel, count, left);
+	Execute(expr.Right(), state->child_states[1].get(), sel, count, right);
 
 	bool all_constant = false;
 	if (state->intermediate_chunk.AllConstant()) {
@@ -277,8 +277,8 @@ idx_t ExpressionExecutor::Select(const BoundComparisonExpression &expr, Expressi
 	auto &left = state->intermediate_chunk.data[0];
 	auto &right = state->intermediate_chunk.data[1];
 
-	Execute(*expr.left, state->child_states[0].get(), sel, count, left);
-	Execute(*expr.right, state->child_states[1].get(), sel, count, right);
+	Execute(expr.Left(), state->child_states[0].get(), sel, count, left);
+	Execute(expr.Right(), state->child_states[1].get(), sel, count, right);
 
 	switch (expr.GetExpressionType()) {
 	case ExpressionType::COMPARE_EQUAL:

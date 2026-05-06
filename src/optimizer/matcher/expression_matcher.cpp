@@ -39,8 +39,8 @@ bool ComparisonExpressionMatcher::Match(Expression &expr_p, vector<reference<Exp
 	}
 	auto &expr = expr_p.Cast<BoundComparisonExpression>();
 	vector<reference<Expression>> expressions;
-	expressions.push_back(*expr.left);
-	expressions.push_back(*expr.right);
+	expressions.push_back(*expr.LeftMutable());
+	expressions.push_back(*expr.RightMutable());
 	return SetMatcher::Match(matchers, expressions, bindings, policy);
 }
 
@@ -52,7 +52,7 @@ bool CastExpressionMatcher::Match(Expression &expr_p, vector<reference<Expressio
 		return true;
 	}
 	auto &expr = expr_p.Cast<BoundCastExpression>();
-	return matcher->Match(*expr.child, bindings);
+	return matcher->Match(*expr.ChildMutable(), bindings);
 }
 
 bool InClauseExpressionMatcher::Match(Expression &expr_p, vector<reference<Expression>> &bindings) {

@@ -51,10 +51,10 @@ unique_ptr<Expression> EnumComparisonRule::Apply(LogicalOperator &op, vector<ref
 	auto &left_child = bindings[1].get().Cast<BoundCastExpression>();
 	auto &right_child = bindings[3].get().Cast<BoundCastExpression>();
 
-	if (!AreMatchesPossible(left_child.child->GetReturnType(), right_child.child->GetReturnType())) {
+	if (!AreMatchesPossible(left_child.Child().GetReturnType(), right_child.Child().GetReturnType())) {
 		vector<unique_ptr<Expression>> children;
-		children.push_back(std::move(root.left));
-		children.push_back(std::move(root.right));
+		children.push_back(std::move(root.LeftMutable()));
+		children.push_back(std::move(root.RightMutable()));
 		return ExpressionRewriter::ConstantOrNull(std::move(children), Value::BOOLEAN(false));
 	}
 
@@ -62,10 +62,10 @@ unique_ptr<Expression> EnumComparisonRule::Apply(LogicalOperator &op, vector<ref
 		return nullptr;
 	}
 
-	auto cast_left_to_right = BoundCastExpression::AddDefaultCastToType(std::move(left_child.child),
-	                                                                    right_child.child->GetReturnType(), true);
+	auto cast_left_to_right = BoundCastExpression::AddDefaultCastToType(std::move(left_child.ChildMutable()),
+	                                                                    right_child.Child().GetReturnType(), true);
 	return make_uniq<BoundComparisonExpression>(root.GetExpressionType(), std::move(cast_left_to_right),
-	                                            std::move(right_child.child));
+	                                            std::move(right_child.ChildMutable()));
 }
 
 } // namespace duckdb

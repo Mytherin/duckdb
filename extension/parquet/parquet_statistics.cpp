@@ -649,8 +649,8 @@ static bool HasFilterConstants(const Expression &expr) {
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
 		auto &comp = expr.Cast<BoundComparisonExpression>();
 		if (comp.GetExpressionType() == ExpressionType::COMPARE_EQUAL &&
-		    comp.right->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-			auto &constant = comp.right->Cast<BoundConstantExpression>();
+		    comp.Right().GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+			auto &constant = comp.Right().Cast<BoundConstantExpression>();
 			return !constant.value.IsNull();
 		}
 		return false;
@@ -739,10 +739,10 @@ static bool ApplyBloomFilter(const Expression &expr, ParquetBloomFilter &bloom_f
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
 		auto &comp = expr.Cast<BoundComparisonExpression>();
 		if (comp.GetExpressionType() != ExpressionType::COMPARE_EQUAL ||
-		    comp.right->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+		    comp.Right().GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
 			return false;
 		}
-		auto &constant = comp.right->Cast<BoundConstantExpression>();
+		auto &constant = comp.Right().Cast<BoundConstantExpression>();
 		D_ASSERT(!constant.value.IsNull());
 		auto hash = ValueXXH64(constant.value);
 		return hash > 0 && !bloom_filter.FilterCheck(hash);

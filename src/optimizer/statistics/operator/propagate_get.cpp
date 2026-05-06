@@ -93,16 +93,17 @@ void StatisticsPropagator::UpdateExpressionFilterStatistics(BaseStatistics &inpu
 		auto &comp = expr.Cast<BoundComparisonExpression>();
 		auto is_compare_distinct = comp.GetExpressionType() == ExpressionType::COMPARE_DISTINCT_FROM ||
 		                           comp.GetExpressionType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM;
-		if (IsDirectFilterColumnRef(*comp.left) && comp.right->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-			auto &constant = comp.right->Cast<BoundConstantExpression>();
+		if (IsDirectFilterColumnRef(comp.Left()) &&
+		    comp.Right().GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+			auto &constant = comp.Right().Cast<BoundConstantExpression>();
 			if (constant.value.type().InternalType() == input.GetType().InternalType()) {
 				UpdateFilterStatistics(input, comp.GetExpressionType(), constant.value);
 			} else if (!is_compare_distinct) {
 				input.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 			}
-		} else if (comp.left->GetExpressionType() == ExpressionType::VALUE_CONSTANT &&
-		           IsDirectFilterColumnRef(*comp.right)) {
-			auto &constant = comp.left->Cast<BoundConstantExpression>();
+		} else if (comp.Left().GetExpressionType() == ExpressionType::VALUE_CONSTANT &&
+		           IsDirectFilterColumnRef(comp.Right())) {
+			auto &constant = comp.Left().Cast<BoundConstantExpression>();
 			if (constant.value.type().InternalType() == input.GetType().InternalType()) {
 				UpdateFilterStatistics(input, FlipComparisonExpression(comp.GetExpressionType()), constant.value);
 			} else if (!is_compare_distinct) {

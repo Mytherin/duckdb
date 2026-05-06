@@ -19,8 +19,8 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
                                                            bool &changes_made, bool is_root) {
 	auto &expr = bindings[0].get().Cast<BoundComparisonExpression>();
 	auto &constant_expr = bindings[1].get();
-	bool column_ref_left = expr.left.get() != &constant_expr;
-	auto column_ref_expr = !column_ref_left ? expr.right.get() : expr.left.get();
+	bool column_ref_left = expr.LeftRef().get() != &constant_expr;
+	auto column_ref_expr = !column_ref_left ? expr.RightMutable().get() : expr.LeftMutable().get();
 	// the constant_expr is a scalar expression that we have to fold
 	// use an ExpressionExecutor to execute the expression
 	D_ASSERT(constant_expr.IsFoldable());
@@ -60,14 +60,14 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 		}
 
 		//! We can cast, now we change our column_ref_expression from an operator cast to a column reference
-		auto child_expression = std::move(cast_expression.child);
+		auto child_expression = std::move(cast_expression.ChildMutable());
 		auto new_constant_expr = make_uniq<BoundConstantExpression>(cast_constant);
 		if (column_ref_left) {
-			expr.left = std::move(child_expression);
-			expr.right = std::move(new_constant_expr);
+			expr.LeftMutable() = std::move(child_expression);
+			expr.RightMutable() = std::move(new_constant_expr);
 		} else {
-			expr.left = std::move(new_constant_expr);
-			expr.right = std::move(child_expression);
+			expr.LeftMutable() = std::move(new_constant_expr);
+			expr.RightMutable() = std::move(child_expression);
 		}
 		changes_made = true;
 	}

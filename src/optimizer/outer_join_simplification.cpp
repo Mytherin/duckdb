@@ -115,8 +115,8 @@ void OuterJoinSimplification::VisitOperator(LogicalOperator &op) {
 					continue;
 				}
 				const auto &comparison = expr->Cast<BoundComparisonExpression>();
-				HandleExpression(*comparison.left);
-				HandleExpression(*comparison.right);
+				HandleExpression(comparison.Left());
+				HandleExpression(comparison.Right());
 			}
 		}
 		VisitOperatorChildren(op);

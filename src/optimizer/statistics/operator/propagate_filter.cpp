@@ -217,7 +217,7 @@ void StatisticsPropagator::UpdateFilterStatistics(const Expression &condition) {
 	}
 	case ExpressionClass::BOUND_COMPARISON: {
 		auto &comparison = condition.Cast<BoundComparisonExpression>();
-		UpdateFilterStatistics(*comparison.left, *comparison.right, comparison.GetExpressionType());
+		UpdateFilterStatistics(comparison.Left(), comparison.Right(), comparison.GetExpressionType());
 		break;
 	}
 	default:

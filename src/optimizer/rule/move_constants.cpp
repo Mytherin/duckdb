@@ -157,10 +157,10 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 	// first extract x from the arithmetic expression
 	auto arithmetic_child = std::move(arithmetic.children[arithmetic_child_index]);
 	// then place in the comparison
-	if (comparison.left.get() == &outer_constant) {
-		comparison.right = std::move(arithmetic_child);
+	if (comparison.LeftRef().get() == &outer_constant) {
+		comparison.RightMutable() = std::move(arithmetic_child);
 	} else {
-		comparison.left = std::move(arithmetic_child);
+		comparison.LeftMutable() = std::move(arithmetic_child);
 	}
 	changes_made = true;
 	return nullptr;

@@ -50,7 +50,7 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 	auto &rhs = bindings[4].get().Cast<BoundConstantExpression>();
 
 	// Determine whether or not the column name is on the lhs or rhs.
-	const bool col_is_lhs = (expr.left->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION);
+	const bool col_is_lhs = (expr.Left().GetExpressionClass() == ExpressionClass::BOUND_FUNCTION);
 
 	// We want to treat rhs >= col equivalently to col <= rhs.
 	// So, get the expression type if it was ordered such that the constant was actually on the right hand side.
@@ -216,26 +216,28 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 				}
 
 				if (col_is_lhs) {
-					expr.left = column_part.Copy();
-					expr.right = std::move(trunc);
+					expr.LeftMutable() = column_part.Copy();
+					expr.RightMutable() = std::move(trunc);
 				} else {
-					expr.right = column_part.Copy();
-					expr.left = std::move(trunc);
+					expr.RightMutable() = column_part.Copy();
+					expr.LeftMutable() = std::move(trunc);
 				}
 			} else {
 				// If the RHS is already truncated (i.e.  date_trunc(part, rhs) = rhs), then we can use
 				// it as-is.
 				if (col_is_lhs) {
-					expr.left = column_part.Copy();
+					expr.LeftMutable() = column_part.Copy();
 					// Determine whether the RHS needs to be casted.
-					if (rhs.GetReturnType().id() != expr.left->GetReturnType().id()) {
-						expr.right = CastAndEvaluate(std::move(expr.right), expr.left->GetReturnType());
+					if (rhs.GetReturnType().id() != expr.Left().GetReturnType().id()) {
+						expr.RightMutable() =
+						    CastAndEvaluate(std::move(expr.RightMutable()), expr.Left().GetReturnType());
 					}
 				} else {
-					expr.right = column_part.Copy();
+					expr.RightMutable() = column_part.Copy();
 					// Determine whether the RHS needs to be casted.
-					if (rhs.GetReturnType().id() != expr.right->GetReturnType().id()) {
-						expr.left = CastAndEvaluate(std::move(expr.left), expr.right->GetReturnType());
+					if (rhs.GetReturnType().id() != expr.Right().GetReturnType().id()) {
+						expr.LeftMutable() =
+						    CastAndEvaluate(std::move(expr.LeftMutable()), expr.Right().GetReturnType());
 					}
 				}
 			}
@@ -258,11 +260,11 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 			}
 
 			if (col_is_lhs) {
-				expr.left = column_part.Copy();
-				expr.right = std::move(trunc);
+				expr.LeftMutable() = column_part.Copy();
+				expr.RightMutable() = std::move(trunc);
 			} else {
-				expr.right = column_part.Copy();
-				expr.left = std::move(trunc);
+				expr.RightMutable() = column_part.Copy();
+				expr.LeftMutable() = std::move(trunc);
 			}
 
 			// > needs to become >=, and <= needs to become <.

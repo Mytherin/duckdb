@@ -100,10 +100,10 @@ unique_ptr<Expression> SwitchBindExpression(FunctionBindExpressionInput &input) 
 		cases = std::move(input.children[map_index]);
 	} else if (input.children[map_index]->GetExpressionClass() == ExpressionClass::BOUND_CAST) {
 		auto &cast_expr = input.children[map_index]->Cast<BoundCastExpression>();
-		if (cast_expr.child->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		if (cast_expr.Child().GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
 			throw BinderException("SWITCH expected a map function for the cases");
 		}
-		cases = std::move(cast_expr.child);
+		cases = std::move(cast_expr.ChildMutable());
 	} else {
 		throw BinderException("SWITCH expected a map function for the cases");
 	}

@@ -141,12 +141,12 @@ static FilterPropagateResult CheckComparisonStatistics(const BoundComparisonExpr
 	optional_ptr<const BaseStatistics> filter_stats;
 	optional_ptr<const BoundConstantExpression> constant_expr;
 	auto comparison_type = comp_expr.GetExpressionType();
-	if (comp_expr.right->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-		filter_stats = TryGetFilterStats(*comp_expr.left, stats, owned_stats);
-		constant_expr = &comp_expr.right->Cast<BoundConstantExpression>();
-	} else if (comp_expr.left->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-		filter_stats = TryGetFilterStats(*comp_expr.right, stats, owned_stats);
-		constant_expr = &comp_expr.left->Cast<BoundConstantExpression>();
+	if (comp_expr.Right().GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+		filter_stats = TryGetFilterStats(comp_expr.Left(), stats, owned_stats);
+		constant_expr = &comp_expr.Right().Cast<BoundConstantExpression>();
+	} else if (comp_expr.Left().GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+		filter_stats = TryGetFilterStats(comp_expr.Right(), stats, owned_stats);
+		constant_expr = &comp_expr.Left().Cast<BoundConstantExpression>();
 		comparison_type = FlipComparisonExpression(comparison_type);
 	} else {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;

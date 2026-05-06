@@ -1,5 +1,6 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
-#include "duckdb/parser/expression/comparison_expression.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
 
 namespace duckdb {
 
@@ -10,7 +11,8 @@ BoundComparisonExpression::BoundComparisonExpression(ExpressionType type, unique
 }
 
 string BoundComparisonExpression::ToString() const {
-	return ComparisonExpression::ToString<BoundComparisonExpression, Expression>(*this);
+	return StringUtil::Format("(%s %s %s)", left->ToString(), ExpressionTypeToOperator(GetExpressionType()),
+	                          right->ToString());
 }
 
 bool BoundComparisonExpression::Equals(const BaseExpression &other_p) const {

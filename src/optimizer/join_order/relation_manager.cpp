@@ -528,7 +528,7 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 	}
 }
 
-bool RelationManager::ExtractBindings(Expression &expression, unordered_set<RelationIndex> &bindings) {
+bool RelationManager::ExtractBindings(const Expression &expression, unordered_set<RelationIndex> &bindings) {
 	if (expression.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = expression.Cast<BoundColumnRefExpression>();
 		D_ASSERT(colref.depth == 0);
@@ -553,7 +553,7 @@ bool RelationManager::ExtractBindings(Expression &expression, unordered_set<Rela
 	}
 	D_ASSERT(expression.GetExpressionType() != ExpressionType::SUBQUERY);
 	bool can_reorder = true;
-	ExpressionIterator::EnumerateChildren(expression, [&](Expression &expr) {
+	ExpressionIterator::EnumerateChildren(expression, [&](const Expression &expr) {
 		if (!ExtractBindings(expr, bindings)) {
 			can_reorder = false;
 			return;
@@ -606,8 +606,8 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 					D_ASSERT(bound_expr->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON);
 					auto &comp = bound_expr->Cast<BoundComparisonExpression>();
 					unordered_set<RelationIndex> right_bindings, left_bindings;
-					ExtractBindings(*comp.right, right_bindings);
-					ExtractBindings(*comp.left, left_bindings);
+					ExtractBindings(comp.Right(), right_bindings);
+					ExtractBindings(comp.Left(), left_bindings);
 
 					if (!left_set) {
 						left_set = set_manager.GetJoinRelation(left_bindings);

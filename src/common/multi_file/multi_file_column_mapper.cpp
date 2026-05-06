@@ -966,14 +966,14 @@ static unique_ptr<Expression> TryCastFilterExpression(const Expression &expr, co
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_COMPARISON: {
 		auto &comparison = expr.Cast<BoundComparisonExpression>();
-		if (comparison.right->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+		if (comparison.Right().GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
 			return nullptr;
 		}
-		auto lhs = RewriteMappedValueExpression(*comparison.left, mapping, target_type);
+		auto lhs = RewriteMappedValueExpression(comparison.Left(), mapping, target_type);
 		if (!lhs.expr || !lhs.type) {
 			return nullptr;
 		}
-		auto constant = comparison.right->Cast<BoundConstantExpression>().value;
+		auto constant = comparison.Right().Cast<BoundConstantExpression>().value;
 		if (!TryCastConstant(constant, *lhs.type)) {
 			return nullptr;
 		}

@@ -39,7 +39,7 @@ bool PushdownJoinFilterExpression(const Expression &expr, JoinFilterPushdownColu
 	case ExpressionClass::BOUND_CAST: {
 		// We allow pushing through integral down/upcasts, as long as source/target are (u)bigint or smaller
 		const auto &bound_cast = expr.Cast<BoundCastExpression>();
-		const auto &src = bound_cast.child->GetReturnType();
+		const auto &src = bound_cast.Child().GetReturnType();
 		const auto &tgt = bound_cast.GetReturnType();
 		if (!src.IsIntegral() || !tgt.IsIntegral()) {
 			return false;
@@ -48,7 +48,7 @@ bool PushdownJoinFilterExpression(const Expression &expr, JoinFilterPushdownColu
 		    GetTypeIdSize(tgt.InternalType()) > GetTypeIdSize(PhysicalType::INT64)) {
 			return false; // Only do this for (u)bigint and smaller
 		}
-		return PushdownJoinFilterExpression(*bound_cast.child, filter);
+		return PushdownJoinFilterExpression(bound_cast.Child(), filter);
 	}
 	default:
 		return false;

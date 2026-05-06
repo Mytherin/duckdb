@@ -492,12 +492,12 @@ static bool CollectValuesAndComparisonsFromExpression(const Expression &expr, va
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
 		auto &comp = expr.Cast<BoundComparisonExpression>();
 		Value val;
-		bool left_is_ref = comp.left->GetExpressionClass() == ExpressionClass::BOUND_REF;
-		bool right_is_ref = comp.right->GetExpressionClass() == ExpressionClass::BOUND_REF;
-		if (comp.right->GetExpressionType() == ExpressionType::VALUE_CONSTANT && left_is_ref) {
-			val = comp.right->Cast<BoundConstantExpression>().value;
-		} else if (comp.left->GetExpressionType() == ExpressionType::VALUE_CONSTANT && right_is_ref) {
-			val = comp.left->Cast<BoundConstantExpression>().value;
+		bool left_is_ref = comp.Left().GetExpressionClass() == ExpressionClass::BOUND_REF;
+		bool right_is_ref = comp.Right().GetExpressionClass() == ExpressionClass::BOUND_REF;
+		if (comp.Right().GetExpressionType() == ExpressionType::VALUE_CONSTANT && left_is_ref) {
+			val = comp.Right().Cast<BoundConstantExpression>().value;
+		} else if (comp.Left().GetExpressionType() == ExpressionType::VALUE_CONSTANT && right_is_ref) {
+			val = comp.Left().Cast<BoundConstantExpression>().value;
 		} else {
 			return false;
 		}

@@ -51,8 +51,8 @@ static unique_ptr<Expression> TryRewriteEqualOrIsNull(Expression &equal_expr, Ex
 	}
 
 	// Make sure on the AND conjunction the relevant conditions appear
-	auto &a_exp = *equal_cast.left;
-	auto &b_exp = *equal_cast.right;
+	auto &a_exp = equal_cast.Left();
+	auto &b_exp = equal_cast.Right();
 	bool a_is_null_found = false;
 	bool b_is_null_found = false;
 
@@ -77,7 +77,8 @@ static unique_ptr<Expression> TryRewriteEqualOrIsNull(Expression &equal_expr, Ex
 	}
 	if (a_is_null_found && b_is_null_found) {
 		return make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
-		                                            std::move(equal_cast.left), std::move(equal_cast.right));
+		                                            std::move(equal_cast.LeftMutable()),
+		                                            std::move(equal_cast.RightMutable()));
 	}
 	return nullptr;
 }

@@ -37,6 +37,9 @@ public:
 	BoundCastInfo &GetBoundCastInfo() {
 		return bound_cast;
 	}
+	const BoundCastInfo &GetBoundCastInfo() const {
+		return bound_cast;
+	}
 	LogicalType source_type() const { // NOLINT: allow casing for legacy reasons
 		D_ASSERT(child->GetReturnType().IsValid());
 		return child->GetReturnType();

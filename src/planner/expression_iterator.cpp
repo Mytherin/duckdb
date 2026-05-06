@@ -51,13 +51,13 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 	}
 	case ExpressionClass::BOUND_CAST: {
 		auto &cast_expr = expr.Cast<BoundCastExpression>();
-		callback(cast_expr.child);
+		callback(cast_expr.ChildMutable());
 		break;
 	}
 	case ExpressionClass::BOUND_COMPARISON: {
 		auto &comp_expr = expr.Cast<BoundComparisonExpression>();
-		callback(comp_expr.left);
-		callback(comp_expr.right);
+		callback(comp_expr.LeftMutable());
+		callback(comp_expr.RightMutable());
 		break;
 	}
 	case ExpressionClass::BOUND_CONJUNCTION: {
