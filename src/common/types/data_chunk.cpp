@@ -283,7 +283,7 @@ void DataChunk::Serialize(Serializer &serializer, bool compressed_serialization)
 			// Reference the vector to avoid potentially mutating it during serialization
 			Vector serialized_vector(data[i].GetType());
 			serialized_vector.Reference(data[i]);
-			serialized_vector.Serialize(object, row_count, compressed_serialization);
+			serialized_vector.Serialize(object, compressed_serialization);
 		});
 	});
 }

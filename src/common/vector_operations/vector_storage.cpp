@@ -9,7 +9,7 @@ namespace duckdb {
 namespace {
 template <class T>
 
-void CopyToStorageLoop(Vector &source, idx_t count, data_ptr_t target) {
+void CopyToStorageLoop(const Vector &source, idx_t count, data_ptr_t target) {
 	D_ASSERT(source.size() == count);
 	auto result_data = (T *)target;
 	for (auto entry : source.Values<T>()) {
@@ -32,7 +32,7 @@ void ReadFromStorageLoop(data_ptr_t source, idx_t count, Vector &result) {
 
 } // namespace
 
-void VectorOperations::WriteToStorage(Vector &source, idx_t count, data_ptr_t target) {
+void VectorOperations::WriteToStorage(const Vector &source, idx_t count, data_ptr_t target) {
 	if (count == 0) {
 		return;
 	}
