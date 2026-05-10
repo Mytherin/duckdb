@@ -106,7 +106,7 @@ static idx_t ComparatorSelectOperation(Vector &left, Vector &right, optional_ptr
                                        optional_ptr<SelectionVector> false_sel, optional_ptr<ValidityMask> null_mask,
                                        PREDICATE predicate) {
 	Vector comparator_result(LogicalType::TINYINT, count);
-	VectorOperations::Comparator(left, right, comparator_result, count);
+	VectorOperations::Comparator(left, right, comparator_result);
 	auto cmp_data = comparator_result.Values<int8_t>();
 
 	if (!sel) {

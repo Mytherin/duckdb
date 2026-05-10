@@ -29,7 +29,7 @@ struct VectorOperations {
 	// In-Place Operators
 	//===--------------------------------------------------------------------===//
 	//! left += delta
-	static void AddInPlace(Vector &left, int64_t delta, idx_t count);
+	static void AddInPlace(Vector &left, int64_t delta);
 
 	//===--------------------------------------------------------------------===//
 	// NULL Operators
@@ -48,47 +48,47 @@ struct VectorOperations {
 	// Boolean Operations
 	//===--------------------------------------------------------------------===//
 	// result = left && right
-	static void And(Vector &left, Vector &right, Vector &result, idx_t count);
+	static void And(Vector &left, Vector &right, Vector &result);
 	// result = left || right
-	static void Or(Vector &left, Vector &right, Vector &result, idx_t count);
+	static void Or(Vector &left, Vector &right, Vector &result);
 	// result = NOT(left)
-	static void Not(Vector &left, Vector &result, idx_t count);
+	static void Not(Vector &left, Vector &result);
 
 	//===--------------------------------------------------------------------===//
 	// Comparison Operations
 	//===--------------------------------------------------------------------===//
 	// result = left == right
-	static void Equals(Vector &left, Vector &right, Vector &result, idx_t count);
+	static void Equals(Vector &left, Vector &right, Vector &result);
 	// result = left != right
-	static void NotEquals(Vector &left, Vector &right, Vector &result, idx_t count);
+	static void NotEquals(Vector &left, Vector &right, Vector &result);
 	// result = left > right
-	static void GreaterThan(Vector &left, Vector &right, Vector &result, idx_t count);
+	static void GreaterThan(Vector &left, Vector &right, Vector &result);
 	// result = left >= right
-	static void GreaterThanEquals(Vector &left, Vector &right, Vector &result, idx_t count);
+	static void GreaterThanEquals(Vector &left, Vector &right, Vector &result);
 	// result = left < right
-	static void LessThan(Vector &left, Vector &right, Vector &result, idx_t count);
+	static void LessThan(Vector &left, Vector &right, Vector &result);
 	// result = left <= right
-	static void LessThanEquals(Vector &left, Vector &right, Vector &result, idx_t count);
+	static void LessThanEquals(Vector &left, Vector &right, Vector &result);
 
 	// result = -1 if left < right, 0 if left == right, 1 if left > right (stored in int8_t TINYINT result vector)
-	static void Comparator(Vector &left, Vector &right, Vector &result, idx_t count);
+	static void Comparator(Vector &left, Vector &right, Vector &result);
 
 	// result = A != B with nulls being equal
-	static void DistinctFrom(Vector &left, Vector &right, Vector &result, idx_t count);
+	static void DistinctFrom(Vector &left, Vector &right, Vector &result);
 	// result := A == B with nulls being equal
-	static void NotDistinctFrom(Vector &left, Vector &right, Vector &result, idx_t count);
+	static void NotDistinctFrom(Vector &left, Vector &right, Vector &result);
 	// result := A > B with nulls being maximal
-	static void DistinctGreaterThan(Vector &left, Vector &right, Vector &result, idx_t count);
+	static void DistinctGreaterThan(Vector &left, Vector &right, Vector &result);
 	// result := A >= B with nulls being maximal
-	static void DistinctGreaterThanEquals(Vector &left, Vector &right, Vector &result, idx_t count);
+	static void DistinctGreaterThanEquals(Vector &left, Vector &right, Vector &result);
 	// result := A < B with nulls being maximal
-	static void DistinctLessThan(Vector &left, Vector &right, Vector &result, idx_t count);
+	static void DistinctLessThan(Vector &left, Vector &right, Vector &result);
 	// result := A <= B with nulls being maximal
-	static void DistinctLessThanEquals(Vector &left, Vector &right, Vector &result, idx_t count);
+	static void DistinctLessThanEquals(Vector &left, Vector &right, Vector &result);
 	// result := comparator(A, B) with nulls being maximal (NULLS LAST), returns -1/0/1 as int8_t
-	static void DistinctComparator(Vector &left, Vector &right, Vector &result, idx_t count);
+	static void DistinctComparator(Vector &left, Vector &right, Vector &result);
 	// result := comparator(A, B) with nulls being minimal (NULLS FIRST), returns -1/0/1 as int8_t
-	static void DistinctComparatorNullsFirst(Vector &left, Vector &right, Vector &result, idx_t count);
+	static void DistinctComparatorNullsFirst(Vector &left, Vector &right, Vector &result);
 
 	//===--------------------------------------------------------------------===//
 	// Select Comparisons
@@ -163,10 +163,10 @@ struct VectorOperations {
 	// Hash functions
 	//===--------------------------------------------------------------------===//
 	// hashes = HASH(input)
-	static void Hash(Vector &input, Vector &hashes, idx_t count);
+	static void Hash(Vector &input, Vector &hashes);
 	static void Hash(Vector &input, Vector &hashes, const SelectionVector &rsel, idx_t count);
 	// hashes ^= HASH(input)
-	static void CombineHash(Vector &hashes, Vector &input, idx_t count);
+	static void CombineHash(Vector &hashes, Vector &input);
 	static void CombineHash(Vector &hashes, Vector &input, const SelectionVector &rsel, idx_t count);
 
 	//===--------------------------------------------------------------------===//

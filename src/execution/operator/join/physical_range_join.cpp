@@ -442,7 +442,7 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vec
 		}
 		return count - pvalidity.CountValid(count);
 	} else {
-		return count - VectorOperations::CountNotNull(primary, count);
+		return count - VectorOperations::CountNotNull(primary);
 	}
 }
 

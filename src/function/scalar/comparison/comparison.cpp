@@ -31,32 +31,31 @@ void ComparisonFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	auto expr_type = state.expr.GetExpressionType();
 	auto &left = args.data[0];
 	auto &right = args.data[1];
-	auto count = args.size();
 
 	switch (expr_type) {
 	case ExpressionType::COMPARE_EQUAL:
-		VectorOperations::Equals(left, right, result, count);
+		VectorOperations::Equals(left, right, result);
 		break;
 	case ExpressionType::COMPARE_NOTEQUAL:
-		VectorOperations::NotEquals(left, right, result, count);
+		VectorOperations::NotEquals(left, right, result);
 		break;
 	case ExpressionType::COMPARE_LESSTHAN:
-		VectorOperations::LessThan(left, right, result, count);
+		VectorOperations::LessThan(left, right, result);
 		break;
 	case ExpressionType::COMPARE_GREATERTHAN:
-		VectorOperations::GreaterThan(left, right, result, count);
+		VectorOperations::GreaterThan(left, right, result);
 		break;
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		VectorOperations::LessThanEquals(left, right, result, count);
+		VectorOperations::LessThanEquals(left, right, result);
 		break;
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		VectorOperations::GreaterThanEquals(left, right, result, count);
+		VectorOperations::GreaterThanEquals(left, right, result);
 		break;
 	case ExpressionType::COMPARE_DISTINCT_FROM:
-		VectorOperations::DistinctFrom(left, right, result, count);
+		VectorOperations::DistinctFrom(left, right, result);
 		break;
 	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-		VectorOperations::NotDistinctFrom(left, right, result, count);
+		VectorOperations::NotDistinctFrom(left, right, result);
 		break;
 	default:
 		throw InternalException("Unknown comparison type!");

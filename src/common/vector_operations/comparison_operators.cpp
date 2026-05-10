@@ -188,7 +188,7 @@ template <class PREDICATE>
 static void ComparatorToBoolean(Vector &left, Vector &right, Vector &result, idx_t count, PREDICATE predicate) {
 	D_ASSERT(result.GetType() == LogicalType::BOOLEAN);
 	Vector comparator_result(LogicalType::TINYINT, count);
-	VectorOperations::Comparator(left, right, comparator_result, count);
+	VectorOperations::Comparator(left, right, comparator_result);
 	auto cmp_data = comparator_result.Values<int8_t>();
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::Writer<bool>(result, count);
@@ -202,35 +202,61 @@ static void ComparatorToBoolean(Vector &left, Vector &right, Vector &result, idx
 	}
 }
 
-void VectorOperations::Equals(Vector &left, Vector &right, Vector &result, idx_t count) {
+void VectorOperations::Equals(Vector &left, Vector &right, Vector &result) {
+	if (left.size() != right.size()) {
+		throw InternalException("Mismatch in input vector sizes for Equals - left has %d rows but right has %d",
+		                        left.size(), right.size());
+	}
+	auto count = left.size();
 	if (TryPrimitiveComparisonExecute<duckdb::Equals>(left, right, result, count)) {
 		return;
 	}
 	ComparatorToBoolean(left, right, result, count, [](int8_t v) { return v == 0; });
 }
 
-void VectorOperations::NotEquals(Vector &left, Vector &right, Vector &result, idx_t count) {
+void VectorOperations::NotEquals(Vector &left, Vector &right, Vector &result) {
+	if (left.size() != right.size()) {
+		throw InternalException("Mismatch in input vector sizes for NotEquals - left has %d rows but right has %d",
+		                        left.size(), right.size());
+	}
+	auto count = left.size();
 	if (TryPrimitiveComparisonExecute<duckdb::NotEquals>(left, right, result, count)) {
 		return;
 	}
 	ComparatorToBoolean(left, right, result, count, [](int8_t v) { return v != 0; });
 }
 
-void VectorOperations::GreaterThan(Vector &left, Vector &right, Vector &result, idx_t count) {
+void VectorOperations::GreaterThan(Vector &left, Vector &right, Vector &result) {
+	if (left.size() != right.size()) {
+		throw InternalException("Mismatch in input vector sizes for GreaterThan - left has %d rows but right has %d",
+		                        left.size(), right.size());
+	}
+	auto count = left.size();
 	if (TryPrimitiveComparisonExecute<duckdb::GreaterThan>(left, right, result, count)) {
 		return;
 	}
 	ComparatorToBoolean(left, right, result, count, [](int8_t v) { return v > 0; });
 }
 
-void VectorOperations::GreaterThanEquals(Vector &left, Vector &right, Vector &result, idx_t count) {
+void VectorOperations::GreaterThanEquals(Vector &left, Vector &right, Vector &result) {
+	if (left.size() != right.size()) {
+		throw InternalException(
+		    "Mismatch in input vector sizes for GreaterThanEquals - left has %d rows but right has %d", left.size(),
+		    right.size());
+	}
+	auto count = left.size();
 	if (TryPrimitiveComparisonExecute<duckdb::GreaterThanEquals>(left, right, result, count)) {
 		return;
 	}
 	ComparatorToBoolean(left, right, result, count, [](int8_t v) { return v >= 0; });
 }
 
-void VectorOperations::LessThan(Vector &left, Vector &right, Vector &result, idx_t count) {
+void VectorOperations::LessThan(Vector &left, Vector &right, Vector &result) {
+	if (left.size() != right.size()) {
+		throw InternalException("Mismatch in input vector sizes for LessThan - left has %d rows but right has %d",
+		                        left.size(), right.size());
+	}
+	auto count = left.size();
 	// NOLINTNEXTLINE: flip right / left (left < right is equal to right > left)
 	if (TryPrimitiveComparisonExecute<duckdb::GreaterThan>(right, left, result, count)) {
 		return;
@@ -238,7 +264,12 @@ void VectorOperations::LessThan(Vector &left, Vector &right, Vector &result, idx
 	ComparatorToBoolean(left, right, result, count, [](int8_t v) { return v < 0; });
 }
 
-void VectorOperations::LessThanEquals(Vector &left, Vector &right, Vector &result, idx_t count) {
+void VectorOperations::LessThanEquals(Vector &left, Vector &right, Vector &result) {
+	if (left.size() != right.size()) {
+		throw InternalException("Mismatch in input vector sizes for LessThanEquals - left has %d rows but right has %d",
+		                        left.size(), right.size());
+	}
+	auto count = left.size();
 	// NOLINTNEXTLINE: flip right / left (left <= right is equal to right >= left)
 	if (TryPrimitiveComparisonExecute<duckdb::GreaterThanEquals>(right, left, result, count)) {
 		return;
@@ -727,8 +758,12 @@ static void ComparatorTypeSwitch(Vector &left, Vector &right, Vector &result, id
 	}
 }
 
-void VectorOperations::Comparator(Vector &left, Vector &right, Vector &result, idx_t count) {
-	ComparatorTypeSwitch(left, right, result, count);
+void VectorOperations::Comparator(Vector &left, Vector &right, Vector &result) {
+	if (left.size() != right.size()) {
+		throw InternalException("Mismatch in input vector sizes for Comparator - left has %d rows but right has %d",
+		                        left.size(), right.size());
+	}
+	ComparatorTypeSwitch(left, right, result, left.size());
 }
 
 template <class T, class OP>
@@ -826,7 +861,13 @@ static bool TryPrimitiveDistinctComparatorExecute(Vector &left, Vector &right, V
 #endif
 }
 
-void VectorOperations::DistinctComparator(Vector &left, Vector &right, Vector &result, idx_t count) {
+void VectorOperations::DistinctComparator(Vector &left, Vector &right, Vector &result) {
+	if (left.size() != right.size()) {
+		throw InternalException(
+		    "Mismatch in input vector sizes for DistinctComparator - left has %d rows but right has %d", left.size(),
+		    right.size());
+	}
+	auto count = left.size();
 	D_ASSERT(result.GetType() == LogicalType::TINYINT);
 	if (TryPrimitiveDistinctComparatorExecute<duckdb::DistinctComparator>(left, right, result, count)) {
 		return;
@@ -837,14 +878,20 @@ void VectorOperations::DistinctComparator(Vector &left, Vector &right, Vector &r
 	DistinctComparatorTypeSwitchInternal(left, right, result_data, sel, sel, count);
 }
 
-void VectorOperations::DistinctComparatorNullsFirst(Vector &left, Vector &right, Vector &result, idx_t count) {
+void VectorOperations::DistinctComparatorNullsFirst(Vector &left, Vector &right, Vector &result) {
+	if (left.size() != right.size()) {
+		throw InternalException(
+		    "Mismatch in input vector sizes for DistinctComparatorNullsFirst - left has %d rows but right has %d",
+		    left.size(), right.size());
+	}
+	auto count = left.size();
 	if (TryPrimitiveDistinctComparatorExecute<duckdb::DistinctComparatorNullsFirst>(left, right, result, count)) {
 		return;
 	}
 	// run the NULLS LAST comparator, then flip the sign for NULL-involving rows
 	// note that even for NULLS FIRST, ONLY the top-level is NULLS FIRST,
 	// i.e. within structs we still use NULLS LAST semantics
-	VectorOperations::DistinctComparator(left, right, result, count);
+	VectorOperations::DistinctComparator(left, right, result);
 	result.Flatten();
 	auto result_data = FlatVector::GetDataMutable<int8_t>(result);
 	auto left_validity = left.Validity();

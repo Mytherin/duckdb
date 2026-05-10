@@ -39,22 +39,21 @@ void BetweenFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &input = args.data[0];
 	auto &lower = args.data[1];
 	auto &upper = args.data[2];
-	auto count = args.size();
 
 	if (upper_inclusive && lower_inclusive) {
-		VectorOperations::GreaterThanEquals(input, lower, intermediate1, count);
-		VectorOperations::LessThanEquals(input, upper, intermediate2, count);
+		VectorOperations::GreaterThanEquals(input, lower, intermediate1);
+		VectorOperations::LessThanEquals(input, upper, intermediate2);
 	} else if (lower_inclusive) {
-		VectorOperations::GreaterThanEquals(input, lower, intermediate1, count);
-		VectorOperations::LessThan(input, upper, intermediate2, count);
+		VectorOperations::GreaterThanEquals(input, lower, intermediate1);
+		VectorOperations::LessThan(input, upper, intermediate2);
 	} else if (upper_inclusive) {
-		VectorOperations::GreaterThan(input, lower, intermediate1, count);
-		VectorOperations::LessThanEquals(input, upper, intermediate2, count);
+		VectorOperations::GreaterThan(input, lower, intermediate1);
+		VectorOperations::LessThanEquals(input, upper, intermediate2);
 	} else {
-		VectorOperations::GreaterThan(input, lower, intermediate1, count);
-		VectorOperations::LessThan(input, upper, intermediate2, count);
+		VectorOperations::GreaterThan(input, lower, intermediate1);
+		VectorOperations::LessThan(input, upper, intermediate2);
 	}
-	VectorOperations::And(intermediate1, intermediate2, result, count);
+	VectorOperations::And(intermediate1, intermediate2, result);
 }
 
 #ifndef DUCKDB_SMALLER_BINARY

@@ -165,17 +165,25 @@ struct NotOperator {
 
 } // namespace
 
-void VectorOperations::And(Vector &left, Vector &right, Vector &result, idx_t count) {
-	TemplatedBooleanNullmask<TernaryAnd>(left, right, result, count);
+void VectorOperations::And(Vector &left, Vector &right, Vector &result) {
+	if (left.size() != right.size()) {
+		throw InternalException("Mismatch in input vector sizes for And - left has %d rows but right has %d", left.size(),
+		                        right.size());
+	}
+	TemplatedBooleanNullmask<TernaryAnd>(left, right, result, left.size());
 }
 
-void VectorOperations::Or(Vector &left, Vector &right, Vector &result, idx_t count) {
-	TemplatedBooleanNullmask<TernaryOr>(left, right, result, count);
+void VectorOperations::Or(Vector &left, Vector &right, Vector &result) {
+	if (left.size() != right.size()) {
+		throw InternalException("Mismatch in input vector sizes for Or - left has %d rows but right has %d", left.size(),
+		                        right.size());
+	}
+	TemplatedBooleanNullmask<TernaryOr>(left, right, result, left.size());
 }
 
-void VectorOperations::Not(Vector &input, Vector &result, idx_t count) {
+void VectorOperations::Not(Vector &input, Vector &result) {
 	D_ASSERT(input.GetType() == LogicalType::BOOLEAN && result.GetType() == LogicalType::BOOLEAN);
-	UnaryExecutor::Execute<bool, bool, NotOperator>(input, result, count);
+	UnaryExecutor::Execute<bool, bool, NotOperator>(input, result, input.size());
 }
 
 } // namespace duckdb

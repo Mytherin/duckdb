@@ -4,10 +4,15 @@
 
 namespace duckdb {
 
-void VectorOperations::DistinctFrom(Vector &left, Vector &right, Vector &result, idx_t count) {
+void VectorOperations::DistinctFrom(Vector &left, Vector &right, Vector &result) {
+	if (left.size() != right.size()) {
+		throw InternalException("Mismatch in input vector sizes for DistinctFrom - left has %d rows but right has %d",
+		                        left.size(), right.size());
+	}
+	auto count = left.size();
 	D_ASSERT(result.GetType() == LogicalType::BOOLEAN);
 	Vector comparator_result(LogicalType::TINYINT, count);
-	VectorOperations::DistinctComparator(left, right, comparator_result, count);
+	VectorOperations::DistinctComparator(left, right, comparator_result);
 	auto cmp_data = comparator_result.Values<int8_t>();
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::Writer<bool>(result, count);
@@ -16,10 +21,16 @@ void VectorOperations::DistinctFrom(Vector &left, Vector &right, Vector &result,
 	}
 }
 
-void VectorOperations::NotDistinctFrom(Vector &left, Vector &right, Vector &result, idx_t count) {
+void VectorOperations::NotDistinctFrom(Vector &left, Vector &right, Vector &result) {
+	if (left.size() != right.size()) {
+		throw InternalException(
+		    "Mismatch in input vector sizes for NotDistinctFrom - left has %d rows but right has %d", left.size(),
+		    right.size());
+	}
+	auto count = left.size();
 	D_ASSERT(result.GetType() == LogicalType::BOOLEAN);
 	Vector comparator_result(LogicalType::TINYINT, count);
-	VectorOperations::DistinctComparator(left, right, comparator_result, count);
+	VectorOperations::DistinctComparator(left, right, comparator_result);
 	auto cmp_data = comparator_result.Values<int8_t>();
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::Writer<bool>(result, count);
@@ -33,7 +44,7 @@ static idx_t DistinctComparatorSelect(Vector &left, Vector &right, optional_ptr<
                                       optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
                                       COMPARATOR_FN comparator_fn, PREDICATE predicate) {
 	Vector comparator_result(LogicalType::TINYINT, count);
-	comparator_fn(left, right, comparator_result, count);
+	comparator_fn(left, right, comparator_result);
 	auto cmp_data = comparator_result.Values<int8_t>();
 
 	idx_t true_count = 0;

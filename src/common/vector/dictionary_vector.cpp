@@ -177,7 +177,7 @@ const Vector &DictionaryVector::GetCachedHashes(Vector &input) {
 		// Uninitialized: hash the dictionary
 		const auto dictionary_size = DictionarySize(input).GetIndex();
 		entry.cached_hashes = make_uniq<Vector>(LogicalType::HASH, dictionary_size);
-		VectorOperations::Hash(entry.data, *entry.cached_hashes, dictionary_size);
+		VectorOperations::Hash(entry.data, *entry.cached_hashes);
 	}
 	return *entry.cached_hashes;
 }

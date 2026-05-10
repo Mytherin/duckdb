@@ -574,7 +574,7 @@ bool DataTable::CanFetch(DuckTransaction &transaction, const row_t row_id) {
 // Append
 //===--------------------------------------------------------------------===//
 static void VerifyNotNullConstraint(TableCatalogEntry &table, Vector &vector, idx_t count, const string &col_name) {
-	if (!VectorOperations::HasNull(vector, count)) {
+	if (!VectorOperations::HasNull(vector)) {
 		return;
 	}
 

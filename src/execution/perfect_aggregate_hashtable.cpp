@@ -157,7 +157,7 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 		}
 		// move to the next aggregate
 		payload_idx += input_count;
-		VectorOperations::AddInPlace(addresses, UnsafeNumericCast<int64_t>(aggregate.payload_size), payload.size());
+		VectorOperations::AddInPlace(addresses, UnsafeNumericCast<int64_t>(aggregate.payload_size));
 	}
 }
 

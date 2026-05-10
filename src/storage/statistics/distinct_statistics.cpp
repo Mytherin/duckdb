@@ -41,7 +41,7 @@ void DistinctStatistics::Update(Vector &new_data, idx_t count, Vector &hashes) {
 
 void DistinctStatistics::UpdateInternal(Vector &new_data, idx_t count, Vector &hashes) {
 	sample_count += count;
-	VectorOperations::Hash(new_data, hashes, count);
+	VectorOperations::Hash(new_data, hashes);
 
 	log->Update(new_data, hashes, count);
 }

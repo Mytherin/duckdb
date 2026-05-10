@@ -43,7 +43,7 @@ void ApproxCountDistinctSimpleUpdateFunction(Vector inputs[], AggregateInputData
 		throw InternalException("ApproxCountDistinct - count must be at most vector size");
 	}
 	Vector hash_vec(LogicalType::HASH, count);
-	VectorOperations::Hash(input, hash_vec, count);
+	VectorOperations::Hash(input, hash_vec);
 
 	auto agg_state = reinterpret_cast<ApproxDistinctCountState *>(state);
 	agg_state->hll.Update(input, hash_vec, count);
@@ -60,7 +60,7 @@ void ApproxCountDistinctUpdateFunction(Vector inputs[], AggregateInputData &, id
 		throw InternalException("ApproxCountDistinct - count must be at most vector size");
 	}
 	Vector hash_vec(LogicalType::HASH, count);
-	VectorOperations::Hash(input, hash_vec, count);
+	VectorOperations::Hash(input, hash_vec);
 
 	auto states = state_vector.Values<ApproxDistinctCountState *>();
 	auto hashes = hash_vec.Values<hash_t>();

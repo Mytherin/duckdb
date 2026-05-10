@@ -113,12 +113,12 @@ void StructLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, 
 		}
 	} else {
 		if (FIRST_HASH) {
-			VectorOperations::Hash(children[col_no++], hashes, count);
+			VectorOperations::Hash(children[col_no++], hashes);
 		} else {
-			VectorOperations::CombineHash(hashes, children[col_no++], count);
+			VectorOperations::CombineHash(hashes, children[col_no++]);
 		}
 		while (col_no < children.size()) {
-			VectorOperations::CombineHash(hashes, children[col_no++], count);
+			VectorOperations::CombineHash(hashes, children[col_no++]);
 		}
 	}
 }
@@ -139,7 +139,7 @@ void ListLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, id
 
 	Vector child_hashes(LogicalType::HASH, child_count);
 	if (child_count > 0) {
-		VectorOperations::Hash(child, child_hashes, child_count);
+		VectorOperations::Hash(child, child_hashes);
 		child_hashes.Flatten();
 	}
 	auto chdata = FlatVector::GetDataMutable<hash_t>(child_hashes);
@@ -234,7 +234,7 @@ void ArrayLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, i
 		auto child_count = array_size * (is_constant ? 1 : count);
 
 		Vector child_hashes(LogicalType::HASH, child_count);
-		VectorOperations::Hash(child, child_hashes, child_count);
+		VectorOperations::Hash(child, child_hashes);
 		child_hashes.Flatten();
 		auto chdata = FlatVector::GetDataMutable<hash_t>(child_hashes);
 
@@ -268,7 +268,7 @@ void ArrayLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, i
 
 				// Hash the array slice
 				Vector dict_vec(child, array_sel, array_size);
-				VectorOperations::Hash(dict_vec, array_hashes, array_size);
+				VectorOperations::Hash(dict_vec, array_hashes);
 				auto ahdata = FlatVector::GetDataMutable<hash_t>(array_hashes);
 
 				if (FIRST_HASH) {
@@ -490,7 +490,8 @@ void CombineHashTypeSwitch(Vector &hashes, Vector &input, const SelectionVector 
 
 } // namespace
 
-void VectorOperations::Hash(Vector &input, Vector &result, idx_t count) {
+void VectorOperations::Hash(Vector &input, Vector &result) {
+	auto count = input.size();
 	if (input.GetVectorType() == VectorType::DICTIONARY_VECTOR && DictionaryVector::CanCacheHashes(input)) {
 		Vector input_hashes(DictionaryVector::GetCachedHashes(input), DictionaryVector::SelVector(input), count);
 		TemplatedLoopHash<false, hash_t, true>(input_hashes, result, nullptr, count);
@@ -508,7 +509,12 @@ void VectorOperations::Hash(Vector &input, Vector &result, const SelectionVector
 	}
 }
 
-void VectorOperations::CombineHash(Vector &hashes, Vector &input, idx_t count) {
+void VectorOperations::CombineHash(Vector &hashes, Vector &input) {
+	if (hashes.size() != input.size()) {
+		throw InternalException("Mismatch in input vector sizes for CombineHash - hashes has %d rows but input has %d",
+		                        hashes.size(), input.size());
+	}
+	auto count = input.size();
 	if (input.GetVectorType() == VectorType::DICTIONARY_VECTOR && DictionaryVector::CanCacheHashes(input)) {
 		Vector input_hashes(DictionaryVector::GetCachedHashes(input), DictionaryVector::SelVector(input), count);
 		TemplatedLoopCombineHash<false, hash_t, true>(input_hashes, hashes, nullptr, count);

@@ -265,7 +265,7 @@ void IsHistogramOtherBinFunction(DataChunk &args, ExpressionState &state, Vector
 	}
 	auto v = OtherBucketValue(input_type);
 	Vector ref(v, count_t(args.size()));
-	VectorOperations::NotDistinctFrom(args.data[0], ref, result, args.size());
+	VectorOperations::NotDistinctFrom(args.data[0], ref, result);
 
 	// Set NULL if input is NULL.
 	UnifiedVectorFormat input_data;

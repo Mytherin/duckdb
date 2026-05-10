@@ -352,9 +352,9 @@ void HashedSortLocalSinkState::Hash(DataChunk &input_chunk, Vector &hash_vector)
 	// OVER(PARTITION BY...) (hash grouping)
 	group_chunk.Reset();
 	hash_exec.Execute(input_chunk, group_chunk);
-	VectorOperations::Hash(group_chunk.data[0], hash_vector, count);
+	VectorOperations::Hash(group_chunk.data[0], hash_vector);
 	for (idx_t prt_idx = 1; prt_idx < group_chunk.ColumnCount(); ++prt_idx) {
-		VectorOperations::CombineHash(hash_vector, group_chunk.data[prt_idx], count);
+		VectorOperations::CombineHash(hash_vector, group_chunk.data[prt_idx]);
 	}
 }
 

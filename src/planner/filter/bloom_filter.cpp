@@ -88,7 +88,7 @@ string BFTableFilter::ToString(const string &column_name) const {
 idx_t BFTableFilter::Filter(Vector &keys_v, SelectionVector &sel, idx_t &approved_tuple_count,
                             JoinFilterTableFilterState &state) const {
 	state.PrepareSlicedKeys(keys_v, sel, approved_tuple_count);
-	VectorOperations::Hash(state.keys_sliced_v, state.hashes_v, approved_tuple_count);
+	VectorOperations::Hash(state.keys_sliced_v, state.hashes_v);
 
 	idx_t found_count;
 	if (state.hashes_v.GetVectorType() == VectorType::CONSTANT_VECTOR) {
