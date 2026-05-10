@@ -35,14 +35,14 @@ struct VectorOperations {
 	// NULL Operators
 	//===--------------------------------------------------------------------===//
 	//! result = IS NOT NULL(input)
-	static void IsNotNull(Vector &arg, Vector &result, idx_t count);
+	static void IsNotNull(const Vector &arg, Vector &result);
 	//! result = IS NULL (input)
-	static void IsNull(Vector &input, Vector &result, idx_t count);
+	static void IsNull(const Vector &input, Vector &result);
 	// Returns whether or not arg vector has a NULL value
-	static bool HasNull(Vector &input, idx_t count);
-	static bool HasNotNull(Vector &input, idx_t count);
+	static bool HasNull(const Vector &input);
+	static bool HasNotNull(const Vector &input);
 	//! Count the number of not-NULL values.
-	static idx_t CountNotNull(Vector &input, const idx_t count);
+	static idx_t CountNotNull(const Vector &input);
 
 	//===--------------------------------------------------------------------===//
 	// Boolean Operations
