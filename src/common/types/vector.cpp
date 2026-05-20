@@ -422,6 +422,7 @@ void Vector::ToUnifiedFormat(UnifiedVectorFormat &format) const {
 		Flatten();
 	}
 	Buffer().ToUnifiedFormat(format);
+	format.count = size();
 }
 
 void Vector::RecursiveToUnifiedFormat(const Vector &input, idx_t, RecursiveUnifiedVectorFormat &data) {

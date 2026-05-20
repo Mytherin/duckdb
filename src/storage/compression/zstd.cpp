@@ -161,15 +161,8 @@ bool ZSTDStorage::StringAnalyze(AnalyzeState &state_p, const Vector &input) {
 	input.ToUnifiedFormat(vdata);
 
 	const auto count = input.size();
-	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
-	for (idx_t i = 0; i < count; i++) {
-		auto idx = vdata.sel->get_index(i);
-		if (!vdata.validity.RowIsValid(idx)) {
-			continue;
-		}
-		auto &str = data[idx];
-		auto string_size = str.GetSize();
-		state.total_size += string_size;
+	for (auto &entry : vdata.ValidValues<string_t>()) {
+		state.total_size += entry.GetValue().GetSize();
 	}
 	state.values_in_vector += count;
 	while (state.values_in_vector >= ZSTD_VECTOR_SIZE) {
@@ -644,16 +637,13 @@ void ZSTDStorage::Compress(CompressionState &state_p, const Vector &input) {
 	// Get vector data
 	UnifiedVectorFormat vdata;
 	input.ToUnifiedFormat(vdata);
-	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
 
-	for (idx_t i = 0; i < input.size(); i++) {
-		auto idx = vdata.sel->get_index(i);
-		// Note: we treat nulls and empty strings the same
-		if (!vdata.validity.RowIsValid(idx)) {
+	for (auto entry : vdata.Values<string_t>()) {
+		if (!entry.IsValid()) {
 			state.AddNull();
 			continue;
 		}
-		state.AddString(data[idx]);
+		state.AddString(entry.GetValueUnsafe());
 	}
 }
 

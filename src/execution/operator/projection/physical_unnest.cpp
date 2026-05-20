@@ -110,16 +110,11 @@ void UnnestOperatorState::PrepareInput(DataChunk &input, const vector<unique_ptr
 	}
 	for (idx_t col_idx = 0; col_idx < list_data.ColumnCount(); col_idx++) {
 		auto &vector_data = list_vector_data[col_idx];
-		for (idx_t r = 0; r < list_data.size(); r++) {
-			auto current_idx = vector_data.sel->get_index(r);
-			if (!vector_data.validity.RowIsValid(current_idx)) {
-				continue;
-			}
+		for (auto &entry : vector_data.ValidValues<list_entry_t>()) {
 			// check if this list is longer than the current unnest length
-			auto list_data_entries = UnifiedVectorFormat::GetData<list_entry_t>(vector_data);
-			auto list_entry = list_data_entries[current_idx];
-			if (list_entry.length > unnest_lengths[r]) {
-				unnest_lengths[r] = list_entry.length;
+			const auto r = entry.GetIndex();
+			if (entry.GetValue().length > unnest_lengths[r]) {
+				unnest_lengths[r] = entry.GetValue().length;
 			}
 		}
 	}

@@ -112,21 +112,16 @@ bool FSSTStorage::StringAnalyze(AnalyzeState &state_p, const Vector &input) {
 
 	const auto count = input.size();
 	state.count += count;
-	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
 
 	// Note that we ignore the sampling in case we have not found any valid strings yet, this solves the issue of
 	// not having seen any valid strings here leading to an empty fsst symbol table.
 	bool sample_selected = !state.have_valid_row || state.random_engine.NextRandom() < ANALYSIS_SAMPLE_SIZE;
 
-	for (idx_t i = 0; i < count; i++) {
-		auto idx = vdata.sel->get_index(i);
-
-		if (!vdata.validity.RowIsValid(idx)) {
-			continue;
-		}
+	for (auto &entry : vdata.ValidValues<string_t>()) {
+		const auto &str = entry.GetValue();
 
 		// We need to check all strings for this, otherwise we run in to trouble during compression if we miss ones
-		auto string_size = data[idx].GetSize();
+		auto string_size = str.GetSize();
 		if (string_size >= StringUncompressed::GetStringBlockLimit(state.info.GetBlockSize())) {
 			return false;
 		}
@@ -137,7 +132,7 @@ bool FSSTStorage::StringAnalyze(AnalyzeState &state_p, const Vector &input) {
 
 		if (string_size > 0) {
 			state.have_valid_row = true;
-			state.fsst_strings.emplace_back(state.fsst_string_heap.AddBlob(data[idx]));
+			state.fsst_strings.emplace_back(state.fsst_string_heap.AddBlob(str));
 			state.fsst_string_total_size += string_size;
 		} else {
 			state.empty_strings++;
@@ -422,36 +417,35 @@ void FSSTStorage::Compress(CompressionState &state_p, const Vector &scan_vector)
 	// Get vector data
 	UnifiedVectorFormat vdata;
 	scan_vector.ToUnifiedFormat(vdata);
-	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
 
 	// Collect pointers to strings to compress
 	vector<size_t> sizes_in;
 	vector<unsigned char *> strings_in;
 	size_t total_size = 0;
 	idx_t total_count = 0;
-	const auto count = scan_vector.size();
-	for (idx_t i = 0; i < count; i++) {
-		auto idx = vdata.sel->get_index(i);
-
-		// Note: we treat nulls and empty strings the same
-		const bool is_null = !vdata.validity.RowIsValid(idx);
-		if (is_null || data[idx].GetSize() == 0) {
+	for (auto entry : vdata.Values<string_t>()) {
+		if (!entry.IsValid()) {
 			continue;
 		}
-
+		// Note: we treat nulls and empty strings the same
+		// GetValueUnsafe() returns a stable reference into the vector's data buffer,
+		// which is required so GetData() gives a valid pointer to pass to the FSST encoder.
+		const auto &str = entry.GetValueUnsafe();
+		if (str.GetSize() == 0) {
+			continue;
+		}
 		total_count++;
-		total_size += data[idx].GetSize();
-		sizes_in.push_back(data[idx].GetSize());
-		strings_in.push_back((unsigned char *)data[idx].GetData()); // NOLINT
+		total_size += str.GetSize();
+		sizes_in.push_back(str.GetSize());
+		strings_in.push_back((unsigned char *)str.GetData()); // NOLINT
 	}
 
 	// Only Nulls or empty strings in this vector, nothing to compress
 	if (total_count == 0) {
-		for (idx_t i = 0; i < count; i++) {
-			auto idx = vdata.sel->get_index(i);
-			if (!vdata.validity.RowIsValid(idx)) {
+		for (auto entry : vdata.Values<string_t>()) {
+			if (!entry.IsValid()) {
 				state.AddNull();
-			} else if (data[idx].GetSize() == 0) {
+			} else if (entry.GetValueUnsafe().GetSize() == 0) {
 				state.AddEmptyString();
 			} else {
 				throw FatalException("FSST: no encoder found even though there are values to encode");
@@ -483,14 +477,13 @@ void FSSTStorage::Compress(CompressionState &state_p, const Vector &scan_vector)
 
 	// Push the compressed strings to the compression state one by one
 	idx_t compressed_idx = 0;
-	for (idx_t i = 0; i < count; i++) {
-		auto idx = vdata.sel->get_index(i);
-		if (!vdata.validity.RowIsValid(idx)) {
+	for (auto entry : vdata.Values<string_t>()) {
+		if (!entry.IsValid()) {
 			state.AddNull();
-		} else if (data[idx].GetSize() == 0) {
+		} else if (entry.GetValueUnsafe().GetSize() == 0) {
 			state.AddEmptyString();
 		} else {
-			state.UpdateState(data[idx], strings_out[compressed_idx], sizes_out[compressed_idx]);
+			state.UpdateState(entry.GetValueUnsafe(), strings_out[compressed_idx], sizes_out[compressed_idx]);
 			compressed_idx++;
 		}
 	}

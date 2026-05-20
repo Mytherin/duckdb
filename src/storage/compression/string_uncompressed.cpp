@@ -43,15 +43,11 @@ bool UncompressedStringStorage::StringAnalyze(AnalyzeState &state_p, const Vecto
 
 	const auto count = input.size();
 	state.count += count;
-	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
-	for (idx_t i = 0; i < count; i++) {
-		auto idx = vdata.sel->get_index(i);
-		if (vdata.validity.RowIsValid(idx)) {
-			auto string_size = data[idx].GetSize();
-			state.total_string_size += string_size;
-			if (string_size >= StringUncompressed::GetStringBlockLimit(state.info.GetBlockSize())) {
-				state.overflow_strings++;
-			}
+	for (auto &entry : vdata.ValidValues<string_t>()) {
+		auto string_size = entry.GetValue().GetSize();
+		state.total_string_size += string_size;
+		if (string_size >= StringUncompressed::GetStringBlockLimit(state.info.GetBlockSize())) {
+			state.overflow_strings++;
 		}
 	}
 	return true;

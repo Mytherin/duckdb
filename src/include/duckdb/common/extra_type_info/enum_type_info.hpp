@@ -16,17 +16,16 @@ struct EnumTypeInfoTemplated : public EnumTypeInfo {
 		UnifiedVectorFormat vdata;
 		values_insert_order.ToUnifiedFormat(vdata);
 
-		auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
-		for (idx_t i = 0; i < size_p; i++) {
-			auto idx = vdata.sel->get_index(i);
-			if (!vdata.validity.RowIsValid(idx)) {
+		idx_t i = 0;
+		for (auto entry : vdata.Values<string_t>()) {
+			if (!entry.IsValid()) {
 				throw InternalException("Attempted to create ENUM type with NULL value");
 			}
-			if (values.count(data[idx]) > 0) {
-				throw InvalidInputException("Attempted to create ENUM type with duplicate value %s",
-				                            data[idx].GetString());
+			const auto &str = entry.GetValueUnsafe();
+			if (values.count(str) > 0) {
+				throw InvalidInputException("Attempted to create ENUM type with duplicate value %s", str.GetString());
 			}
-			values[data[idx]] = UnsafeNumericCast<T>(i);
+			values[str] = UnsafeNumericCast<T>(i++);
 		}
 	}
 

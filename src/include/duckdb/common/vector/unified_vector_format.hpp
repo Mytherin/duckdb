@@ -19,6 +19,12 @@
 
 namespace duckdb {
 
+template <class T>
+class VectorIterator;
+template <class T>
+class VectorValidValueIterator;
+class VectorValidityIterator;
+
 struct UnifiedVectorFormat {
 	DUCKDB_API UnifiedVectorFormat();
 	// disable copy constructors
@@ -33,6 +39,7 @@ struct UnifiedVectorFormat {
 	ValidityMask validity;
 	SelectionVector owned_sel;
 	PhysicalType physical_type;
+	idx_t count = 0;
 
 	template <class T>
 	void VerifyVectorType() const {
@@ -64,6 +71,28 @@ struct UnifiedVectorFormat {
 		format.VerifyVectorType<T>();
 		return reinterpret_cast<T *>(format.data);
 	}
+
+	//! Borrow data pointers from another format without allocating.
+	//! The source format must outlive this format (and any iterators derived from it).
+	void Borrow(const UnifiedVectorFormat &source) {
+		if (source.sel == &source.owned_sel) {
+			owned_sel.Initialize(source.owned_sel);
+			sel = &owned_sel;
+		} else {
+			sel = source.sel;
+		}
+		data = source.data;
+		validity = source.validity;
+		physical_type = source.physical_type;
+	}
+
+	template <class T>
+	VectorIterator<T> Values() const;
+
+	template <class T>
+	VectorValidValueIterator<T> ValidValues() const;
+
+	VectorValidityIterator Validity() const;
 };
 
 struct RecursiveUnifiedVectorFormat {

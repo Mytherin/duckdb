@@ -31,6 +31,9 @@ public:
 	explicit VectorValidityIterator(const Vector &vector) : count(vector.size()) {
 		vector.ToUnifiedFormat(format);
 	}
+	explicit VectorValidityIterator(const UnifiedVectorFormat &source) : count(source.count) {
+		format.Borrow(source);
+	}
 
 	bool IsValid(idx_t i) const {
 		return format.validity.RowIsValid(format.sel->get_index(i));
@@ -56,6 +59,10 @@ public:
 	explicit VectorIterator(const Vector &vector) : count(vector.size()) {
 		vector.ToUnifiedFormat(format);
 		data = UnifiedVectorFormat::GetData<T>(format);
+	}
+	explicit VectorIterator(const UnifiedVectorFormat &source) : count(source.count) {
+		format.Borrow(source);
+		data = UnifiedVectorFormat::GetDataUnsafe<T>(format);
 	}
 
 public:
@@ -502,6 +509,10 @@ public:
 		vector.ToUnifiedFormat(format);
 		data = UnifiedVectorFormat::GetData<T>(format);
 	}
+	explicit VectorValidValueIterator(const UnifiedVectorFormat &source) : count(source.count) {
+		format.Borrow(source);
+		data = UnifiedVectorFormat::GetDataUnsafe<T>(format);
+	}
 
 private:
 	class VectorScanIterator;
@@ -603,6 +614,20 @@ inline VectorValidValueIterator<T> Vector::ValidValues() const {
 }
 
 inline VectorValidityIterator Vector::Validity() const {
+	return VectorValidityIterator(*this);
+}
+
+template <class T>
+inline VectorIterator<T> UnifiedVectorFormat::Values() const {
+	return VectorIterator<T>(*this);
+}
+
+template <class T>
+inline VectorValidValueIterator<T> UnifiedVectorFormat::ValidValues() const {
+	return VectorValidValueIterator<T>(*this);
+}
+
+inline VectorValidityIterator UnifiedVectorFormat::Validity() const {
 	return VectorValidityIterator(*this);
 }
 
