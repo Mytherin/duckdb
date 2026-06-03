@@ -33,6 +33,7 @@ public:
 
 public:
 	ParameterExpression();
+	explicit ParameterExpression(string identifier);
 
 public:
 	const string &Identifier() const {

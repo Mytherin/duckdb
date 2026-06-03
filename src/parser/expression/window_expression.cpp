@@ -55,6 +55,21 @@ WindowExpression::WindowExpression(const string &catalog_name, const string &sch
       schema(schema), function_name(StringUtil::Lower(function_name)), ignore_nulls(false), distinct(false) {
 }
 
+WindowExpression::WindowExpression(const string &catalog_name, const string &schema_p, const string &function_name_p,
+                                   vector<unique_ptr<ParsedExpression>> children_p,
+                                   unique_ptr<ParsedExpression> filter_p, bool has_ignore_nulls_p, bool ignore_nulls_p,
+                                   vector<OrderByNode> arg_orders_p, bool distinct_p, unique_ptr<WindowExpression> spec)
+    : ParsedExpression(WindowToExpressionType(function_name_p), ExpressionClass::WINDOW), catalog(catalog_name),
+      schema(schema_p), function_name(StringUtil::Lower(function_name_p)), children(std::move(children_p)),
+      partitions(std::move(spec->partitions)), orders(std::move(spec->orders)), filter_expr(std::move(filter_p)),
+      has_ignore_nulls(has_ignore_nulls_p), ignore_nulls(ignore_nulls_p), distinct(distinct_p), start(spec->start),
+      end(spec->end), exclude_clause(spec->exclude_clause), start_expr(std::move(spec->start_expr)),
+      end_expr(std::move(spec->end_expr)), arg_orders(std::move(arg_orders_p)) {
+	// preserve the alias / location that the OVER specification (e.g. a named window reference) carried
+	SetAlias(spec->GetAlias());
+	SetQueryLocation(spec->GetQueryLocation());
+}
+
 struct WindowFunctionDefinition {
 	const char *name;
 	ExpressionType expression_type;

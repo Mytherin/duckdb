@@ -40,6 +40,12 @@ public:
 
 public:
 	WindowExpression(const string &catalog_name, const string &schema, const string &function_name);
+	//! Construct a window function during parsing: function identity and aggregate modifiers come from the function
+	//! call, while the PARTITION BY / ORDER BY / frame fields are moved out of the parsed OVER specification `spec`
+	WindowExpression(const string &catalog_name, const string &schema, const string &function_name,
+	                 vector<unique_ptr<ParsedExpression>> children, unique_ptr<ParsedExpression> filter,
+	                 bool has_ignore_nulls, bool ignore_nulls, vector<OrderByNode> arg_orders, bool distinct,
+	                 unique_ptr<WindowExpression> spec);
 
 public:
 	bool IsWindow() const override {

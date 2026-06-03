@@ -12,6 +12,14 @@ StarExpression::StarExpression(string relation_name_p, bool is_columns)
       columns(is_columns) {
 }
 
+StarExpression::StarExpression(string relation_name_p, qualified_column_set_t exclude_list_p,
+                               case_insensitive_map_t<unique_ptr<ParsedExpression>> replace_list_p,
+                               qualified_column_map_t<string> rename_list_p)
+    : ParsedExpression(ExpressionType::STAR, ExpressionClass::STAR), relation_name(std::move(relation_name_p)),
+      exclude_list(std::move(exclude_list_p)), replace_list(std::move(replace_list_p)),
+      rename_list(std::move(rename_list_p)) {
+}
+
 string StarExpression::ToString() const {
 	string result;
 	if (expr) {

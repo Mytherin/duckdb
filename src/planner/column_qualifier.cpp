@@ -139,12 +139,12 @@ unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnName(const ParsedExpr
 			return binder.bind_context.CreateColumnReference(using_binding->primary_binding, column_name);
 		} else {
 			// we cannot! we need to bind this as COALESCE between all the relevant columns
-			auto coalesce = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
-			coalesce->GetChildrenMutable().reserve(using_binding->bindings.size());
+			vector<unique_ptr<ParsedExpression>> children;
+			children.reserve(using_binding->bindings.size());
 			for (auto &entry : using_binding->bindings) {
-				coalesce->GetChildrenMutable().push_back(make_uniq<ColumnRefExpression>(column_name, entry));
+				children.push_back(make_uniq<ColumnRefExpression>(column_name, entry));
 			}
-			return std::move(coalesce);
+			return make_uniq<OperatorExpression>(ExpressionType::OPERATOR_COALESCE, std::move(children));
 		}
 	}
 

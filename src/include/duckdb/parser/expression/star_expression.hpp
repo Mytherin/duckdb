@@ -23,6 +23,10 @@ public:
 
 public:
 	explicit StarExpression(string relation_name = string(), bool is_columns = false);
+	//! Construct a (non-COLUMNS) star expression with EXCLUDE / REPLACE / RENAME lists (used during parsing)
+	StarExpression(string relation_name, qualified_column_set_t exclude_list,
+	               case_insensitive_map_t<unique_ptr<ParsedExpression>> replace_list,
+	               qualified_column_map_t<string> rename_list);
 
 public:
 	const string &RelationName() const {

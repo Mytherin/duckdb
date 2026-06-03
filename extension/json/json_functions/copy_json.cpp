@@ -139,8 +139,7 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	select_node.from_table = std::move(source_ref);
 
 	auto columns_star = make_uniq<StarExpression>(string(), true);
-	auto unpack = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_UNPACK);
-	unpack->GetChildrenMutable().push_back(std::move(columns_star));
+	auto unpack = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_UNPACK, std::move(columns_star));
 
 	vector<unique_ptr<ParsedExpression>> struct_pack_args;
 	struct_pack_args.push_back(std::move(unpack));
