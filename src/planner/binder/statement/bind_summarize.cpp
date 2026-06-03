@@ -67,12 +67,12 @@ static unique_ptr<ParsedExpression> SummarizeCreateNullPercentage(string column_
 
 	auto comp_expr = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_GREATERTHAN, SummarizeCreateCountStar(),
 	                                                 make_uniq<ConstantExpression>(Value::BIGINT(0)));
-	auto case_expr = make_uniq<CaseExpression>();
 	CaseCheck check;
 	check.when_expr = std::move(comp_expr);
 	check.then_expr = std::move(percentage_x);
-	case_expr->CaseChecksMutable().push_back(std::move(check));
-	case_expr->ElseMutable() = make_uniq<ConstantExpression>(Value());
+	vector<CaseCheck> case_checks;
+	case_checks.push_back(std::move(check));
+	auto case_expr = make_uniq<CaseExpression>(std::move(case_checks), make_uniq<ConstantExpression>(Value()));
 
 	return make_uniq<CastExpression>(LogicalType::DECIMAL(9, 2), std::move(case_expr));
 }

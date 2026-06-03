@@ -7,8 +7,9 @@
 
 namespace duckdb {
 
-StarExpression::StarExpression(string relation_name_p)
-    : ParsedExpression(ExpressionType::STAR, ExpressionClass::STAR), relation_name(std::move(relation_name_p)) {
+StarExpression::StarExpression(string relation_name_p, bool is_columns)
+    : ParsedExpression(ExpressionType::STAR, ExpressionClass::STAR), relation_name(std::move(relation_name_p)),
+      columns(is_columns) {
 }
 
 string StarExpression::ToString() const {

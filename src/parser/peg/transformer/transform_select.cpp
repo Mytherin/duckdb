@@ -1237,8 +1237,7 @@ vector<OrderByNode> PEGTransformerFactory::TransformOrderByAll(PEGTransformer &t
 	if (order_by_null_pr.HasResult()) {
 		order_by_null_type = transformer.Transform<OrderByNullType>(order_by_null_pr.GetResult());
 	}
-	auto star_expr = make_uniq<StarExpression>();
-	star_expr->IsColumnsMutable() = true;
+	auto star_expr = make_uniq<StarExpression>(string(), true);
 	result.push_back(OrderByNode(order_type, order_by_null_type, std::move(star_expr)));
 	return result;
 }

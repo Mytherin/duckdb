@@ -228,8 +228,7 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 		child_expr = make_uniq<FunctionExpression>("list_filter", std::move(filter_children));
 	}
 
-	auto columns_expr = make_uniq<StarExpression>(star.RelationName());
-	columns_expr->IsColumnsMutable() = true;
+	auto columns_expr = make_uniq<StarExpression>(star.RelationName(), true);
 	columns_expr->ExpressionMutable() = std::move(child_expr);
 	columns_expr->SetAlias(std::move(original_alias));
 	root = std::move(columns_expr);

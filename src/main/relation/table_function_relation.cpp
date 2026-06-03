@@ -71,10 +71,9 @@ unique_ptr<QueryNode> TableFunctionRelation::GetQueryNode() {
 unique_ptr<TableRef> TableFunctionRelation::GetTableRef() {
 	vector<unique_ptr<ParsedExpression>> children;
 	if (input_relation) { // input relation becomes first parameter if present, always
-		auto subquery = make_uniq<SubqueryExpression>();
-		subquery->SubqueryMutable() = make_uniq<SelectStatement>();
-		subquery->SubqueryMutable()->node = input_relation->GetQueryNode();
-		subquery->GetSubqueryTypeMutable() = SubqueryType::SCALAR;
+		auto select_statement = make_uniq<SelectStatement>();
+		select_statement->node = input_relation->GetQueryNode();
+		auto subquery = make_uniq<SubqueryExpression>(SubqueryType::SCALAR, std::move(select_statement));
 		children.push_back(std::move(subquery));
 	}
 	for (auto &parameter : parameters) {

@@ -22,7 +22,7 @@ public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::STAR;
 
 public:
-	explicit StarExpression(string relation_name = string());
+	explicit StarExpression(string relation_name = string(), bool is_columns = false);
 
 public:
 	const string &RelationName() const {

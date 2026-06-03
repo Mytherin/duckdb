@@ -28,6 +28,7 @@ public:
 
 public:
 	DUCKDB_API CaseExpression();
+	DUCKDB_API CaseExpression(vector<CaseCheck> case_checks, unique_ptr<ParsedExpression> else_expr);
 
 public:
 	const vector<CaseCheck> &CaseChecks() const {

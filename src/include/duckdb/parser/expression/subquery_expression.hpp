@@ -21,6 +21,10 @@ public:
 
 public:
 	SubqueryExpression();
+	//! Construct a fully-specified subquery expression (used during parsing)
+	SubqueryExpression(SubqueryType subquery_type, unique_ptr<SelectStatement> subquery,
+	                   unique_ptr<ParsedExpression> child = nullptr,
+	                   ExpressionType comparison_type = ExpressionType::INVALID);
 
 public:
 	const unique_ptr<SelectStatement> &Subquery() const {

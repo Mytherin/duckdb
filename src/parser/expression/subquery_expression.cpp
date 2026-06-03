@@ -9,6 +9,12 @@ SubqueryExpression::SubqueryExpression()
       comparison_type(ExpressionType::INVALID) {
 }
 
+SubqueryExpression::SubqueryExpression(SubqueryType subquery_type_p, unique_ptr<SelectStatement> subquery_p,
+                                       unique_ptr<ParsedExpression> child_p, ExpressionType comparison_type_p)
+    : ParsedExpression(ExpressionType::SUBQUERY, ExpressionClass::SUBQUERY), subquery(std::move(subquery_p)),
+      subquery_type(subquery_type_p), child(std::move(child_p)), comparison_type(comparison_type_p) {
+}
+
 string SubqueryExpression::ToString() const {
 	switch (subquery_type) {
 	case SubqueryType::ANY:

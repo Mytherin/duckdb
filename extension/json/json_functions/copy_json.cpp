@@ -107,8 +107,7 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 		strftime_node->from_table = make_uniq<SubqueryRef>(std::move(inner_select_stmt));
 
 		unique_ptr<ParsedExpression> expr;
-		auto columns_star = make_uniq<StarExpression>();
-		columns_star->IsColumnsMutable() = true;
+		auto columns_star = make_uniq<StarExpression>(string(), true);
 		expr = std::move(columns_star);
 		if (!date_format.empty()) {
 			// apply date format
@@ -139,8 +138,7 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	auto &select_node = copy_info.select_statement->Cast<SelectNode>();
 	select_node.from_table = std::move(source_ref);
 
-	auto columns_star = make_uniq<StarExpression>();
-	columns_star->IsColumnsMutable() = true;
+	auto columns_star = make_uniq<StarExpression>(string(), true);
 	auto unpack = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_UNPACK);
 	unpack->GetChildrenMutable().push_back(std::move(columns_star));
 
