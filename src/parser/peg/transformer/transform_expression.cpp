@@ -897,7 +897,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLikeClause(PEGTrans
 		like_children.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(escape_opt.GetResult()));
 	}
 	bool is_operator = like_variation != "regexp_full_match";
-	return make_uniq<FunctionExpression>(like_variation, std::move(like_children), nullptr, nullptr, false, is_operator);
+	return make_uniq<FunctionExpression>(like_variation, std::move(like_children), nullptr, nullptr, false,
+	                                     is_operator);
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformEscapeClause(PEGTransformer &transformer,
@@ -942,8 +943,9 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformOtherOperatorExpres
 				// ALL sublink is equivalent to NOT(ANY) with inverted comparison
 				// e.g. [= ALL()] is equivalent to [NOT(<> ANY())], so we first invert the comparison type
 				auto comparison_type = is_any ? expression_type : NegateComparisonExpression(expression_type);
-				auto subquery_expr = make_uniq<SubqueryExpression>(
-				    SubqueryType::ANY, std::move(right_expr_subquery.SubqueryMutable()), std::move(expr), comparison_type);
+				auto subquery_expr =
+				    make_uniq<SubqueryExpression>(SubqueryType::ANY, std::move(right_expr_subquery.SubqueryMutable()),
+				                                  std::move(expr), comparison_type);
 				if (!is_any) {
 					return make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(subquery_expr));
 				}
