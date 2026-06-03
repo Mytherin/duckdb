@@ -66,8 +66,7 @@ static unique_ptr<SubqueryRef> PushJSONFormatProjection(unique_ptr<SubqueryRef> 
 	auto format_node = make_uniq<SelectNode>();
 	format_node->from_table = std::move(source_ref);
 
-	auto columns_star = make_uniq<StarExpression>();
-	columns_star->IsColumnsMutable() = true;
+	auto columns_star = make_uniq<StarExpression>(string(), true);
 	vector<unique_ptr<ParsedExpression>> args;
 	args.push_back(std::move(columns_star));
 	args.push_back(make_uniq<ConstantExpression>(Value(format)));
@@ -181,8 +180,7 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	auto &select_node = copy_info.select_statement->Cast<SelectNode>();
 	select_node.from_table = std::move(source_ref);
 
-	auto columns_star = make_uniq<StarExpression>();
-	columns_star->IsColumnsMutable() = true;
+	auto columns_star = make_uniq<StarExpression>(string(), true);
 	if (!write_partition_columns) {
 		// Exclude the partition columns from the JSON object - they are kept as separate columns below
 		for (const auto &partition_column : partition_columns) {
