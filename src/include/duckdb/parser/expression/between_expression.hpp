@@ -56,9 +56,6 @@ public:
 	}
 
 private:
-	BetweenExpression();
-
-private:
 	unique_ptr<ParsedExpression> input;
 	unique_ptr<ParsedExpression> lower;
 	unique_ptr<ParsedExpression> upper;

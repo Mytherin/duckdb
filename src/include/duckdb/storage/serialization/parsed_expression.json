@@ -67,6 +67,11 @@
         "accessor_mut": "UpperBoundMutable()",
         "accessor": "UpperBound()"
       }
+    ],
+    "constructor": [
+      "input",
+      "lower",
+      "upper"
     ]
   },
   {
@@ -186,7 +191,7 @@
         "accessor": "Right()"
       }
     ],
-    "constructor": [
+    "deserialize_constructor": [
       "type"
     ]
   },
@@ -203,7 +208,7 @@
         "accessor": "GetChildren()"
       }
     ],
-    "constructor": [
+    "deserialize_constructor": [
       "type"
     ]
   },
@@ -351,7 +356,7 @@
         "accessor": "GetChildren()"
       }
     ],
-    "constructor": [
+    "deserialize_constructor": [
       "type"
     ]
   },
@@ -590,7 +595,7 @@
         "version": "v2.0.0"
       }
     ],
-    "constructor": [
+    "deserialize_constructor": [
       "type",
       "children",
       "offset_expr",

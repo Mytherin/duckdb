@@ -98,10 +98,10 @@ void BetweenExpression::Serialize(Serializer &serializer) const {
 }
 
 unique_ptr<ParsedExpression> BetweenExpression::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<BetweenExpression>(new BetweenExpression());
-	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(200, "input", result->input);
-	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(201, "lower", result->lower);
-	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(202, "upper", result->upper);
+	auto input = deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(200, "input");
+	auto lower = deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(201, "lower");
+	auto upper = deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(202, "upper");
+	auto result = duckdb::unique_ptr<BetweenExpression>(new BetweenExpression(std::move(input), std::move(lower), std::move(upper)));
 	return std::move(result);
 }
 

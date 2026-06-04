@@ -333,10 +333,7 @@ bool BetweenExpression::Equals(const ParsedExpression &other) const {
 
 
 unique_ptr<ParsedExpression> BetweenExpression::Copy() const {
-	auto copy = duckdb::unique_ptr<BetweenExpression>(new BetweenExpression());
-	copy->input = input ? input->Copy() : nullptr;
-	copy->lower = lower ? lower->Copy() : nullptr;
-	copy->upper = upper ? upper->Copy() : nullptr;
+	auto copy = duckdb::unique_ptr<BetweenExpression>(new BetweenExpression(input ? input->Copy() : nullptr, lower ? lower->Copy() : nullptr, upper ? upper->Copy() : nullptr));
 	copy->CopyBase(*this);
 	return std::move(copy);
 }

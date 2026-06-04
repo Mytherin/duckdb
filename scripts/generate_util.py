@@ -352,14 +352,56 @@ def generate_subclass_copy(entry):
             '}',
         ]
 
+    constructor_args = entry.get('constructor', [])
+    members_by_name = {m['name']: m for m in entry.get('members', [])}
+    constructor_member_fields = {
+        get_member_field_name(members_by_name[a]) for a in constructor_args if a in members_by_name
+    }
+
     lines = [f'unique_ptr<ParsedExpression> {class_name}::Copy() const {{']
-    lines.append(f'\tauto copy = duckdb::unique_ptr<{class_name}>(new {class_name}());')
+
+    if constructor_args:
+        # Emit pre-copy loops for any vector constructor args
+        pre_copy_vars = {}
+        for arg_name in constructor_args:
+            if arg_name not in members_by_name:
+                continue
+            member = members_by_name[arg_name]
+            if is_parsed_expression_list(member['type']):
+                field = get_member_field_name(member)
+                var_name = f'ctor_{field}'
+                pre_copy_vars[arg_name] = var_name
+                lines.append(f'\tvector<unique_ptr<ParsedExpression>> {var_name};')
+                lines.append(f'\tfor (auto &child : {field}) {{')
+                lines.append(f'\t\t{var_name}.push_back(child->Copy());')
+                lines.append(f'\t}}')
+
+        # Build constructor call
+        ctor_arg_strs = []
+        for arg_name in constructor_args:
+            if arg_name in members_by_name:
+                member = members_by_name[arg_name]
+                type_str = member['type']
+                field = get_member_field_name(member)
+                if is_parsed_expression_ptr(type_str):
+                    ctor_arg_strs.append(f'{field} ? {field}->Copy() : nullptr')
+                elif is_parsed_expression_list(type_str):
+                    ctor_arg_strs.append(f'std::move({pre_copy_vars[arg_name]})')
+                else:
+                    ctor_arg_strs.append(field)
+            else:
+                ctor_arg_strs.append(arg_name)
+        lines.append(f'\tauto copy = duckdb::unique_ptr<{class_name}>(new {class_name}({", ".join(ctor_arg_strs)}));')
+    else:
+        lines.append(f'\tauto copy = duckdb::unique_ptr<{class_name}>(new {class_name}());')
 
     if class_name == 'FunctionExpression':
         lines.append('\tcopy->is_legacy_function_call = is_legacy_function_call;')
 
     for member in entry.get('members', []):
         if member_should_be_copied(member):
+            if get_member_field_name(member) in constructor_member_fields:
+                continue  # already handled by constructor
             lines.extend(generate_member_copy(member))
 
     lines.append('\tcopy->CopyBase(*this);')

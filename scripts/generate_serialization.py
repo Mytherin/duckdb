@@ -398,6 +398,7 @@ supported_serialize_entries = [
     'base',
     'enum',
     'constructor',
+    'deserialize_constructor',
     'constructor_method',
     'custom_implementation',
     'custom_switch_code',
@@ -466,8 +467,9 @@ class SerializableClass:
             if type(self.enum_entries) is str:
                 self.enum_entries = [self.enum_entries]
             self.return_type = self.base
-        if 'constructor' in entry:
-            self.constructor = entry['constructor']
+        deserialize_ctor_key = 'deserialize_constructor' if 'deserialize_constructor' in entry else 'constructor'
+        if deserialize_ctor_key in entry:
+            self.constructor = entry[deserialize_ctor_key]
             if not isinstance(self.constructor, list):
                 print(f"constructor for {self.name}, must be of type [], but is of type {str(type(self.constructor))}")
                 exit(1)
