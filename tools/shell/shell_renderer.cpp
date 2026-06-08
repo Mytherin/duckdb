@@ -2,6 +2,7 @@
 
 #include "shell_state.hpp"
 #include "duckdb/common/box_renderer.hpp"
+#include "shell_explain_renderer.hpp"
 #include "shell_highlight.hpp"
 #include "duckdb/logging/log_storage.hpp"
 #include <stdexcept>
@@ -894,60 +895,6 @@ public:
 	idx_t header_width = 0;
 };
 
-class ModeExplainRenderer : public RowRenderer {
-public:
-	explicit ModeExplainRenderer(ShellState &state) : RowRenderer(state) {
-	}
-
-	void RenderRow(PrintStream &out, ResultMetadata &result, RowData &row) override {
-		auto &data = row.data;
-		if (data.size() != 2) {
-			return;
-		}
-		if (duckdb::StringUtil::Equals(data[0], "logical_plan") || duckdb::StringUtil::Equals(data[0], "logical_opt") ||
-		    duckdb::StringUtil::Equals(data[0], "physical_plan")) {
-			out.Print("\n┌─────────────────────────────┐\n");
-			out.Print("│┌───────────────────────────┐│\n");
-			if (duckdb::StringUtil::Equals(data[0], "logical_plan")) {
-				out.Print("││ Unoptimized Logical Plan  ││\n");
-			} else if (duckdb::StringUtil::Equals(data[0], "logical_opt")) {
-				out.Print("││  Optimized Logical Plan   ││\n");
-			} else if (duckdb::StringUtil::Equals(data[0], "physical_plan")) {
-				out.Print("││       Physical Plan       ││\n");
-			}
-			out.Print("│└───────────────────────────┘│\n");
-			out.Print("└─────────────────────────────┘\n");
-		}
-		out.Print(data[1]);
-	}
-
-	bool RequireMaterializedResult() const override {
-		return true;
-	}
-	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
-		if (global_mode == PagerMode::PAGER_ON) {
-			return true;
-		}
-		idx_t row_count = 0;
-		for (auto &chunk : result.chunks) {
-			auto &plan_vector = chunk->data[1];
-			auto string_data = duckdb::FlatVector::GetData<duckdb::string_t>(plan_vector);
-			for (idx_t r = 0; r < chunk->size(); r++) {
-				if (duckdb::FlatVector::IsNull(plan_vector, r)) {
-					continue;
-				}
-				for (idx_t s_idx = 0; s_idx < string_data[r].GetSize(); s_idx++) {
-					auto c = string_data[r].GetData()[s_idx];
-					if (c == '\n') {
-						row_count++;
-					}
-				}
-			}
-		}
-		return row_count >= state.pager_min_rows;
-	}
-};
-
 class ModeListRenderer : public RowRenderer {
 public:
 	explicit ModeListRenderer(ShellState &state) : RowRenderer(state) {
@@ -1742,7 +1689,7 @@ unique_ptr<ShellRenderer> ShellState::GetRenderer(RenderMode mode) {
 	case RenderMode::LINE:
 		return make_uniq<ModeLineRenderer>(*this);
 	case RenderMode::EXPLAIN:
-		return make_uniq<ModeExplainRenderer>(*this);
+		return CreateExplainRenderer(*this);
 	case RenderMode::LIST:
 		return make_uniq<ModeListRenderer>(*this);
 	case RenderMode::HTML:

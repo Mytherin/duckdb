@@ -212,6 +212,8 @@ public:
 	AutoFormatMode auto_format = AutoFormatMode::NO_AUTO_FORMAT;
 	//! Table name when rendering a DESCRIBE statement
 	string describe_table_name;
+	//! Whether the current EXPLAIN statement was rewritten to FORMAT JSON so the shell can pretty-print it
+	bool pretty_explain = false;
 
 	/*
 	** Treat stdin as an interactive input if the following variable
@@ -340,6 +342,7 @@ public:
 	unique_ptr<ShellRenderer> GetRenderer(RenderMode mode);
 	vector<string> TableColumnList(const char *zTab);
 	SuccessState ExecuteStatement(unique_ptr<duckdb::SQLStatement> statement);
+	void SetupPrettyExplain(duckdb::SQLStatement &statement);
 	static bool UseDescribeRenderMode(const duckdb::SQLStatement &stmt, string &describe_table_name);
 	void RenderTableMetadata(vector<ShellTableInfo> &result);
 

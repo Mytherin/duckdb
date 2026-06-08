@@ -90,6 +90,7 @@
 #include "shell_state.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/client_config.hpp"
+#include "duckdb/parser/statement/explain_statement.hpp"
 
 using namespace duckdb_shell;
 
@@ -983,6 +984,30 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 }
 
 /*
+** When executing a plain EXPLAIN or EXPLAIN ANALYZE statement, rewrite the explain format to JSON so that the
+** shell can render the query plan itself - allowing for highlighting and terminal-width aware rendering.
+** If the user explicitly requested an output format we leave the statement untouched and print the result as-is.
+*/
+void ShellState::SetupPrettyExplain(duckdb::SQLStatement &statement) {
+	auto &explain = statement.Cast<duckdb::ExplainStatement>();
+	if (explain.explain_format != duckdb::ExplainFormat::DEFAULT) {
+		// the user explicitly requested an explain format - render the output as-is
+		return;
+	}
+	if (explain.explain_type == duckdb::ExplainType::EXPLAIN_ANALYZE) {
+		// for EXPLAIN ANALYZE the output format can also be set through the profiler settings
+		auto profiler_format = duckdb::ClientConfig::GetConfig(*conn->context).profiler_print_format;
+		if (profiler_format != duckdb::ProfilerPrintFormat::QUERY_TREE &&
+		    profiler_format != duckdb::ProfilerPrintFormat::NO_OUTPUT) {
+			// the user configured a custom profiling output format - render the output as-is
+			return;
+		}
+	}
+	explain.explain_format = duckdb::ExplainFormat::JSON;
+	pretty_explain = true;
+}
+
+/*
 ** Execute a statement or set of statements.  Print
 ** any result rows/columns depending on the current mode
 ** set via the supplied callback.
@@ -1006,8 +1031,10 @@ SuccessState ShellState::ExecuteSQL(const string &zSql) {
 			}
 
 			cMode = mode;
+			pretty_explain = false;
 			if (statement->type == duckdb::StatementType::EXPLAIN_STATEMENT) {
 				cMode = RenderMode::EXPLAIN;
+				SetupPrettyExplain(*statement);
 			}
 			if (mode == RenderMode::DUCKBOX && UseDescribeRenderMode(*statement, describe_table_name)) {
 				cMode = RenderMode::DESCRIBE;
