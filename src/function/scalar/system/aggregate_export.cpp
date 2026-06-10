@@ -263,13 +263,39 @@ static void DeserializeField(const LogicalType &type, const AggregateStateField 
 	}
 }
 
-static void DeserializeState(const AggregateStateLayout &layout, const Vector &input_vec, idx_t count,
-                             data_ptr_t dest_buffer, ArenaAllocator &allocator) {
+static void DeserializeState(const BoundAggregateFunction &aggr, const AggregateStateLayout &layout,
+                             const Vector &input_vec, idx_t count, data_ptr_t dest_buffer, ArenaAllocator &allocator) {
+	if (aggr.HasDeserializeStateCallback()) {
+		// the aggregate explicitly deserializes its own states
+		aggr.GetDeserializeStateCallback()(layout, input_vec, count, dest_buffer, allocator);
+		return;
+	}
 	DeserializeField(layout.type, layout.field, input_vec, count, dest_buffer, layout.total_state_size, 0, allocator);
 }
 
 static void SerializeState(const AggregateStateLayout &layout, Vector &result, idx_t count,
                            const data_ptr_t *addresses) {
+	SerializeField(layout.type, layout.field, result, count, addresses, 0);
+}
+
+static void SerializeState(const BoundAggregateFunction &aggr, optional_ptr<FunctionData> bind_data,
+                           const AggregateStateLayout &layout, Vector &states, idx_t count, Vector &result,
+                           ArenaAllocator &allocator) {
+	if (aggr.HasSerializeStateCallback()) {
+		// the aggregate explicitly serializes its own states
+		AggregateInputData aggr_input_data(aggr, bind_data, allocator);
+		aggr.GetSerializeStateCallback()(states, aggr_input_data, result, count, 0);
+		return;
+	}
+	const data_ptr_t *addresses;
+	if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		if (count != 1) {
+			throw InternalException("Serialize with a constant vector only supported with count of 1");
+		}
+		addresses = ConstantVector::GetData<data_ptr_t>(states);
+	} else {
+		addresses = FlatVector::GetData<data_ptr_t>(states);
+	}
 	SerializeField(layout.type, layout.field, result, count, addresses, 0);
 }
 
@@ -331,13 +357,20 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 	auto count = input.size();
 	auto state_vec_writer = FlatVector::Writer<data_ptr_t>(local_state.addresses, count);
 	for (idx_t i = 0; i < count; i++) {
-		state_vec_writer.WriteValue(local_state.state_buffer.get() + i * layout.total_state_size);
+		auto state_ptr = local_state.state_buffer.get() + i * layout.total_state_size;
+		bind_data.aggr.GetStateInitCallback()(bind_data.aggr, state_ptr);
+		state_vec_writer.WriteValue(state_ptr);
 	}
 
-	DeserializeState(layout, input.data[0], count, local_state.state_buffer.get(), local_state.allocator);
+	DeserializeState(bind_data.aggr, layout, input.data[0], count, local_state.state_buffer.get(),
+	                 local_state.allocator);
 
 	AggregateInputData aggr_input_data(bind_data.aggr, bind_data.bind_data.get(), local_state.allocator);
 	bind_data.aggr.GetStateFinalizeCallback()(local_state.addresses, aggr_input_data, result, count, 0);
+	if (bind_data.aggr.HasStateDestructorCallback()) {
+		// destroy the deserialized states
+		bind_data.aggr.GetStateDestructorCallback()(local_state.addresses, aggr_input_data, count);
+	}
 
 	auto validity = input.data[0].Validity();
 	for (idx_t i = 0; i < count; i++) {
@@ -382,14 +415,23 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 	}
 
 	// Deserialize both inputs — null rows are skipped by LoadOp, keeping the initialized empty state
-	DeserializeState(layout, input.data[0], count, local_state.state_buffer0.get(), local_state.allocator);
-	DeserializeState(layout, input.data[1], count, local_state.state_buffer1.get(), local_state.allocator);
+	DeserializeState(bind_data.aggr, layout, input.data[0], count, local_state.state_buffer0.get(),
+	                 local_state.allocator);
+	DeserializeState(bind_data.aggr, layout, input.data[1], count, local_state.state_buffer1.get(),
+	                 local_state.allocator);
 
 	AggregateInputData aggr_input_data(bind_data.aggr, bind_data.bind_data.get(), local_state.allocator,
 	                                   AggregateCombineType::ALLOW_DESTRUCTIVE);
 	bind_data.aggr.GetStateCombineCallback()(local_state.addresses0, local_state.addresses1, aggr_input_data, count);
 
-	SerializeState(layout, result, count, FlatVector::GetData<data_ptr_t>(local_state.addresses1));
+	SerializeState(bind_data.aggr, bind_data.bind_data.get(), layout, local_state.addresses1, count, result,
+	               local_state.allocator);
+
+	if (bind_data.aggr.HasStateDestructorCallback()) {
+		// destroy the deserialized states
+		bind_data.aggr.GetStateDestructorCallback()(local_state.addresses0, aggr_input_data, count);
+		bind_data.aggr.GetStateDestructorCallback()(local_state.addresses1, aggr_input_data, count);
+	}
 
 	// Rows where both inputs were NULL produce no meaningful combined state — mark result as NULL
 	for (idx_t i = 0; i < count; i++) {
@@ -521,6 +563,7 @@ unique_ptr<FunctionData> CombineAggrBind(BindAggregateFunctionInput &input) {
 	function.SetStateSizeCallback(bind_data->aggr.GetStateSizeCallback());
 	function.SetStateInitCallback(bind_data->aggr.GetStateInitCallback());
 	function.SetStateCombineCallback(bind_data->aggr.GetStateCombineCallback());
+	function.SetStateDestructorCallback(bind_data->aggr.GetStateDestructorCallback());
 
 	function.SetReturnType(arguments[0]->GetReturnType());
 
@@ -557,11 +600,15 @@ void CombineAggrUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx
 		target_data.WriteValue(state_values[i].GetValue());
 	}
 
-	DeserializeState(layout, inputs[0], count, temp_state_buf.get(), aggr_input_data.allocator);
+	DeserializeState(underlying_aggr, layout, inputs[0], count, temp_state_buf.get(), aggr_input_data.allocator);
 
 	AggregateInputData combine_input(bind_data.aggr, bind_data.bind_data.get(), aggr_input_data.allocator,
 	                                 AggregateCombineType::ALLOW_DESTRUCTIVE);
 	underlying_aggr.GetStateCombineCallback()(source_vec, target_vec, combine_input, count);
+	if (underlying_aggr.HasStateDestructorCallback()) {
+		// destroy the temporary deserialized states
+		underlying_aggr.GetStateDestructorCallback()(source_vec, combine_input, count);
+	}
 }
 
 void CombineAggrFinalize(Vector &state, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
@@ -569,20 +616,11 @@ void CombineAggrFinalize(Vector &state, AggregateInputData &aggr_input_data, Vec
 	D_ASSERT(offset == 0);
 	auto &bind_data = aggr_input_data.bind_data->Cast<ExportAggregateBindData>();
 	auto &underlying_aggr = bind_data.aggr;
-	const data_ptr_t *addresses_ptrs;
-	if (state.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		if (count != 1) {
-			throw InternalException("Finalize with a constant vector only supported with count of 1");
-		}
-		addresses_ptrs = ConstantVector::GetData<data_ptr_t>(state);
-	} else {
-		addresses_ptrs = FlatVector::GetData<data_ptr_t>(state);
-	}
 
 	auto layout = GetLayout(underlying_aggr);
 
 	result.Flatten();
-	SerializeState(layout, result, count, addresses_ptrs);
+	SerializeState(underlying_aggr, bind_data.bind_data.get(), layout, state, count, result, aggr_input_data.allocator);
 }
 
 // constructs the AGGREGATE_STATE type for the given bound aggregate function
@@ -663,7 +701,11 @@ void ToAggregateStateFunction(DataChunk &input, ExpressionState &state, Vector &
 
 void ExportAggregateFunction::SetStateExport(BoundAggregateExpression &aggregate, LogicalType state_layout) {
 	auto &bound_function = aggregate.FunctionMutable();
-	bound_function.SetStateFinalizeCallback(ExportAggregateFinalize);
+	// functions that explicitly serialize their own states use their serialize_state callback as the finalize -
+	// other functions go through the generic field-based serialization
+	bound_function.SetStateFinalizeCallback(bound_function.HasSerializeStateCallback()
+	                                            ? bound_function.GetSerializeStateCallback()
+	                                            : ExportAggregateFinalize);
 	// statistics propagation is no longer correct post
 	bound_function.SetStatisticsCallback(nullptr);
 	bound_function.SetReturnType(state_layout);
@@ -686,6 +728,12 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	D_ASSERT(bound_function.HasStateFinalizeCallback());
 
 	D_ASSERT(child_aggregate->Function().GetReturnType().id() != LogicalTypeId::INVALID);
+	if (bound_function.HasSerializeStateCallback() != bound_function.HasDeserializeStateCallback()) {
+		throw InternalException(
+		    "Aggregate function \"%s\" must define either both or neither of the serialize_state/deserialize_state "
+		    "callbacks",
+		    bound_function.GetName());
+	}
 	if (!bound_function.HasGetStateTypeCallback()) {
 		throw NotImplementedException(
 		    "Aggregate function \"%s\" does not have a state type callback defined - cannot export state",
