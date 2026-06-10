@@ -1,0 +1,75 @@
+# name: test/sql/aggregate/aggregate_state_export/mode_export_state.test
+# description: Test EXPORT_STATE for mode - the frequency map is explicitly (de)serialized
+# group: [aggregate_state_export]
+
+# empty input exports a NULL state
+query II
+SELECT mode(i) EXPORT_STATE, finalize(mode(i) EXPORT_STATE) FROM (SELECT 1 AS i WHERE false) t;
+----
+NULL	NULL
+
+# the state is the frequency map with first-seen rows (used to break ties)
+query I
+SELECT (mode(x) EXPORT_STATE)::STRUCT("value" INTEGER, "count" UBIGINT, first_row UBIGINT)[] FROM (VALUES (1), (2), (2)) t(x);
+----
+[{'value': 1, 'count': 1, 'first_row': 0}, {'value': 2, 'count': 2, 'first_row': 1}]
+
+# basic roundtrips
+query II nosort mode_basic
+SELECT mode(x), mode(v) FROM (VALUES (1, 'a'), (2, 'this-is-a-long-string-that-is-not-inlined'), (2, 'this-is-a-long-string-that-is-not-inlined')) t(x, v);
+----
+
+query II nosort mode_basic
+SELECT finalize(mode(x) EXPORT_STATE), finalize(mode(v) EXPORT_STATE) FROM (VALUES (1, 'a'), (2, 'this-is-a-long-string-that-is-not-inlined'), (2, 'this-is-a-long-string-that-is-not-inlined')) t(x, v);
+----
+
+# values are exported with the aggregate's input type (e.g. DATE)
+query II
+SELECT finalize(mode(d) EXPORT_STATE), (mode(d) EXPORT_STATE)::STRUCT("value" DATE, "count" UBIGINT, first_row UBIGINT)[]
+FROM (VALUES (DATE '2000-01-01'), (DATE '2000-01-01')) t(d);
+----
+2000-01-01	[{'value': 2000-01-01, 'count': 2, 'first_row': 0}]
+
+# ties are broken by the first-seen row, which survives the roundtrip
+query II
+SELECT mode(x), finalize(mode(x) EXPORT_STATE) FROM (VALUES (5), (3), (5), (3)) t(x);
+----
+5	5
+
+# grouped aggregation matches the regular aggregate
+statement ok
+CREATE TABLE dummy AS SELECT range % 10 g, range % 3 d FROM range(100);
+
+query II nosort grouped_mode
+SELECT g, mode(d) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query II nosort grouped_mode
+SELECT g, finalize(mode(d) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
+----
+
+# we can persist the state and finalize later
+statement ok
+CREATE TABLE mode_state AS SELECT g, mode(d) EXPORT_STATE s FROM dummy GROUP BY g;
+
+query II nosort grouped_mode
+SELECT g, finalize(s) FROM mode_state ORDER BY g;
+----
+
+# combine_aggr across groups, including a NULL state
+query I
+SELECT finalize(combine_aggr(s)) FROM (
+    SELECT mode(x) EXPORT_STATE AS s FROM (VALUES (1), (2)) t(x)
+    UNION ALL
+    SELECT mode(x) EXPORT_STATE AS s FROM (VALUES (2), (3)) t(x)
+    UNION ALL
+    SELECT mode(x) EXPORT_STATE AS s FROM (SELECT 1 AS x WHERE false) t
+) t;
+----
+2
+
+# to_aggregate_state converts a plain frequency map back into an aggregate state
+query I
+SELECT finalize(to_aggregate_state([{'value': 7, 'count': 3, 'first_row': 0}, {'value': 1, 'count': 2, 'first_row': 1}]::STRUCT("value" INTEGER, "count" UBIGINT, first_row UBIGINT)[], 'mode', ['INTEGER']));
+----
+7
