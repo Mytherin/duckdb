@@ -679,9 +679,8 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	if (!bound_function.HasStateCombineCallback()) {
 		throw BinderException("Cannot use EXPORT_STATE for non-combinable function %s", bound_function.GetName());
 	}
-	if (bound_function.HasStateDestructorCallback()) {
-		throw BinderException("Cannot use EXPORT_STATE on aggregate functions with custom destructors");
-	}
+	// note that aggregates with custom destructors CAN be exported as long as they define a state type callback -
+	// by defining the callback they declare that the exported part of the state does not own any heap memory
 	// this should be required
 	D_ASSERT(bound_function.HasStateSizeCallback());
 	D_ASSERT(bound_function.HasStateFinalizeCallback());

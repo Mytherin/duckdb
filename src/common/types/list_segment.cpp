@@ -395,6 +395,73 @@ void ListSegmentFunctions::AppendListEntry(ArenaAllocator &allocator, LinkedList
 	}
 }
 
+template <class T>
+void ListSegmentAppendValue(ArenaAllocator &allocator, LinkedList &linked_list, const T &value) {
+	ListSegmentFunctions functions;
+	functions.create_segment = CreatePrimitiveSegment<T>;
+	allocator.AlignNext();
+	auto segment = GetSegment(functions, allocator, linked_list);
+	GetNullMask(segment)[segment->count] = false;
+	Store<T>(value, data_ptr_cast(GetPrimitiveData<T>(segment) + segment->count));
+	segment->count++;
+	linked_list.total_capacity++;
+}
+
+template <>
+void ListSegmentAppendValue(ArenaAllocator &allocator, LinkedList &linked_list, const string_t &value) {
+	ListSegmentFunctions functions;
+	functions.create_segment = CreateListSegment;
+	allocator.AlignNext();
+	auto segment = GetSegment(functions, allocator, linked_list);
+	GetNullMask(segment)[segment->count] = false;
+
+	// set the length of this string
+	const idx_t str_size = value.GetSize();
+	auto str_length_data = GetListLengthData(segment);
+	Store<uint64_t>(str_size, data_ptr_cast(str_length_data + segment->count));
+
+	// write the characters to the linked list of child segments
+	ListSegmentFunctions child_function;
+	child_function.create_segment = CreateVarcharDataSegment;
+	child_function.initial_capacity = 16;
+
+	auto child_segments = Load<LinkedList>(data_ptr_cast(GetListChildData(segment)));
+	auto str_data = value.GetData();
+	idx_t current_offset = 0;
+	while (current_offset < str_size) {
+		auto child_segment = GetSegment(child_function, allocator, child_segments);
+		auto data = GetStringData(child_segment);
+		idx_t copy_count = MinValue<idx_t>(str_size - current_offset, child_segment->capacity - child_segment->count);
+		memcpy(data + child_segment->count, str_data + current_offset, copy_count);
+		current_offset += copy_count;
+		child_segment->count += copy_count;
+	}
+	child_segments.total_capacity += str_size;
+	// store the updated linked list
+	Store<LinkedList>(child_segments, data_ptr_cast(GetListChildData(segment)));
+
+	segment->count++;
+	linked_list.total_capacity++;
+}
+
+template void ListSegmentAppendValue<bool>(ArenaAllocator &, LinkedList &, const bool &);
+template void ListSegmentAppendValue<int8_t>(ArenaAllocator &, LinkedList &, const int8_t &);
+template void ListSegmentAppendValue<int16_t>(ArenaAllocator &, LinkedList &, const int16_t &);
+template void ListSegmentAppendValue<int32_t>(ArenaAllocator &, LinkedList &, const int32_t &);
+template void ListSegmentAppendValue<int64_t>(ArenaAllocator &, LinkedList &, const int64_t &);
+template void ListSegmentAppendValue<uint8_t>(ArenaAllocator &, LinkedList &, const uint8_t &);
+template void ListSegmentAppendValue<uint16_t>(ArenaAllocator &, LinkedList &, const uint16_t &);
+template void ListSegmentAppendValue<uint32_t>(ArenaAllocator &, LinkedList &, const uint32_t &);
+template void ListSegmentAppendValue<uint64_t>(ArenaAllocator &, LinkedList &, const uint64_t &);
+template void ListSegmentAppendValue<hugeint_t>(ArenaAllocator &, LinkedList &, const hugeint_t &);
+template void ListSegmentAppendValue<uhugeint_t>(ArenaAllocator &, LinkedList &, const uhugeint_t &);
+template void ListSegmentAppendValue<float>(ArenaAllocator &, LinkedList &, const float &);
+template void ListSegmentAppendValue<double>(ArenaAllocator &, LinkedList &, const double &);
+template void ListSegmentAppendValue<interval_t>(ArenaAllocator &, LinkedList &, const interval_t &);
+template void ListSegmentAppendValue<date_t>(ArenaAllocator &, LinkedList &, const date_t &);
+template void ListSegmentAppendValue<dtime_t>(ArenaAllocator &, LinkedList &, const dtime_t &);
+template void ListSegmentAppendValue<timestamp_t>(ArenaAllocator &, LinkedList &, const timestamp_t &);
+
 //===--------------------------------------------------------------------===//
 // Read
 //===--------------------------------------------------------------------===//
