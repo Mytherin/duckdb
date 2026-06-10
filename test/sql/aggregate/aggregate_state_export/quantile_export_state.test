@@ -30,17 +30,27 @@ SELECT finalize(mad(d) EXPORT_STATE) FROM (VALUES (1.0), (2.0), (10.0)) t(d);
 ----
 1.0
 
-# parameterized quantiles can export their state, but finalize cannot re-bind them
-# (the quantile fraction lives in the bind data, which is not part of the exported state type)
+# parameterized quantiles store their serialized bind data in the state type - finalize restores it
 query I
 SELECT (quantile_disc(i, 0.5) EXPORT_STATE)::BIGINT[] FROM (VALUES (1), (3), (2)) t(i);
 ----
 [1, 3, 2]
 
-query I
-SELECT (quantile_cont(i, [0.25, 0.75]) EXPORT_STATE)::BIGINT[] FROM (VALUES (1), (3), (2)) t(i);
+query III
+SELECT finalize(quantile_disc(i, 0.5) EXPORT_STATE), finalize(quantile_cont(i, 0.25) EXPORT_STATE), finalize(quantile_cont(i, [0.25, 0.75]) EXPORT_STATE)
+FROM range(1, 12) t(i);
 ----
-[1, 3, 2]
+6	3.5	[3.5, 8.5]
+
+# combine_aggr keeps the quantile parameters of the states
+query I
+SELECT finalize(combine_aggr(s)) FROM (
+    SELECT quantile_disc(i, 0.25) EXPORT_STATE AS s FROM range(1, 6) t(i)
+    UNION ALL
+    SELECT quantile_disc(i, 0.25) EXPORT_STATE AS s FROM range(6, 12) t(i)
+) t;
+----
+3
 
 # strings - both inlined and non-inlined
 query I
