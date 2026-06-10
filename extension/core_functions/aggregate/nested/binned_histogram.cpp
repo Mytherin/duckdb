@@ -425,8 +425,10 @@ void HistogramBinDeserializeState(const AggregateStateLayout &layout, const Vect
 		}
 		const auto &boundary_entry = boundary_entries[i];
 		const auto &count_entry = count_entries[i];
-		if (count_entry.length != boundary_entry.length + 1) {
-			throw InvalidInputException("Invalid histogram state - the counts list should have exactly one more "
+		// note that there can be more than one extra count entry - the bin boundaries are deduplicated on
+		// initialization while the counts list keeps the size of the original (non-deduplicated) bin list
+		if (count_entry.length < boundary_entry.length + 1) {
+			throw InvalidInputException("Invalid histogram state - the counts list should have at least one more "
 			                            "entry than the bin boundaries list");
 		}
 		state.bin_boundaries = new unsafe_vector<T>();

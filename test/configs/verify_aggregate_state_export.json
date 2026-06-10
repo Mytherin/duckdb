@@ -17,40 +17,30 @@
       ]
     },
     {
-      "reason": "FIXME: aggregate functions missing state type callback (string_agg, approx_count_distinct, mode, histogram, approx_top_k, bitstring_agg, entropy, reservoir/approx_quantile, min/max/arg_min/arg_max(N), sum over VARINT, sort key fallbacks, etc.)",
+      "reason": "FIXME: aggregate functions missing state type callback (string_agg, approx_count_distinct, entropy, bitstring_agg, min/max/arg_min/arg_max(N), sum over VARINT, sort key fallbacks, etc.)",
       "paths": [
         "test/extension/test_function_named_args.test",
         "test/fuzzer/duckfuzz/bitstring_agg_minmax.test",
         "test/fuzzer/duckfuzz/bitstring_agg_uhugeint.test",
         "test/fuzzer/duckfuzz/bitstring_agg_unfoldable.test",
         "test/fuzzer/pedro/aggregate_assertion_errors.test",
-        "test/fuzzer/pedro/first_value_window_crash.test",
-        "test/fuzzer/pedro/non_boolean_aggregate_filter.test",
         "test/fuzzer/sqlsmith/bitstring_agg_overflow.test",
-        "test/issues/general/test_5072.test",
         "test/optimizer/joins/issues/internal_6248.test",
-        "test/sql/aggregate/aggregates/approx_top_k.test",
         "test/sql/aggregate/aggregates/arg_min_max_n.test",
         "test/sql/aggregate/aggregates/arg_min_max_n_tpch.test",
         "test/sql/aggregate/aggregates/arg_min_max_nulls_last.test",
         "test/sql/aggregate/aggregates/bitstring_agg_empty.test",
-        "test/sql/aggregate/aggregates/histogram_exact.test",
-        "test/sql/aggregate/aggregates/histogram_table_function.test",
         "test/sql/aggregate/aggregates/max_n_all_types_grouped.test",
         "test/sql/aggregate/aggregates/string_agg_union.test",
         "test/sql/aggregate/aggregates/test_aggregate_types.test",
         "test/sql/aggregate/aggregates/test_aggregate_types_scalar.test",
-        "test/sql/aggregate/aggregates/test_approx_quantile.test",
         "test/sql/aggregate/aggregates/test_approximate_distinct_count.test",
-        "test/sql/aggregate/aggregates/test_binned_histogram.test",
         "test/sql/aggregate/aggregates/test_bitstring_agg.test",
         "test/sql/aggregate/aggregates/test_entropy.test",
-        "test/sql/aggregate/aggregates/test_histogram.test",
-        "test/sql/aggregate/aggregates/test_histogram_3529.test",
         "test/sql/aggregate/aggregates/test_median.test",
-        "test/sql/aggregate/aggregates/test_mode.test",
-        "test/sql/aggregate/aggregates/test_ordered_aggregates.test",
         "test/sql/aggregate/aggregates/test_perfect_ht.test",
+        "test/sql/aggregate/aggregates/test_quantile_disc.test",
+        "test/sql/aggregate/aggregates/test_quantile_disc_list.test",
         "test/sql/aggregate/aggregates/test_scalar_aggr.test",
         "test/sql/aggregate/aggregates/test_stddev.test",
         "test/sql/aggregate/aggregates/test_string_agg.test",
@@ -63,14 +53,11 @@
         "test/sql/catalog/table/test_create_table_parallelism.test",
         "test/sql/copy/csv/unquoted_escape/mixed.test",
         "test/sql/cte/cte_describe.test",
-        "test/sql/cte/recursive_cte_key_aggregation.test",
         "test/sql/function/generic/hash_func.test",
-        "test/sql/function/list/aggregates/histogram_decimal.test",
         "test/sql/function/string/test_string_split.test",
         "test/sql/json/issues/internal_issue391.test",
         "test/sql/json/scalar/json_nested_casts.test",
         "test/sql/json/test_json_macros.test",
-        "test/sql/pivot/pivot_operator_expression.test",
         "test/sql/prepared/prepare_summarize.test",
         "test/sql/setops/union_limit.test",
         "test/sql/settings/operator_memory_limit.test",
@@ -85,7 +72,6 @@
         "test/sql/types/nested/array/array_summarize.test",
         "test/sql/types/nested/list/list_aggregates.test",
         "test/sql/types/nested/struct/struct_aggregates.test",
-        "test/sql/types/struct/struct_equality_bug.test",
         "test/sql/types/timestamp/test_infinite_time.test",
         "test/sql/window/test_window_cse.test"
       ]
@@ -100,16 +86,6 @@
         "test/sql/function/list/flatten.test",
         "test/sql/types/nested/array/array_list_aggregate.test",
         "test/sql/types/nested/list/array_agg.test"
-      ]
-    },
-    {
-      "reason": "FIXME: parameterized quantiles cannot be re-bound when finalizing exported states - the quantile value lives in the bind data, which is not part of the exported state type",
-      "paths": [
-        "test/sql/aggregate/aggregates/test_quantile_cont.test",
-        "test/sql/aggregate/aggregates/test_quantile_cont_list.test",
-        "test/sql/aggregate/aggregates/test_quantile_disc.test",
-        "test/sql/aggregate/aggregates/test_quantile_disc_list.test",
-        "test/sql/aggregate/quantile_fun.test"
       ]
     },
     {

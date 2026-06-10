@@ -88,6 +88,13 @@ SELECT finalize(combine_aggr(s)) FROM (
 ----
 {10=1, 20=1, 2147483647=1}
 
+# duplicate bin boundaries are deduplicated, leaving extra (unused) count entries in the state -
+# the exported state faithfully reproduces the direct result
+query II
+SELECT finalize(histogram(x, [10, 10, 20]) EXPORT_STATE), histogram(x, [10, 10, 20]) FROM (VALUES (5), (15), (25)) t(x);
+----
+{10=1, 20=1}	{10=1, 20=1}
+
 # combining binned histograms with different boundaries is an error
 statement error
 SELECT finalize(combine(histogram(x, [10]) EXPORT_STATE, (SELECT histogram(y, [99]) EXPORT_STATE FROM (VALUES (1)) s(y)))) FROM (VALUES (1)) t(x);
