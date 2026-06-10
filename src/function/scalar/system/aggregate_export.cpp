@@ -13,6 +13,7 @@
 #include "duckdb/function/scalar/system_functions.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
@@ -448,7 +449,8 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 unique_ptr<ExportAggregateBindData> BindExportedAggregate(ClientContext &context, const string &function_name,
                                                           const vector<LogicalType> &argument_types,
                                                           const Value &bind_data_blob = Value(),
-                                                          const Value &return_type_val = Value()) {
+                                                          const Value &return_type_val = Value(),
+                                                          const Value &bound_arguments_val = Value()) {
 	auto &func = Catalog::GetSystemCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(context, DEFAULT_SCHEMA,
 	                                                                                        function_name);
 	if (func.type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {
@@ -469,7 +471,11 @@ unique_ptr<ExportAggregateBindData> BindExportedAggregate(ClientContext &context
 		// function directly from its parts instead of re-binding it (mirroring FunctionSerializer::Deserialize)
 		const auto return_type = TypeValue::GetType(return_type_val);
 		BoundAggregateFunction bound_aggr(aggr);
-		bound_aggr.GetArguments() = argument_types;
+		bound_aggr.GetArguments().clear();
+		for (auto &arg : ListValue::GetChildren(bound_arguments_val)) {
+			bound_aggr.GetArguments().push_back(TypeValue::GetType(arg));
+		}
+		bound_aggr.GetOriginalArguments() = argument_types;
 
 		auto &blob = StringValue::Get(bind_data_blob);
 		auto blob_data = make_unsafe_uniq_array<data_t>(blob.size());
@@ -539,9 +545,10 @@ unique_ptr<ExportAggregateBindData> BindAggregateStateInternal(ClientContext &co
 		argument_types.push_back(TypeValue::GetType(val));
 	}
 
-	// read the (optional) serialized bind data and original return type
+	// read the (optional) serialized bind data, original return type and bound argument types
 	Value bind_data_blob;
 	Value return_type_val;
+	Value bound_arguments_val;
 	entry = ext_info->properties.find("bind_data");
 	if (entry != ext_info->properties.end()) {
 		bind_data_blob = entry->second;
@@ -551,9 +558,16 @@ unique_ptr<ExportAggregateBindData> BindAggregateStateInternal(ClientContext &co
 			throw InternalException("Aggregate state object with bind data should have a return_type property");
 		}
 		return_type_val = entry->second;
+		entry = ext_info->properties.find("bound_arguments");
+		if (entry == ext_info->properties.end() || entry->second.type().id() != LogicalTypeId::LIST ||
+		    entry->second.IsNull()) {
+			throw InternalException("Aggregate state object with bind data should have a bound_arguments property");
+		}
+		bound_arguments_val = entry->second;
 	}
 
-	return BindExportedAggregate(context, function_name, argument_types, bind_data_blob, return_type_val);
+	return BindExportedAggregate(context, function_name, argument_types, bind_data_blob, return_type_val,
+	                             bound_arguments_val);
 }
 
 unique_ptr<FunctionData> BindAggregateState(BindScalarFunctionInput &input) {
@@ -695,6 +709,13 @@ LogicalType CreateAggregateStateType(const BoundAggregateFunction &bound_functio
 		serializer.End();
 		ext_info->properties.emplace("bind_data", Value::BLOB(stream.GetData(), stream.GetPosition()));
 		ext_info->properties.emplace("return_type", Value::TYPE(bound_function.GetReturnType()));
+		// also store the concrete bound argument types - the "parameters" property holds the original (pre-bind)
+		// types used for the catalog lookup, while deserialization needs the bound types
+		vector<Value> bound_arguments;
+		for (auto &arg : bound_function.GetArguments()) {
+			bound_arguments.push_back(Value::TYPE(arg));
+		}
+		ext_info->properties.emplace("bound_arguments", Value::LIST(LogicalType::TYPE(), std::move(bound_arguments)));
 	}
 	state_layout.SetExtensionInfo(std::move(ext_info));
 	return state_layout;

@@ -166,6 +166,87 @@ struct ApproxQuantileScalarOperation : public ApproxQuantileOperation {
 	}
 };
 
+//===--------------------------------------------------------------------===//
+// State Export
+//===--------------------------------------------------------------------===//
+//! The exported state is STRUCT(count, min, max, centroids): the number of added values, the exact minimum and
+//! maximum, and the centroids of the (compressed) t-digest.
+LogicalType ApproxQuantileExportType() {
+	child_list_t<LogicalType> centroid_children;
+	centroid_children.emplace_back("mean", LogicalType::DOUBLE);
+	centroid_children.emplace_back("weight", LogicalType::DOUBLE);
+
+	child_list_t<LogicalType> children;
+	children.emplace_back("count", LogicalType::UBIGINT);
+	children.emplace_back("min", LogicalType::DOUBLE);
+	children.emplace_back("max", LogicalType::DOUBLE);
+	children.emplace_back("centroids", LogicalType::LIST(LogicalType::STRUCT(std::move(centroid_children))));
+	return LogicalType::STRUCT(std::move(children));
+}
+
+AggregateStateLayout ApproxQuantileGetStateType(const BoundAggregateFunction &function) {
+	AggregateStateLayout layout;
+	layout.type = ApproxQuantileExportType();
+	layout.total_state_size = AlignValue<idx_t>(sizeof(ApproxQuantileState));
+	return layout;
+}
+
+void ApproxQuantileSerializeState(Vector &state_vector, AggregateInputData &aggr_input_data, Vector &result,
+                                  idx_t count, idx_t offset) {
+	D_ASSERT(offset == 0);
+	auto states = state_vector.Values<ApproxQuantileState *>();
+	const auto &centroid_list_type = StructType::GetChildType(result.GetType(), 3);
+	const auto &centroid_type = ListType::GetChildType(centroid_list_type);
+	for (idx_t i = 0; i < count; i++) {
+		auto &state = *states[i].GetValue();
+		if (!state.h || state.pos == 0) {
+			// no values have been added to this state - export NULL
+			FlatVector::SetNull(result, i, true);
+			continue;
+		}
+		// fold any unprocessed values into the centroids
+		state.h->compress();
+		vector<Value> centroids;
+		for (auto &centroid : state.h->processed()) {
+			child_list_t<Value> centroid_children;
+			centroid_children.emplace_back("mean", Value::DOUBLE(centroid.mean()));
+			centroid_children.emplace_back("weight", Value::DOUBLE(centroid.weight()));
+			centroids.push_back(Value::STRUCT(std::move(centroid_children)));
+		}
+		child_list_t<Value> children;
+		children.emplace_back("count", Value::UBIGINT(state.pos));
+		children.emplace_back("min", Value::DOUBLE(state.h->min()));
+		children.emplace_back("max", Value::DOUBLE(state.h->max()));
+		children.emplace_back("centroids", Value::LIST(centroid_type, std::move(centroids)));
+		result.SetValue(i, Value::STRUCT(std::move(children)));
+	}
+}
+
+void ApproxQuantileDeserializeState(const AggregateStateLayout &layout, const Vector &input_vec, idx_t count,
+                                    data_ptr_t dest_buffer, ArenaAllocator &allocator) {
+	for (idx_t i = 0; i < count; i++) {
+		auto &state = *reinterpret_cast<ApproxQuantileState *>(dest_buffer + i * layout.total_state_size);
+		state.h = nullptr;
+		state.pos = 0;
+		auto entry = input_vec.GetValue(i);
+		if (entry.IsNull()) {
+			// NULL input - leave the state empty
+			continue;
+		}
+		auto &children = StructValue::GetChildren(entry);
+		std::vector<duckdb_tdigest::Centroid> centroids;
+		for (auto &centroid : ListValue::GetChildren(children[3])) {
+			auto &centroid_children = StructValue::GetChildren(centroid);
+			centroids.emplace_back(centroid_children[0].GetValue<double>(), centroid_children[1].GetValue<double>());
+		}
+		auto digest = make_uniq<duckdb_tdigest::TDigest>(std::move(centroids), std::vector<duckdb_tdigest::Centroid>(),
+		                                                 100, 0, 0);
+		digest->setMinMax(children[1].GetValue<double>(), children[2].GetValue<double>());
+		state.pos = children[0].GetValue<uint64_t>();
+		state.h = digest.release();
+	}
+}
+
 AggregateFunction GetApproximateQuantileAggregateFunction(const LogicalType &type) {
 	//	Not binary comparable
 	if (type == LogicalType::TIME_TZ) {
@@ -270,6 +351,8 @@ AggregateFunction ApproxQuantileDecimalFunction(const LogicalType &type) {
 	function.name = "approx_quantile";
 	function.SetSerializeCallback(ApproximateQuantileBindData::Serialize);
 	function.SetDeserializeCallback(ApproximateQuantileBindData::Deserialize);
+	function.SetStateExportCallbacks(ApproxQuantileGetStateType, ApproxQuantileSerializeState,
+	                                 ApproxQuantileDeserializeState);
 	return function;
 }
 
@@ -286,6 +369,8 @@ AggregateFunction GetApproximateQuantileAggregate(const LogicalType &type) {
 	fun.SetBindCallback(BindApproxQuantile);
 	fun.SetSerializeCallback(ApproximateQuantileBindData::Serialize);
 	fun.SetDeserializeCallback(ApproximateQuantileBindData::Deserialize);
+	fun.SetStateExportCallbacks(ApproxQuantileGetStateType, ApproxQuantileSerializeState,
+	                            ApproxQuantileDeserializeState);
 	// temporarily push an argument so we can bind the actual quantile
 	fun.GetSignature().AddParameter(LogicalType::FLOAT);
 	return fun;
@@ -391,6 +476,8 @@ AggregateFunction ApproxQuantileDecimalListFunction(const LogicalType &type) {
 	function.name = "approx_quantile";
 	function.SetSerializeCallback(ApproximateQuantileBindData::Serialize);
 	function.SetDeserializeCallback(ApproximateQuantileBindData::Deserialize);
+	function.SetStateExportCallbacks(ApproxQuantileGetStateType, ApproxQuantileSerializeState,
+	                                 ApproxQuantileDeserializeState);
 	return function;
 }
 
@@ -407,6 +494,8 @@ AggregateFunction GetApproxQuantileListAggregate(const LogicalType &type) {
 	fun.SetBindCallback(BindApproxQuantile);
 	fun.SetSerializeCallback(ApproximateQuantileBindData::Serialize);
 	fun.SetDeserializeCallback(ApproximateQuantileBindData::Deserialize);
+	fun.SetStateExportCallbacks(ApproxQuantileGetStateType, ApproxQuantileSerializeState,
+	                            ApproxQuantileDeserializeState);
 	// temporarily push an argument so we can bind the actual quantile
 	auto list_of_float = LogicalType::LIST(LogicalType::FLOAT);
 	fun.GetSignature().AddParameter(list_of_float);
