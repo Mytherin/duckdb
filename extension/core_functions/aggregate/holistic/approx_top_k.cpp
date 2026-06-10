@@ -81,7 +81,7 @@ struct InternalApproxTopKState {
 		filter.resize(filter_size);
 	}
 
-	static void CopyValue(ApproxTopKValue &value, const ApproxTopKString &input, AggregateInputData &input_data) {
+	static void CopyValue(ApproxTopKValue &value, const ApproxTopKString &input, ArenaAllocator &allocator) {
 		value.str_val.hash = input.hash;
 		if (input.str.IsInlined()) {
 			// no need to copy
@@ -92,7 +92,7 @@ struct InternalApproxTopKState {
 		if (value.size > value.capacity) {
 			// need to re-allocate for this value
 			value.capacity = UnsafeNumericCast<uint32_t>(NextPowerOfTwo(value.size));
-			value.dataptr = char_ptr_cast(input_data.allocator.Allocate(value.capacity));
+			value.dataptr = char_ptr_cast(allocator.Allocate(value.capacity));
 		}
 		// copy over the data
 		memcpy(value.dataptr, input.str.GetData(), value.size);
@@ -129,7 +129,7 @@ struct InternalApproxTopKState {
 			filter[value.str_val.hash & filter_mask] = value.count;
 			lookup_map.erase(value.str_val);
 		}
-		CopyValue(value, input, aggr_input);
+		CopyValue(value, input, aggr_input.allocator);
 		lookup_map.insert(make_pair(value.str_val, reference<ApproxTopKValue>(value)));
 		IncrementCount(value, increment);
 	}
@@ -378,6 +378,120 @@ void ApproxTopKFinalize(Vector &state_vector, AggregateInputData &, Vector &resu
 	result.Verify();
 }
 
+//===--------------------------------------------------------------------===//
+// State Export
+//===--------------------------------------------------------------------===//
+//! The exported state is STRUCT(k, "values" LIST(STRUCT("value", "count")), "filter"):
+//! the k parameter, the monitored values with their counters (ordered by descending count),
+//! and the Filtered Space-Saving sketch counters.
+LogicalType ApproxTopKExportType(const LogicalType &input_type) {
+	// strings are stored as-is - all other types are stored as binary-comparable sort keys
+	auto value_type = input_type.InternalType() == PhysicalType::VARCHAR && input_type.id() == LogicalTypeId::VARCHAR
+	                      ? LogicalType::VARCHAR
+	                      : LogicalType::BLOB;
+	child_list_t<LogicalType> value_children;
+	value_children.emplace_back("value", value_type);
+	value_children.emplace_back("count", LogicalType::UBIGINT);
+
+	child_list_t<LogicalType> children;
+	children.emplace_back("k", LogicalType::UBIGINT);
+	children.emplace_back("values", LogicalType::LIST(LogicalType::STRUCT(std::move(value_children))));
+	children.emplace_back("filter", LogicalType::LIST(LogicalType::UBIGINT));
+	return LogicalType::STRUCT(std::move(children));
+}
+
+AggregateStateLayout ApproxTopKGetStateType(const BoundAggregateFunction &function) {
+	AggregateStateLayout layout;
+	layout.type = ApproxTopKExportType(function.GetArguments()[0]);
+	layout.total_state_size = AlignValue<idx_t>(sizeof(ApproxTopKState));
+	return layout;
+}
+
+void ApproxTopKSerializeState(Vector &state_vector, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
+                              idx_t offset) {
+	D_ASSERT(offset == 0);
+	auto states = state_vector.Values<ApproxTopKState *>();
+	const auto &result_type = result.GetType();
+	const auto &value_list_type = StructType::GetChildType(result_type, 1);
+	const auto &value_struct_type = ListType::GetChildType(value_list_type);
+	const auto &value_type = StructType::GetChildType(value_struct_type, 0);
+
+	for (idx_t i = 0; i < count; i++) {
+		auto state_ptr = states[i].GetValue()->state;
+		if (!state_ptr || state_ptr->values.empty()) {
+			// no values have been added to this state - export NULL
+			FlatVector::SetNull(result, i, true);
+			continue;
+		}
+		auto &state = *state_ptr;
+		vector<Value> values;
+		for (auto &val_ref : state.values) {
+			auto &val = val_ref.get();
+			child_list_t<Value> value_children;
+			value_children.emplace_back("value", Value(value_type.id() == LogicalTypeId::VARCHAR
+			                                               ? Value(val.str_val.str.GetString())
+			                                               : Value::BLOB_RAW(val.str_val.str.GetString())));
+			value_children.emplace_back("count", Value::UBIGINT(val.count));
+			values.push_back(Value::STRUCT(std::move(value_children)));
+		}
+		vector<Value> filter;
+		for (auto &filter_entry : state.filter) {
+			filter.push_back(Value::UBIGINT(filter_entry));
+		}
+		child_list_t<Value> children;
+		children.emplace_back("k", Value::UBIGINT(state.k));
+		children.emplace_back("values", Value::LIST(value_struct_type, std::move(values)));
+		children.emplace_back("filter", Value::LIST(LogicalType::UBIGINT, std::move(filter)));
+		result.SetValue(i, Value::STRUCT(std::move(children)));
+	}
+}
+
+void ApproxTopKDeserializeState(const AggregateStateLayout &layout, const Vector &input_vec, idx_t count,
+                                data_ptr_t dest_buffer, ArenaAllocator &allocator) {
+	for (idx_t i = 0; i < count; i++) {
+		auto &state = *reinterpret_cast<ApproxTopKState *>(dest_buffer + i * layout.total_state_size);
+		state.state = nullptr;
+		auto entry = input_vec.GetValue(i);
+		if (entry.IsNull()) {
+			// NULL input - leave the state empty
+			continue;
+		}
+		auto &children = StructValue::GetChildren(entry);
+		const auto k = children[0].GetValue<uint64_t>();
+		auto &values = ListValue::GetChildren(children[1]);
+		auto &filter = ListValue::GetChildren(children[2]);
+
+		auto internal_state = make_uniq<InternalApproxTopKState>();
+		auto &target = *internal_state;
+		target.Initialize(k);
+		if (values.size() > target.capacity || filter.size() != target.filter.size()) {
+			throw InvalidInputException("Invalid approx_top_k state - "
+			                            "the values/filter sizes do not match the k value");
+		}
+		// insert the values - these are ordered by descending count, keeping "values" sorted
+		for (auto &value : values) {
+			auto &value_children = StructValue::GetChildren(value);
+			const auto str = StringValue::Get(value_children[0]);
+			const auto value_count = value_children[1].GetValue<uint64_t>();
+
+			auto &val = target.stored_values[target.values.size()];
+			val.index = target.values.size();
+			target.values.push_back(val);
+
+			string_t str_val(str.c_str(), UnsafeNumericCast<uint32_t>(str.size()));
+			ApproxTopKString topk_string(str_val, Hash(str_val));
+			InternalApproxTopKState::CopyValue(val, topk_string, allocator);
+			target.lookup_map.insert(make_pair(val.str_val, reference<ApproxTopKValue>(val)));
+			val.count = value_count;
+		}
+		for (idx_t filter_idx = 0; filter_idx < filter.size(); filter_idx++) {
+			target.filter[filter_idx] = filter[filter_idx].GetValue<uint64_t>();
+		}
+		target.Verify();
+		state.state = internal_state.release();
+	}
+}
+
 unique_ptr<FunctionData> ApproxTopKBind(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
@@ -390,6 +504,7 @@ unique_ptr<FunctionData> ApproxTopKBind(BindAggregateFunctionInput &input) {
 		function.SetStateUpdateCallback(ApproxTopKUpdate<string_t, HistogramStringFunctor>);
 		function.SetStateFinalizeCallback(ApproxTopKFinalize<HistogramStringFunctor>);
 	}
+	function.GetArguments()[0] = arguments[0]->GetReturnType();
 	function.SetReturnType(LogicalType::LIST(arguments[0]->GetReturnType()));
 	return nullptr;
 }
@@ -399,11 +514,13 @@ unique_ptr<FunctionData> ApproxTopKBind(BindAggregateFunctionInput &input) {
 AggregateFunction ApproxTopKFun::GetFunction() {
 	using STATE = ApproxTopKState;
 	using OP = ApproxTopKOperation;
-	return AggregateFunction("approx_top_k", {LogicalTypeId::ANY, LogicalType::BIGINT},
-	                         LogicalType::LIST(LogicalType::ANY), AggregateFunction::StateSize<STATE>,
-	                         AggregateFunction::StateInitialize<STATE, OP>, ApproxTopKUpdate,
-	                         AggregateFunction::StateCombine<STATE, OP>, ApproxTopKFinalize, nullptr, ApproxTopKBind,
-	                         AggregateFunction::StateDestroy<STATE, OP>);
+	auto fun = AggregateFunction("approx_top_k", {LogicalTypeId::ANY, LogicalType::BIGINT},
+	                             LogicalType::LIST(LogicalType::ANY), AggregateFunction::StateSize<STATE>,
+	                             AggregateFunction::StateInitialize<STATE, OP>, ApproxTopKUpdate,
+	                             AggregateFunction::StateCombine<STATE, OP>, ApproxTopKFinalize, nullptr,
+	                             ApproxTopKBind, AggregateFunction::StateDestroy<STATE, OP>);
+	fun.SetStateExportCallbacks(ApproxTopKGetStateType, ApproxTopKSerializeState, ApproxTopKDeserializeState);
+	return fun;
 }
 
 } // namespace duckdb
