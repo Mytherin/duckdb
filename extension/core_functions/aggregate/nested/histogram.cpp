@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
@@ -130,17 +131,64 @@ void HistogramFinalizeFunction(Vector &state_vector, AggregateInputData &, Vecto
 	result.Verify();
 }
 
+//===--------------------------------------------------------------------===//
+// State Export
+//===--------------------------------------------------------------------===//
+//! The exported state is the histogram itself: a MAP of value -> count.
+//! Serialization re-uses the finalize implementation - deserialization rebuilds the map.
+template <class OP, class T, class MAP_TYPE>
+AggregateStateLayout HistogramGetStateType(const BoundAggregateFunction &function) {
+	AggregateStateLayout layout;
+	layout.type = LogicalType::MAP(function.GetArguments()[0], LogicalType::UBIGINT);
+	layout.total_state_size = AlignValue<idx_t>(sizeof(HistogramAggState<T, typename MAP_TYPE::MAP_TYPE>));
+	return layout;
+}
+
+template <class OP, class T, class MAP_TYPE>
+void HistogramDeserializeState(const AggregateStateLayout &layout, const Vector &input_vec, idx_t count,
+                               data_ptr_t dest_buffer, ArenaAllocator &allocator) {
+	using HIST_STATE = HistogramAggState<T, typename MAP_TYPE::MAP_TYPE>;
+	const auto validity = input_vec.Validity();
+	auto list_entries = FlatVector::GetData<list_entry_t>(input_vec);
+	auto &child = ListVector::GetChild(input_vec);
+	auto &fields = StructVector::GetEntries(child);
+
+	// prepare the keys - this encodes them in the same way the histogram map stores them (e.g. as sort keys)
+	auto extra_state = OP::CreateExtraState();
+	UnifiedVectorFormat key_data;
+	OP::PrepareData(fields[0], extra_state, key_data);
+	auto count_data = FlatVector::GetData<uint64_t>(fields[1]);
+
+	for (idx_t i = 0; i < count; i++) {
+		auto &state = *reinterpret_cast<HIST_STATE *>(dest_buffer + i * layout.total_state_size);
+		if (!validity.IsValid(i)) {
+			// NULL input - leave the state empty
+			continue;
+		}
+		state.hist = MAP_TYPE::CreateEmpty(allocator);
+		const auto &list_entry = list_entries[i];
+		for (idx_t k = 0; k < list_entry.length; k++) {
+			const auto idx = list_entry.offset + k;
+			auto key = OP::template ExtractValue<T>(key_data, idx, allocator);
+			(*state.hist)[key] += count_data[idx];
+		}
+	}
+}
+
 template <class OP, class T, class MAP_TYPE>
 AggregateFunction GetHistogramFunction(const LogicalType &type) {
 	using STATE_TYPE = HistogramAggState<T, typename MAP_TYPE::MAP_TYPE>;
 	using HIST_FUNC = HistogramFunction<MAP_TYPE>;
 
 	auto struct_type = LogicalType::MAP(type, LogicalType::UBIGINT);
-	return AggregateFunction(
+	auto fun = AggregateFunction(
 	    "histogram", {type}, struct_type, AggregateFunction::StateSize<STATE_TYPE>,
 	    AggregateFunction::StateInitialize<STATE_TYPE, HIST_FUNC>, HistogramUpdateFunction<OP, T, MAP_TYPE>,
 	    AggregateFunction::StateCombine<STATE_TYPE, HIST_FUNC>, HistogramFinalizeFunction<OP, T, MAP_TYPE>, nullptr,
 	    nullptr, AggregateFunction::StateDestroy<STATE_TYPE, HIST_FUNC>);
+	fun.SetStateExportCallbacks(HistogramGetStateType<OP, T, MAP_TYPE>, HistogramFinalizeFunction<OP, T, MAP_TYPE>,
+	                            HistogramDeserializeState<OP, T, MAP_TYPE>);
+	return fun;
 }
 
 template <class OP, class T, class MAP_TYPE>

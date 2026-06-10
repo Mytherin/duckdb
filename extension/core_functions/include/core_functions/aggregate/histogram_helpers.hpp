@@ -28,7 +28,7 @@ struct HistogramFunctor {
 	}
 
 	template <class T>
-	static T ExtractValue(UnifiedVectorFormat &bin_data, idx_t offset, AggregateInputData &) {
+	static T ExtractValue(UnifiedVectorFormat &bin_data, idx_t offset, ArenaAllocator &) {
 		return UnifiedVectorFormat::GetData<T>(bin_data)[bin_data.sel->get_index(offset)];
 	}
 
@@ -39,7 +39,7 @@ struct HistogramFunctor {
 
 struct HistogramStringFunctorBase {
 	template <class T>
-	static T ExtractValue(UnifiedVectorFormat &bin_data, idx_t offset, AggregateInputData &aggr_input) {
+	static T ExtractValue(UnifiedVectorFormat &bin_data, idx_t offset, ArenaAllocator &allocator) {
 		auto &input_str = UnifiedVectorFormat::GetData<T>(bin_data)[bin_data.sel->get_index(offset)];
 		if (input_str.IsInlined()) {
 			// inlined strings can be inserted directly
@@ -47,7 +47,7 @@ struct HistogramStringFunctorBase {
 		}
 		// if the string is not inlined we need to allocate space for it
 		auto input_str_size = UnsafeNumericCast<uint32_t>(input_str.GetSize());
-		auto string_memory = aggr_input.allocator.Allocate(input_str_size);
+		auto string_memory = allocator.Allocate(input_str_size);
 		// copy over the string
 		memcpy(string_memory, input_str.GetData(), input_str_size);
 		// now insert it into the histogram

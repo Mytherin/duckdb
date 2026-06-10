@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
@@ -58,7 +59,8 @@ struct HistogramBinState {
 			if (!bin_child_data.validity.RowIsValid(bin_child_idx)) {
 				throw BinderException("Histogram bin entry cannot be NULL");
 			}
-			bin_boundaries->push_back(OP::template ExtractValue<T>(bin_child_data, bin_list.offset + i, aggr_input));
+			bin_boundaries->push_back(
+			    OP::template ExtractValue<T>(bin_child_data, bin_list.offset + i, aggr_input.allocator));
 		}
 		// sort the bin boundaries
 		std::sort(bin_boundaries->begin(), bin_boundaries->end());
@@ -328,6 +330,119 @@ void HistogramBinFinalizeFunction(Vector &state_vector, AggregateInputData &, Ve
 	result.Verify();
 }
 
+//===--------------------------------------------------------------------===//
+// State Export
+//===--------------------------------------------------------------------===//
+//! The exported state is STRUCT("bin_boundaries", "counts"): the (sorted) bin boundaries and the per-bin counters.
+//! The counts list has one extra entry at the end holding the count of the overflow ("other") bucket.
+template <class OP, class T>
+AggregateStateLayout HistogramBinGetStateType(const BoundAggregateFunction &function) {
+	child_list_t<LogicalType> children;
+	children.emplace_back("bin_boundaries", LogicalType::LIST(function.GetArguments()[0]));
+	children.emplace_back("counts", LogicalType::LIST(LogicalType::UBIGINT));
+	AggregateStateLayout layout;
+	layout.type = LogicalType::STRUCT(std::move(children));
+	layout.total_state_size = AlignValue<idx_t>(sizeof(HistogramBinState<T>));
+	return layout;
+}
+
+template <class OP, class T>
+void HistogramBinSerializeState(Vector &state_vector, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
+                                idx_t offset) {
+	D_ASSERT(offset == 0);
+	auto states = state_vector.Values<HistogramBinState<T> *>();
+
+	auto &mask = FlatVector::ValidityMutable(result);
+	auto &fields = StructVector::GetEntries(result);
+	auto &boundary_lists = fields[0];
+	auto &count_lists = fields[1];
+	auto boundary_entries = FlatVector::ScatterWriter<list_entry_t>(boundary_lists);
+	auto count_entries = FlatVector::ScatterWriter<list_entry_t>(count_lists);
+	idx_t total_boundaries = ListVector::GetListSize(boundary_lists);
+	idx_t total_counts = ListVector::GetListSize(count_lists);
+	for (idx_t i = 0; i < count; i++) {
+		auto &state = *states[i].GetValue();
+		boundary_entries[i].offset = total_boundaries;
+		count_entries[i].offset = total_counts;
+		if (!state.bin_boundaries) {
+			// the bins have not been initialized - export NULL
+			mask.SetInvalid(i);
+			boundary_entries[i].length = 0;
+			count_entries[i].length = 0;
+			continue;
+		}
+		boundary_entries[i].length = state.bin_boundaries->size();
+		count_entries[i].length = state.counts->size();
+		total_boundaries += state.bin_boundaries->size();
+		total_counts += state.counts->size();
+	}
+
+	ListVector::Reserve(boundary_lists, total_boundaries);
+	ListVector::Reserve(count_lists, total_counts);
+	auto &boundary_child = ListVector::GetChildMutable(boundary_lists);
+	auto count_data = FlatVector::GetDataMutable<uint64_t>(ListVector::GetChildMutable(count_lists));
+	for (idx_t i = 0; i < count; i++) {
+		auto &state = *states[i].GetValue();
+		if (!state.bin_boundaries) {
+			continue;
+		}
+		for (idx_t bin_idx = 0; bin_idx < state.bin_boundaries->size(); bin_idx++) {
+			OP::template HistogramFinalize<T>((*state.bin_boundaries)[bin_idx], boundary_child,
+			                                  boundary_entries[i].offset + bin_idx);
+		}
+		for (idx_t bin_idx = 0; bin_idx < state.counts->size(); bin_idx++) {
+			count_data[count_entries[i].offset + bin_idx] = (*state.counts)[bin_idx];
+		}
+	}
+	ListVector::SetListSize(boundary_lists, total_boundaries);
+	ListVector::SetListSize(count_lists, total_counts);
+	FlatVector::SetSize(boundary_lists, count);
+	FlatVector::SetSize(count_lists, count);
+	FlatVector::SetSize(result, count);
+}
+
+template <class OP, class T>
+void HistogramBinDeserializeState(const AggregateStateLayout &layout, const Vector &input_vec, idx_t count,
+                                  data_ptr_t dest_buffer, ArenaAllocator &allocator) {
+	const auto validity = input_vec.Validity();
+	const auto &fields = StructVector::GetEntries(input_vec);
+	auto &boundary_lists = fields[0];
+	auto &count_lists = fields[1];
+	auto boundary_entries = FlatVector::GetData<list_entry_t>(boundary_lists);
+	auto count_entries = FlatVector::GetData<list_entry_t>(count_lists);
+
+	// prepare the boundaries - this encodes them the same way the state stores them (e.g. as sort keys)
+	auto extra_state = OP::CreateExtraState();
+	UnifiedVectorFormat boundary_data;
+	OP::PrepareData(ListVector::GetChild(boundary_lists), extra_state, boundary_data);
+	auto count_data = FlatVector::GetData<uint64_t>(ListVector::GetChild(count_lists));
+
+	for (idx_t i = 0; i < count; i++) {
+		auto &state = *reinterpret_cast<HistogramBinState<T> *>(dest_buffer + i * layout.total_state_size);
+		if (!validity.IsValid(i)) {
+			// NULL input - leave the state empty
+			continue;
+		}
+		const auto &boundary_entry = boundary_entries[i];
+		const auto &count_entry = count_entries[i];
+		if (count_entry.length != boundary_entry.length + 1) {
+			throw InvalidInputException("Invalid histogram state - the counts list should have exactly one more "
+			                            "entry than the bin boundaries list");
+		}
+		state.bin_boundaries = new unsafe_vector<T>();
+		state.counts = new unsafe_vector<idx_t>();
+		state.bin_boundaries->reserve(boundary_entry.length);
+		for (idx_t k = 0; k < boundary_entry.length; k++) {
+			state.bin_boundaries->push_back(
+			    OP::template ExtractValue<T>(boundary_data, boundary_entry.offset + k, allocator));
+		}
+		state.counts->reserve(count_entry.length);
+		for (idx_t k = 0; k < count_entry.length; k++) {
+			state.counts->push_back(count_data[count_entry.offset + k]);
+		}
+	}
+}
+
 template <class OP, class T, class HIST>
 AggregateFunction GetHistogramBinFunction(const LogicalType &type) {
 	using STATE_TYPE = HistogramBinState<T>;
@@ -335,11 +450,14 @@ AggregateFunction GetHistogramBinFunction(const LogicalType &type) {
 	const char *function_name = HIST::EXACT ? "histogram_exact" : "histogram";
 
 	auto struct_type = LogicalType::MAP(type, LogicalType::UBIGINT);
-	return AggregateFunction(
+	auto fun = AggregateFunction(
 	    function_name, {type, LogicalType::LIST(type)}, struct_type, AggregateFunction::StateSize<STATE_TYPE>,
 	    AggregateFunction::StateInitialize<STATE_TYPE, HistogramBinFunction>, HistogramBinUpdateFunction<OP, T, HIST>,
 	    AggregateFunction::StateCombine<STATE_TYPE, HistogramBinFunction>, HistogramBinFinalizeFunction<OP, T>, nullptr,
 	    nullptr, AggregateFunction::StateDestroy<STATE_TYPE, HistogramBinFunction>);
+	fun.SetStateExportCallbacks(HistogramBinGetStateType<OP, T>, HistogramBinSerializeState<OP, T>,
+	                            HistogramBinDeserializeState<OP, T>);
+	return fun;
 }
 
 template <class HIST>
