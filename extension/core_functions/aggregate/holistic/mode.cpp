@@ -1,4 +1,4 @@
-#include "duckdb/common/vector/struct_vector.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
@@ -476,77 +476,62 @@ AggregateStateLayout ModeGetStateType(const BoundAggregateFunction &function) {
 	return layout;
 }
 
+//! The shape of the exported state: LIST(STRUCT("value", "count", "first_row"))
+template <typename INPUT_TYPE>
+using MODE_EXPORT_TYPE = VectorListType<VectorStructType<INPUT_TYPE, uint64_t, uint64_t>>;
+
 template <typename INPUT_TYPE, typename TYPE_OP>
 void ModeSerializeState(Vector &state_vector, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
                         idx_t offset) {
 	D_ASSERT(offset == 0);
 	using STATE = ModeState<INPUT_TYPE, TYPE_OP>;
 	auto states = state_vector.Values<STATE *>();
+	auto writer = FlatVector::Writer<MODE_EXPORT_TYPE<INPUT_TYPE>>(result, count);
 
-	auto &mask = FlatVector::ValidityMutable(result);
-	auto list_entries = FlatVector::ScatterWriter<list_entry_t>(result);
-	idx_t total_len = ListVector::GetListSize(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto &state = *states[i].GetValue();
-		list_entries[i].offset = total_len;
 		if (!state.frequency_map || state.frequency_map->empty()) {
 			// no values have been added to this state - export NULL
-			mask.SetInvalid(i);
-			list_entries[i].length = 0;
+			writer.WriteNull();
 			continue;
 		}
-		list_entries[i].length = state.frequency_map->size();
-		total_len += state.frequency_map->size();
-	}
-
-	ListVector::Reserve(result, total_len);
-	auto &child = ListVector::GetChildMutable(result);
-	auto &fields = StructVector::GetEntries(child);
-	auto value_data = FlatVector::GetDataMutable<INPUT_TYPE>(fields[0]);
-	auto count_data = FlatVector::GetDataMutable<uint64_t>(fields[1]);
-	auto first_row_data = FlatVector::GetDataMutable<uint64_t>(fields[2]);
-	for (idx_t i = 0; i < count; i++) {
-		auto &state = *states[i].GetValue();
-		if (!state.frequency_map || state.frequency_map->empty()) {
-			continue;
-		}
-		idx_t pos = list_entries[i].offset;
-		for (auto &entry : *state.frequency_map) {
-			value_data[pos] = TYPE_OP::template Assign<INPUT_TYPE, INPUT_TYPE>(fields[0], entry.first);
-			count_data[pos] = entry.second.count;
-			first_row_data[pos] = entry.second.first_row;
-			pos++;
+		auto map_entry = state.frequency_map->begin();
+		for (auto &entry_writer : writer.WriteList(state.frequency_map->size())) {
+			auto &entry = *map_entry++;
+			entry_writer.WriteValue([&](auto &value_writer, auto &count_writer, auto &first_row_writer) {
+				value_writer.WriteValue(entry.first);
+				count_writer.WriteValue(entry.second.count);
+				first_row_writer.WriteValue(entry.second.first_row);
+			});
 		}
 	}
-	ListVector::SetListSize(result, total_len);
-	FlatVector::SetSize(result, count);
 }
 
 template <typename INPUT_TYPE, typename TYPE_OP>
 void ModeDeserializeState(const AggregateStateLayout &layout, const Vector &input_vec, idx_t count,
                           data_ptr_t dest_buffer, ArenaAllocator &allocator) {
 	using STATE = ModeState<INPUT_TYPE, TYPE_OP>;
-	auto values = input_vec.Values<list_entry_t>();
-	auto &child = ListVector::GetChild(input_vec);
-	auto &fields = StructVector::GetEntries(child);
-	auto value_data = FlatVector::GetData<INPUT_TYPE>(fields[0]);
-	auto count_data = FlatVector::GetData<uint64_t>(fields[1]);
-	auto first_row_data = FlatVector::GetData<uint64_t>(fields[2]);
+	auto entries = input_vec.Values<MODE_EXPORT_TYPE<INPUT_TYPE>>();
 	for (idx_t i = 0; i < count; i++) {
 		auto &state = *reinterpret_cast<STATE *>(dest_buffer + i * layout.total_state_size);
-		const auto entry = values[i];
+		const auto entry = entries[i];
 		if (!entry.IsValid()) {
 			// NULL input - leave the state empty
 			continue;
 		}
 		state.frequency_map = TYPE_OP::CreateEmpty(allocator);
-		const auto &list_entry = entry.GetValue();
-		for (idx_t k = 0; k < list_entry.length; k++) {
-			const auto idx = list_entry.offset + k;
-			auto &attr = (*state.frequency_map)[value_data[idx]];
-			attr.count = count_data[idx];
-			attr.first_row = first_row_data[idx];
-			state.count += count_data[idx];
+		for (const auto value_entry : entry.GetChildValues()) {
+			const auto key_entry = value_entry.template GetChildValue<0>();
+			const auto count_entry = value_entry.template GetChildValue<1>();
+			const auto first_row_entry = value_entry.template GetChildValue<2>();
+			if (!value_entry.IsValid() || !key_entry.IsValid() || !count_entry.IsValid() ||
+			    !first_row_entry.IsValid()) {
+				throw InvalidInputException("Invalid mode state - the state values cannot be NULL");
+			}
+			auto &attr = (*state.frequency_map)[key_entry.GetValue()];
+			attr.count = count_entry.GetValue();
+			attr.first_row = first_row_entry.GetValue();
+			state.count += attr.count;
 		}
 	}
 }

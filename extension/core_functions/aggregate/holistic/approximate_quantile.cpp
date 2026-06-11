@@ -1,4 +1,5 @@
 #include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "core_functions/aggregate/holistic_functions.hpp"
@@ -191,58 +192,74 @@ AggregateStateLayout ApproxQuantileGetStateType(const BoundAggregateFunction &fu
 	return layout;
 }
 
+//! The shape of the exported state: STRUCT(count, min, max, centroids LIST(STRUCT(mean, weight)))
+using APPROX_QUANTILE_EXPORT_TYPE =
+    VectorStructType<uint64_t, double, double, VectorListType<VectorStructType<double, double>>>;
+
 void ApproxQuantileSerializeState(Vector &state_vector, AggregateInputData &aggr_input_data, Vector &result,
                                   idx_t count, idx_t offset) {
 	D_ASSERT(offset == 0);
 	auto states = state_vector.Values<ApproxQuantileState *>();
-	const auto &centroid_list_type = StructType::GetChildType(result.GetType(), 3);
-	const auto &centroid_type = ListType::GetChildType(centroid_list_type);
+	auto writer = FlatVector::Writer<APPROX_QUANTILE_EXPORT_TYPE>(result, count);
 	for (idx_t i = 0; i < count; i++) {
 		auto &state = *states[i].GetValue();
 		if (!state.h || state.pos == 0) {
 			// no values have been added to this state - export NULL
-			FlatVector::SetNull(result, i, true);
+			writer.WriteNull();
 			continue;
 		}
 		// fold any unprocessed values into the centroids
 		state.h->compress();
-		vector<Value> centroids;
-		for (auto &centroid : state.h->processed()) {
-			child_list_t<Value> centroid_children;
-			centroid_children.emplace_back("mean", Value::DOUBLE(centroid.mean()));
-			centroid_children.emplace_back("weight", Value::DOUBLE(centroid.weight()));
-			centroids.push_back(Value::STRUCT(std::move(centroid_children)));
-		}
-		child_list_t<Value> children;
-		children.emplace_back("count", Value::UBIGINT(state.pos));
-		children.emplace_back("min", Value::DOUBLE(state.h->min()));
-		children.emplace_back("max", Value::DOUBLE(state.h->max()));
-		children.emplace_back("centroids", Value::LIST(centroid_type, std::move(centroids)));
-		result.SetValue(i, Value::STRUCT(std::move(children)));
+		writer.WriteValue([&](auto &count_writer, auto &min_writer, auto &max_writer, auto &centroids_writer) {
+			count_writer.WriteValue(state.pos);
+			min_writer.WriteValue(state.h->min());
+			max_writer.WriteValue(state.h->max());
+			auto &centroids = state.h->processed();
+			idx_t centroid_idx = 0;
+			for (auto &centroid_writer : centroids_writer.WriteList(centroids.size())) {
+				auto &centroid = centroids[centroid_idx++];
+				centroid_writer.WriteValue([&](auto &mean_writer, auto &weight_writer) {
+					mean_writer.WriteValue(centroid.mean());
+					weight_writer.WriteValue(centroid.weight());
+				});
+			}
+		});
 	}
 }
 
 void ApproxQuantileDeserializeState(const AggregateStateLayout &layout, const Vector &input_vec, idx_t count,
                                     data_ptr_t dest_buffer, ArenaAllocator &allocator) {
+	auto entries = input_vec.Values<APPROX_QUANTILE_EXPORT_TYPE>();
 	for (idx_t i = 0; i < count; i++) {
 		auto &state = *reinterpret_cast<ApproxQuantileState *>(dest_buffer + i * layout.total_state_size);
 		state.h = nullptr;
 		state.pos = 0;
-		auto entry = input_vec.GetValue(i);
-		if (entry.IsNull()) {
+		const auto entry = entries[i];
+		if (!entry.IsValid()) {
 			// NULL input - leave the state empty
 			continue;
 		}
-		auto &children = StructValue::GetChildren(entry);
+		const auto count_entry = entry.template GetChildValue<0>();
+		const auto min_entry = entry.template GetChildValue<1>();
+		const auto max_entry = entry.template GetChildValue<2>();
+		const auto centroid_list = entry.template GetChildValue<3>();
+		if (!count_entry.IsValid() || !min_entry.IsValid() || !max_entry.IsValid() || !centroid_list.IsValid()) {
+			throw InvalidInputException("Invalid approx_quantile state - the state fields cannot be NULL");
+		}
 		std::vector<duckdb_tdigest::Centroid> centroids;
-		for (auto &centroid : ListValue::GetChildren(children[3])) {
-			auto &centroid_children = StructValue::GetChildren(centroid);
-			centroids.emplace_back(centroid_children[0].GetValue<double>(), centroid_children[1].GetValue<double>());
+		centroids.reserve(centroid_list.GetListLength());
+		for (const auto centroid_entry : centroid_list.GetChildValues()) {
+			const auto mean_entry = centroid_entry.template GetChildValue<0>();
+			const auto weight_entry = centroid_entry.template GetChildValue<1>();
+			if (!centroid_entry.IsValid() || !mean_entry.IsValid() || !weight_entry.IsValid()) {
+				throw InvalidInputException("Invalid approx_quantile state - the centroids cannot be NULL");
+			}
+			centroids.emplace_back(mean_entry.GetValue(), weight_entry.GetValue());
 		}
 		auto digest = make_uniq<duckdb_tdigest::TDigest>(std::move(centroids), std::vector<duckdb_tdigest::Centroid>(),
 		                                                 100, 0, 0);
-		digest->setMinMax(children[1].GetValue<double>(), children[2].GetValue<double>());
-		state.pos = children[0].GetValue<uint64_t>();
+		digest->setMinMax(min_entry.GetValue(), max_entry.GetValue());
+		state.pos = count_entry.GetValue();
 		state.h = digest.release();
 	}
 }

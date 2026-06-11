@@ -1,4 +1,4 @@
-#include "duckdb/common/vector/struct_vector.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -182,73 +182,61 @@ AggregateStateLayout ReservoirQuantileGetStateType(const BoundAggregateFunction 
 	return layout;
 }
 
+//! The shape of the exported state: STRUCT("sample_size", "values")
+template <class T>
+using RESERVOIR_QUANTILE_EXPORT_TYPE = VectorStructType<uint64_t, VectorListType<T>>;
+
 template <class T>
 void ReservoirQuantileSerializeState(Vector &state_vector, AggregateInputData &aggr_input_data, Vector &result,
                                      idx_t count, idx_t offset) {
 	D_ASSERT(offset == 0);
 	using STATE = ReservoirQuantileState<T>;
 	auto states = state_vector.Values<STATE *>();
+	auto writer = FlatVector::Writer<RESERVOIR_QUANTILE_EXPORT_TYPE<T>>(result, count);
 
-	auto &mask = FlatVector::ValidityMutable(result);
-	auto &fields = StructVector::GetEntries(result);
-	auto sample_sizes = FlatVector::GetDataMutable<uint64_t>(fields[0]);
-	auto &value_lists = fields[1];
-	auto list_entries = FlatVector::ScatterWriter<list_entry_t>(value_lists);
-	idx_t total_len = ListVector::GetListSize(value_lists);
 	for (idx_t i = 0; i < count; i++) {
 		auto &state = *states[i].GetValue();
-		list_entries[i].offset = total_len;
 		if (state.pos == 0) {
 			// no values have been added to this state - export NULL
-			mask.SetInvalid(i);
-			list_entries[i].length = 0;
-			sample_sizes[i] = 0;
+			writer.WriteNull();
 			continue;
 		}
-		sample_sizes[i] = state.len;
-		list_entries[i].length = state.pos;
-		total_len += state.pos;
+		writer.WriteValue([&](auto &sample_size_writer, auto &values_writer) {
+			sample_size_writer.WriteValue(state.len);
+			idx_t value_idx = 0;
+			for (auto &value_writer : values_writer.WriteList(state.pos)) {
+				value_writer.WriteValue(state.v[value_idx++]);
+			}
+		});
 	}
-
-	ListVector::Reserve(value_lists, total_len);
-	auto value_data = FlatVector::GetDataMutable<T>(ListVector::GetChildMutable(value_lists));
-	for (idx_t i = 0; i < count; i++) {
-		auto &state = *states[i].GetValue();
-		if (state.pos == 0) {
-			continue;
-		}
-		for (idx_t k = 0; k < state.pos; k++) {
-			value_data[list_entries[i].offset + k] = state.v[k];
-		}
-	}
-	ListVector::SetListSize(value_lists, total_len);
-	FlatVector::SetSize(fields[0], count);
-	FlatVector::SetSize(value_lists, count);
-	FlatVector::SetSize(result, count);
 }
 
 template <class T>
 void ReservoirQuantileDeserializeState(const AggregateStateLayout &layout, const Vector &input_vec, idx_t count,
                                        data_ptr_t dest_buffer, ArenaAllocator &allocator) {
 	using STATE = ReservoirQuantileState<T>;
-	const auto validity = input_vec.Validity();
-	const auto &fields = StructVector::GetEntries(input_vec);
-	auto sample_sizes = FlatVector::GetData<uint64_t>(fields[0]);
-	auto &value_lists = fields[1];
-	auto list_entries = FlatVector::GetData<list_entry_t>(value_lists);
-	auto value_data = FlatVector::GetData<T>(ListVector::GetChild(value_lists));
+	auto entries = input_vec.Values<RESERVOIR_QUANTILE_EXPORT_TYPE<T>>();
 	for (idx_t i = 0; i < count; i++) {
 		auto &state = *reinterpret_cast<STATE *>(dest_buffer + i * layout.total_state_size);
-		if (!validity.IsValid(i)) {
+		const auto entry = entries[i];
+		if (!entry.IsValid()) {
 			// NULL input - leave the state empty
 			continue;
 		}
-		const auto &list_entry = list_entries[i];
-		state.Resize(MaxValue<idx_t>(sample_sizes[i], list_entry.length));
-		for (idx_t k = 0; k < list_entry.length; k++) {
-			state.v[k] = value_data[list_entry.offset + k];
+		const auto sample_size_entry = entry.template GetChildValue<0>();
+		const auto values = entry.template GetChildValue<1>();
+		if (!sample_size_entry.IsValid() || !values.IsValid()) {
+			throw InvalidInputException("Invalid reservoir_quantile state - the state fields cannot be NULL");
 		}
-		state.pos = list_entry.length;
+		state.Resize(MaxValue<idx_t>(sample_size_entry.GetValue(), values.GetListLength()));
+		idx_t value_idx = 0;
+		for (const auto value_entry : values.GetChildValues()) {
+			if (!value_entry.IsValid()) {
+				throw InvalidInputException("Invalid reservoir_quantile state - the state values cannot be NULL");
+			}
+			state.v[value_idx++] = value_entry.GetValue();
+		}
+		state.pos = value_idx;
 		state.r_samp = new BaseReservoirSampling();
 		state.r_samp->InitializeReservoirWeights(state.pos, state.len);
 	}

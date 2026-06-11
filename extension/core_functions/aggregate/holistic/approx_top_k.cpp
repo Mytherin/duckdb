@@ -1,4 +1,5 @@
 #include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "core_functions/aggregate/histogram_helpers.hpp"
 #include "core_functions/aggregate/holistic_functions.hpp"
@@ -407,85 +408,88 @@ AggregateStateLayout ApproxTopKGetStateType(const BoundAggregateFunction &functi
 	return layout;
 }
 
+//! The shape of the exported state: STRUCT(k, "values" LIST(STRUCT("value", "count")), "filter")
+using APPROX_TOP_K_EXPORT_TYPE =
+    VectorStructType<uint64_t, VectorListType<VectorStructType<string_t, uint64_t>>, VectorListType<uint64_t>>;
+
 void ApproxTopKSerializeState(Vector &state_vector, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
                               idx_t offset) {
 	D_ASSERT(offset == 0);
 	auto states = state_vector.Values<ApproxTopKState *>();
-	const auto &result_type = result.GetType();
-	const auto &value_list_type = StructType::GetChildType(result_type, 1);
-	const auto &value_struct_type = ListType::GetChildType(value_list_type);
-	const auto &value_type = StructType::GetChildType(value_struct_type, 0);
+	auto writer = FlatVector::Writer<APPROX_TOP_K_EXPORT_TYPE>(result, count);
 
 	for (idx_t i = 0; i < count; i++) {
 		auto state_ptr = states[i].GetValue()->state;
 		if (!state_ptr || state_ptr->values.empty()) {
 			// no values have been added to this state - export NULL
-			FlatVector::SetNull(result, i, true);
+			writer.WriteNull();
 			continue;
 		}
 		auto &state = *state_ptr;
-		vector<Value> values;
-		for (auto &val_ref : state.values) {
-			auto &val = val_ref.get();
-			child_list_t<Value> value_children;
-			value_children.emplace_back("value", Value(value_type.id() == LogicalTypeId::VARCHAR
-			                                               ? Value(val.str_val.str.GetString())
-			                                               : Value::BLOB_RAW(val.str_val.str.GetString())));
-			value_children.emplace_back("count", Value::UBIGINT(val.count));
-			values.push_back(Value::STRUCT(std::move(value_children)));
-		}
-		vector<Value> filter;
-		for (auto &filter_entry : state.filter) {
-			filter.push_back(Value::UBIGINT(filter_entry));
-		}
-		child_list_t<Value> children;
-		children.emplace_back("k", Value::UBIGINT(state.k));
-		children.emplace_back("values", Value::LIST(value_struct_type, std::move(values)));
-		children.emplace_back("filter", Value::LIST(LogicalType::UBIGINT, std::move(filter)));
-		result.SetValue(i, Value::STRUCT(std::move(children)));
+		writer.WriteValue([&](auto &k_writer, auto &values_writer, auto &filter_writer) {
+			k_writer.WriteValue(state.k);
+			idx_t val_idx = 0;
+			for (auto &value_writer : values_writer.WriteList(state.values.size())) {
+				auto &val = state.values[val_idx++].get();
+				value_writer.WriteValue([&](auto &str_writer, auto &count_writer) {
+					str_writer.WriteValue(val.str_val.str);
+					count_writer.WriteValue(val.count);
+				});
+			}
+			idx_t filter_idx = 0;
+			for (auto &entry_writer : filter_writer.WriteList(state.filter.size())) {
+				entry_writer.WriteValue(state.filter[filter_idx++]);
+			}
+		});
 	}
 }
 
 void ApproxTopKDeserializeState(const AggregateStateLayout &layout, const Vector &input_vec, idx_t count,
                                 data_ptr_t dest_buffer, ArenaAllocator &allocator) {
+	auto entries = input_vec.Values<APPROX_TOP_K_EXPORT_TYPE>();
 	for (idx_t i = 0; i < count; i++) {
 		auto &state = *reinterpret_cast<ApproxTopKState *>(dest_buffer + i * layout.total_state_size);
 		state.state = nullptr;
-		auto entry = input_vec.GetValue(i);
-		if (entry.IsNull()) {
+		const auto entry = entries[i];
+		if (!entry.IsValid()) {
 			// NULL input - leave the state empty
 			continue;
 		}
-		auto &children = StructValue::GetChildren(entry);
-		const auto k = children[0].GetValue<uint64_t>();
-		auto &values = ListValue::GetChildren(children[1]);
-		auto &filter = ListValue::GetChildren(children[2]);
+		const auto k_entry = entry.template GetChildValue<0>();
+		const auto values = entry.template GetChildValue<1>();
+		const auto filter = entry.template GetChildValue<2>();
+		if (!k_entry.IsValid() || !values.IsValid() || !filter.IsValid()) {
+			throw InvalidInputException("Invalid approx_top_k state - the state fields cannot be NULL");
+		}
 
 		auto internal_state = make_uniq<InternalApproxTopKState>();
 		auto &target = *internal_state;
-		target.Initialize(k);
-		if (values.size() > target.capacity || filter.size() != target.filter.size()) {
+		target.Initialize(k_entry.GetValue());
+		if (values.GetListLength() > target.capacity || filter.GetListLength() != target.filter.size()) {
 			throw InvalidInputException("Invalid approx_top_k state - "
 			                            "the values/filter sizes do not match the k value");
 		}
 		// insert the values - these are ordered by descending count, keeping "values" sorted
-		for (auto &value : values) {
-			auto &value_children = StructValue::GetChildren(value);
-			const auto str = StringValue::Get(value_children[0]);
-			const auto value_count = value_children[1].GetValue<uint64_t>();
+		for (const auto value_entry : values.GetChildValues()) {
+			const auto str_entry = value_entry.template GetChildValue<0>();
+			const auto count_entry = value_entry.template GetChildValue<1>();
+			if (!value_entry.IsValid() || !str_entry.IsValid() || !count_entry.IsValid()) {
+				throw InvalidInputException("Invalid approx_top_k state - the state values cannot be NULL");
+			}
 
 			auto &val = target.stored_values[target.values.size()];
 			val.index = target.values.size();
 			target.values.push_back(val);
 
-			string_t str_val(str.c_str(), UnsafeNumericCast<uint32_t>(str.size()));
+			const auto str_val = str_entry.GetValue();
 			ApproxTopKString topk_string(str_val, Hash(str_val));
 			InternalApproxTopKState::CopyValue(val, topk_string, allocator);
 			target.lookup_map.insert(make_pair(val.str_val, reference<ApproxTopKValue>(val)));
-			val.count = value_count;
+			val.count = count_entry.GetValue();
 		}
-		for (idx_t filter_idx = 0; filter_idx < filter.size(); filter_idx++) {
-			target.filter[filter_idx] = filter[filter_idx].GetValue<uint64_t>();
+		idx_t filter_idx = 0;
+		for (const auto filter_entry : filter.GetChildValues()) {
+			target.filter[filter_idx++] = filter_entry.IsValid() ? filter_entry.GetValue() : 0;
 		}
 		target.Verify();
 		state.state = internal_state.release();
