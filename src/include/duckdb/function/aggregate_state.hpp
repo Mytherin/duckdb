@@ -48,6 +48,10 @@ struct AggregateInputData {
 	ArenaAllocator &allocator;
 	AggregateCombineType combine_type;
 	optional_ptr<const ClusteredAggr> clustered;
+	//! Optional caller-provided slot in which the aggregate can cache expensive state across calls.
+	//! The slot outlives the call - e.g. the hash table scan provides a slot that lives for the entire scan,
+	//! so state cached here survives across the per-chunk finalize calls.
+	optional_ptr<unique_ptr<FunctionLocalState>> local_state;
 };
 
 struct AggregateUnaryInput {
@@ -79,6 +83,16 @@ struct AggregateBinaryInput {
 struct AggregateFinalizeData {
 	AggregateFinalizeData(Vector &result_p, AggregateInputData &input_p, idx_t result_count_p = 1)
 	    : result(result_p), input(input_p), result_idx(0), result_count(result_count_p) {
+		if (input.local_state) {
+			// the caller provided a slot for caching local state across finalize calls - adopt its contents
+			local_state = std::move(*input.local_state);
+		}
+	}
+	~AggregateFinalizeData() {
+		if (input.local_state) {
+			// hand the local state back to the caller's slot so it can be re-used by the next finalize call
+			*input.local_state = std::move(local_state);
+		}
 	}
 
 	Vector &result;

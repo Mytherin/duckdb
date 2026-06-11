@@ -161,10 +161,15 @@ void RowOperations::FinalizeStates(RowOperationsState &state, TupleDataLayout &l
 	VectorOperations::AddInPlace(addresses_copy, UnsafeNumericCast<int64_t>(layout.GetAggrOffset()));
 
 	auto &aggregates = layout.GetAggregates();
+	// provide a local state slot per aggregate, in which aggregates can cache state across finalize calls
+	if (state.local_states.size() < aggregates.size()) {
+		state.local_states.resize(aggregates.size());
+	}
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &target = result.data[aggr_idx + i];
 		auto &aggr = aggregates[i];
 		AggregateInputData aggr_input_data(aggr, state.allocator);
+		aggr_input_data.local_state = &state.local_states[i];
 		aggr.function.GetStateFinalizeCallback()(addresses_copy, aggr_input_data, target, result.size(), 0);
 		FlatVector::SetSize(target, count_t(result.size()));
 
