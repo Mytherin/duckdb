@@ -252,10 +252,10 @@ public:
 
 	aggregate_deserialize_t deserialize = nullptr;
 
+	//! Returns the aggregate state layout
 	aggregate_get_state_type_t get_state_type = nullptr;
 
-	//! Re-binds an exported aggregate state from the bind_data values stored in the exported state type - required
-	//! for functions whose get_state_type callback fills AggregateStateLayout::bind_data (may be null)
+	//! Re-binds an exported aggregate state from the bind_data values stored in the exported state type
 	aggregate_rebind_state_t rebind_aggregate_state = nullptr;
 
 	bool operator==(const AggregateFunctionCallbacks &rhs) const;

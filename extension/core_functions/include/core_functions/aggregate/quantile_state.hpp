@@ -297,11 +297,8 @@ template <typename INPUT_TYPE, class TYPE_OP>
 struct QuantileState {
 	using InputType = INPUT_TYPE;
 	using CursorType = QuantileCursor<INPUT_TYPE>;
-
-	//! The state is a linked list of values - exported/imported as a LIST of the input type
 	using STATE_TYPE = StateListType<StateListOf<StateInputType<0>>>;
 
-	//! Regular aggregation: the values are accumulated in a linked list (must be the first member)
 	LinkedList v;
 
 	// Window Quantile State (only used for window execution - not exported)
