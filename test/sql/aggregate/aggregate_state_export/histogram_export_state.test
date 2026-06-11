@@ -32,11 +32,12 @@ query II nosort hist_types
 SELECT finalize(histogram(d) EXPORT_STATE), finalize(histogram(l) EXPORT_STATE) FROM (VALUES (DATE '2000-01-01', [1, 2]), (DATE '2000-01-01', [1, 2]), (DATE '2010-01-01', [3])) t(d, l);
 ----
 
-# binned histogram - the state holds the bin boundaries and counts (with an extra overflow bucket counter)
+# binned histogram - the state is also a MAP of bin boundary -> count,
+# with the overflow ("other") bucket exported under the sentinel key
 query I
-SELECT (histogram(x, [10, 20]) EXPORT_STATE)::STRUCT(bin_boundaries INTEGER[], counts UBIGINT[]) FROM (VALUES (5), (15), (25)) t(x);
+SELECT (histogram(x, [10, 20]) EXPORT_STATE)::MAP(INTEGER, UBIGINT) FROM (VALUES (5), (15), (25)) t(x);
 ----
-{'bin_boundaries': [10, 20], 'counts': [1, 1, 1]}
+{10=1, 20=1, 2147483647=1}
 
 query II nosort hist_binned
 SELECT histogram(x, [10, 20]), histogram_exact(v, ['a']) FROM (VALUES (5, 'a'), (15, 'b'), (25, 'a')) t(x, v);
@@ -88,7 +89,7 @@ SELECT finalize(combine_aggr(s)) FROM (
 ----
 {10=1, 20=1, 2147483647=1}
 
-# duplicate bin boundaries are deduplicated, leaving extra (unused) count entries in the state -
+# duplicate bin boundaries are deduplicated -
 # the exported state faithfully reproduces the direct result
 query II
 SELECT finalize(histogram(x, [10, 10, 20]) EXPORT_STATE), histogram(x, [10, 10, 20]) FROM (VALUES (5), (15), (25)) t(x);
@@ -106,3 +107,9 @@ query I
 SELECT finalize(to_aggregate_state(MAP([1, 2], [3, 4]::UBIGINT[]), 'histogram', ['INTEGER']));
 ----
 {1=3, 2=4}
+
+# the same works for the binned histogram - the sentinel key is restored as the overflow bucket
+query I
+SELECT finalize(to_aggregate_state(MAP([10, 20, 2147483647], [1, 1, 5]::UBIGINT[]), 'histogram', ['INTEGER', 'INTEGER[]']));
+----
+{10=1, 20=1, 2147483647=5}

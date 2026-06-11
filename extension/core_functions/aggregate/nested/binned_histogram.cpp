@@ -333,89 +333,44 @@ void HistogramBinFinalizeFunction(Vector &state_vector, AggregateInputData &, Ve
 //===--------------------------------------------------------------------===//
 // State Export
 //===--------------------------------------------------------------------===//
-//! The exported state is STRUCT("bin_boundaries", "counts"): the (sorted) bin boundaries and the per-bin counters.
-//! The counts list has one extra entry at the end holding the count of the overflow ("other") bucket.
+//! The exported state is a MAP of bin boundary -> count, in the same shape as the result of the aggregate:
+//! serialization re-uses the finalize implementation. The count of the overflow ("other") bucket is exported
+//! under the sentinel key produced by OtherBucketValue (and omitted when it is zero).
 template <class OP, class T>
 AggregateStateLayout HistogramBinGetStateType(const BoundAggregateFunction &function) {
-	child_list_t<LogicalType> children;
-	children.emplace_back("bin_boundaries", LogicalType::LIST(function.GetArguments()[0]));
-	children.emplace_back("counts", LogicalType::LIST(LogicalType::UBIGINT));
 	AggregateStateLayout layout;
-	layout.type = LogicalType::STRUCT(std::move(children));
+	layout.type = LogicalType::MAP(function.GetArguments()[0], LogicalType::UBIGINT);
 	layout.total_state_size = AlignValue<idx_t>(sizeof(HistogramBinState<T>));
 	return layout;
-}
-
-template <class OP, class T>
-void HistogramBinSerializeState(Vector &state_vector, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
-                                idx_t offset) {
-	D_ASSERT(offset == 0);
-	auto states = state_vector.Values<HistogramBinState<T> *>();
-
-	auto &mask = FlatVector::ValidityMutable(result);
-	auto &fields = StructVector::GetEntries(result);
-	auto &boundary_lists = fields[0];
-	auto &count_lists = fields[1];
-	auto boundary_entries = FlatVector::ScatterWriter<list_entry_t>(boundary_lists);
-	auto count_entries = FlatVector::ScatterWriter<list_entry_t>(count_lists);
-	idx_t total_boundaries = ListVector::GetListSize(boundary_lists);
-	idx_t total_counts = ListVector::GetListSize(count_lists);
-	for (idx_t i = 0; i < count; i++) {
-		auto &state = *states[i].GetValue();
-		boundary_entries[i].offset = total_boundaries;
-		count_entries[i].offset = total_counts;
-		if (!state.bin_boundaries) {
-			// the bins have not been initialized - export NULL
-			mask.SetInvalid(i);
-			boundary_entries[i].length = 0;
-			count_entries[i].length = 0;
-			continue;
-		}
-		boundary_entries[i].length = state.bin_boundaries->size();
-		count_entries[i].length = state.counts->size();
-		total_boundaries += state.bin_boundaries->size();
-		total_counts += state.counts->size();
-	}
-
-	ListVector::Reserve(boundary_lists, total_boundaries);
-	ListVector::Reserve(count_lists, total_counts);
-	auto &boundary_child = ListVector::GetChildMutable(boundary_lists);
-	auto count_data = FlatVector::GetDataMutable<uint64_t>(ListVector::GetChildMutable(count_lists));
-	for (idx_t i = 0; i < count; i++) {
-		auto &state = *states[i].GetValue();
-		if (!state.bin_boundaries) {
-			continue;
-		}
-		for (idx_t bin_idx = 0; bin_idx < state.bin_boundaries->size(); bin_idx++) {
-			OP::template HistogramFinalize<T>((*state.bin_boundaries)[bin_idx], boundary_child,
-			                                  boundary_entries[i].offset + bin_idx);
-		}
-		for (idx_t bin_idx = 0; bin_idx < state.counts->size(); bin_idx++) {
-			count_data[count_entries[i].offset + bin_idx] = (*state.counts)[bin_idx];
-		}
-	}
-	ListVector::SetListSize(boundary_lists, total_boundaries);
-	ListVector::SetListSize(count_lists, total_counts);
-	FlatVector::SetSize(boundary_lists, count);
-	FlatVector::SetSize(count_lists, count);
-	FlatVector::SetSize(result, count);
 }
 
 template <class OP, class T>
 void HistogramBinDeserializeState(const AggregateStateLayout &layout, const Vector &input_vec, idx_t count,
                                   data_ptr_t dest_buffer, ArenaAllocator &allocator) {
 	const auto validity = input_vec.Validity();
-	const auto &fields = StructVector::GetEntries(input_vec);
-	auto &boundary_lists = fields[0];
-	auto &count_lists = fields[1];
-	auto boundary_entries = FlatVector::GetData<list_entry_t>(boundary_lists);
-	auto count_entries = FlatVector::GetData<list_entry_t>(count_lists);
+	auto list_entries = FlatVector::GetData<list_entry_t>(input_vec);
+	auto &child = ListVector::GetChild(input_vec);
+	const auto &fields = StructVector::GetEntries(child);
 
-	// prepare the boundaries - this encodes them the same way the state stores them (e.g. as sort keys)
+	// encode the bin boundaries - this maps them to the representation the state stores (e.g. as sort keys)
 	auto extra_state = OP::CreateExtraState();
 	UnifiedVectorFormat boundary_data;
-	OP::PrepareData(ListVector::GetChild(boundary_lists), extra_state, boundary_data);
-	auto count_data = FlatVector::GetData<uint64_t>(ListVector::GetChild(count_lists));
+	OP::PrepareData(fields[0], extra_state, boundary_data);
+	auto boundary_values = UnifiedVectorFormat::GetData<T>(boundary_data);
+	auto count_data = FlatVector::GetData<uint64_t>(fields[1]);
+
+	// the overflow ("other") bucket is exported under a sentinel key - encode it the same way for comparison
+	const auto &key_type = MapType::KeyType(input_vec.GetType());
+	const bool supports_other = SupportsOtherBucket(key_type);
+	T other_value {};
+	auto other_extra_state = OP::CreateExtraState();
+	UnifiedVectorFormat other_data;
+	if (supports_other) {
+		Vector other_vec(key_type, 1);
+		other_vec.SetValue(0, OtherBucketValue(key_type));
+		OP::PrepareData(other_vec, other_extra_state, other_data);
+		other_value = UnifiedVectorFormat::GetData<T>(other_data)[other_data.sel->get_index(0)];
+	}
 
 	for (idx_t i = 0; i < count; i++) {
 		auto &state = *reinterpret_cast<HistogramBinState<T> *>(dest_buffer + i * layout.total_state_size);
@@ -423,25 +378,26 @@ void HistogramBinDeserializeState(const AggregateStateLayout &layout, const Vect
 			// NULL input - leave the state empty
 			continue;
 		}
-		const auto &boundary_entry = boundary_entries[i];
-		const auto &count_entry = count_entries[i];
-		// note that there can be more than one extra count entry - the bin boundaries are deduplicated on
-		// initialization while the counts list keeps the size of the original (non-deduplicated) bin list
-		if (count_entry.length < boundary_entry.length + 1) {
-			throw InvalidInputException("Invalid histogram state - the counts list should have at least one more "
-			                            "entry than the bin boundaries list");
-		}
 		state.bin_boundaries = new unsafe_vector<T>();
 		state.counts = new unsafe_vector<idx_t>();
-		state.bin_boundaries->reserve(boundary_entry.length);
-		for (idx_t k = 0; k < boundary_entry.length; k++) {
-			state.bin_boundaries->push_back(
-			    OP::template ExtractValue<T>(boundary_data, boundary_entry.offset + k, allocator));
+		const auto &list_entry = list_entries[i];
+		state.bin_boundaries->reserve(list_entry.length);
+		idx_t other_count = 0;
+		for (idx_t k = 0; k < list_entry.length; k++) {
+			const auto idx = list_entry.offset + k;
+			const auto sel_idx = boundary_data.sel->get_index(idx);
+			if (!boundary_data.validity.RowIsValid(sel_idx)) {
+				throw InvalidInputException("Invalid histogram state - the bin boundaries cannot be NULL");
+			}
+			if (supports_other && Equals::Operation(boundary_values[sel_idx], other_value)) {
+				// this is the entry of the overflow bucket
+				other_count = count_data[idx];
+				continue;
+			}
+			state.bin_boundaries->push_back(OP::template ExtractValue<T>(boundary_data, idx, allocator));
+			state.counts->push_back(count_data[idx]);
 		}
-		state.counts->reserve(count_entry.length);
-		for (idx_t k = 0; k < count_entry.length; k++) {
-			state.counts->push_back(count_data[count_entry.offset + k]);
-		}
+		state.counts->push_back(other_count);
 	}
 }
 
@@ -457,7 +413,7 @@ AggregateFunction GetHistogramBinFunction(const LogicalType &type) {
 	    AggregateFunction::StateInitialize<STATE_TYPE, HistogramBinFunction>, HistogramBinUpdateFunction<OP, T, HIST>,
 	    AggregateFunction::StateCombine<STATE_TYPE, HistogramBinFunction>, HistogramBinFinalizeFunction<OP, T>, nullptr,
 	    nullptr, AggregateFunction::StateDestroy<STATE_TYPE, HistogramBinFunction>);
-	fun.SetStateExportCallbacks(HistogramBinGetStateType<OP, T>, HistogramBinSerializeState<OP, T>,
+	fun.SetStateExportCallbacks(HistogramBinGetStateType<OP, T>, HistogramBinFinalizeFunction<OP, T>,
 	                            HistogramBinDeserializeState<OP, T>);
 	return fun;
 }
