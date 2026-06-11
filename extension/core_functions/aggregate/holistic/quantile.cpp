@@ -166,7 +166,7 @@ struct QuantileScalarOperation : public QuantileOperation {
 		D_ASSERT(finalize_data.input.bind_data);
 		auto &bind_data = finalize_data.input.bind_data->Cast<QuantileBindData>();
 		D_ASSERT(bind_data.quantiles.size() == 1);
-		FlattenedQuantileValues<typename STATE::InputType> flattened(state.v);
+		auto &flattened = FlattenedQuantileValues<typename STATE::InputType>::Flatten(finalize_data, state.v);
 		QuantileInterpolator<DISCRETE> interp(bind_data.quantiles[0], state.v.total_capacity, bind_data.desc);
 		target = interp.template Operation<typename STATE::InputType, T>(flattened.Data(), finalize_data.result);
 	}
@@ -242,7 +242,7 @@ struct QuantileScalarFallback : QuantileOperation {
 		D_ASSERT(finalize_data.input.bind_data);
 		auto &bind_data = finalize_data.input.bind_data->Cast<QuantileBindData>();
 		D_ASSERT(bind_data.quantiles.size() == 1);
-		FlattenedQuantileValues<string_t> flattened(state.v);
+		auto &flattened = FlattenedQuantileValues<string_t>::Flatten(finalize_data, state.v);
 		QuantileInterpolator<true> interp(bind_data.quantiles[0], state.v.total_capacity, bind_data.desc);
 		auto interpolation_result = interp.InterpolateInternal<string_t>(flattened.Data());
 		CreateSortKeyHelpers::DecodeSortKey(interpolation_result, finalize_data.result, finalize_data.result_idx,
@@ -270,7 +270,7 @@ struct QuantileListOperation : QuantileOperation {
 		ListVector::Reserve(finalize_data.result, ridx + bind_data.quantiles.size());
 		auto rdata = FlatVector::GetDataMutable<CHILD_TYPE>(result);
 
-		FlattenedQuantileValues<typename STATE::InputType> flattened(state.v);
+		auto &flattened = FlattenedQuantileValues<typename STATE::InputType>::Flatten(finalize_data, state.v);
 		auto v_t = flattened.Data();
 		D_ASSERT(v_t);
 
@@ -357,7 +357,7 @@ struct QuantileListFallback : QuantileOperation {
 		auto ridx = ListVector::GetListSize(finalize_data.result);
 		ListVector::Reserve(finalize_data.result, ridx + bind_data.quantiles.size());
 
-		FlattenedQuantileValues<string_t> flattened(state.v);
+		auto &flattened = FlattenedQuantileValues<string_t>::Flatten(finalize_data, state.v);
 
 		auto &entry = target;
 		entry.offset = ridx;

@@ -183,7 +183,7 @@ struct MedianAbsoluteDeviationOperation : QuantileOperation {
 		auto &bind_data = finalize_data.input.bind_data->Cast<QuantileBindData>();
 		D_ASSERT(bind_data.quantiles.size() == 1);
 		const auto &q = bind_data.quantiles[0];
-		FlattenedQuantileValues<INPUT_TYPE> flattened(state.v);
+		auto &flattened = FlattenedQuantileValues<INPUT_TYPE>::Flatten(finalize_data, state.v);
 		QuantileInterpolator<false> interp(q, state.v.total_capacity, false);
 		const auto med = interp.template Operation<INPUT_TYPE, MEDIAN_TYPE>(flattened.Data(), finalize_data.result);
 

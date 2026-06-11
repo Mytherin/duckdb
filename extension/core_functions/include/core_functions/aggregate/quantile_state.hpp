@@ -9,6 +9,7 @@
 #pragma once
 
 #include "core_functions/aggregate/quantile_sort_tree.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/list_segment.hpp"
 #include "SkipList.h"
 
@@ -16,21 +17,45 @@ namespace duckdb {
 
 //! Flattens the values of a linked list into a contiguous array for interpolation.
 //! The flattened values are mutable - the interpolators partially sort them in place.
+//! The flattened chunk is cached in the finalize data's local state, so that it is allocated (at most) once per
+//! result chunk instead of once per finalized group.
 template <class INPUT_TYPE>
-struct FlattenedQuantileValues {
-	explicit FlattenedQuantileValues(const LinkedList &linked_list)
-	    : flat(PrimitiveToLogicalType<INPUT_TYPE>(), MaxValue<idx_t>(linked_list.total_capacity, 1)) {
+struct FlattenedQuantileValues : FunctionLocalState {
+	FlattenedQuantileValues(const LogicalType &type, idx_t capacity_p) : capacity(capacity_p) {
+		chunk.Initialize(Allocator::DefaultAllocator(), {type}, capacity_p);
+	}
+
+	//! Flatten the values of the given linked list into the chunk cached in the finalize data
+	static FlattenedQuantileValues &Flatten(AggregateFinalizeData &finalize_data, const LinkedList &linked_list) {
+		const auto type = PrimitiveToLogicalType<INPUT_TYPE>();
+		const auto required_capacity = MaxValue<idx_t>(linked_list.total_capacity, 1);
+		if (!finalize_data.local_state) {
+			finalize_data.local_state = make_uniq<FlattenedQuantileValues>(type, NextPowerOfTwo(required_capacity));
+		}
+		auto &values = finalize_data.local_state->Cast<FlattenedQuantileValues>();
+		if (values.capacity < required_capacity) {
+			// grow the cached chunk
+			values.capacity = NextPowerOfTwo(required_capacity);
+			values.chunk.Destroy();
+			values.chunk.Initialize(Allocator::DefaultAllocator(), {type}, values.capacity);
+		} else {
+			// re-use the allocated chunk - resetting clears the string heap of the previously flattened state
+			values.chunk.Reset();
+		}
 		ListSegmentFunctions functions;
-		GetSegmentDataFunctions(functions, PrimitiveToLogicalType<INPUT_TYPE>());
-		functions.BuildListVector(linked_list, flat, 0);
+		GetSegmentDataFunctions(functions, type);
+		functions.BuildListVector(linked_list, values.chunk.data[0], 0);
+		return values;
 	}
 
 	INPUT_TYPE *Data() {
-		return FlatVector::GetDataMutable<INPUT_TYPE>(flat);
+		return FlatVector::GetDataMutable<INPUT_TYPE>(chunk.data[0]);
 	}
 
-	//! The flattened values - strings are materialized into the vector's heap
-	Vector flat;
+	//! The flattened values (a single-column chunk) - strings are materialized into the chunk's string heap
+	DataChunk chunk;
+	//! The allocated capacity of the chunk
+	idx_t capacity;
 };
 
 struct QuantileOperation {
