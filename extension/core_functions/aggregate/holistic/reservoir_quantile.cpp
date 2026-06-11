@@ -355,36 +355,14 @@ unique_ptr<FunctionData> BindReservoirQuantile(BindAggregateFunctionInput &input
 	return make_uniq<ReservoirQuantileBindData>(quantiles, NumericCast<idx_t>(sample_size));
 }
 
-unique_ptr<FunctionData> ReservoirQuantileDecimalDeserialize(Deserializer &deserializer,
-                                                             BoundAggregateFunction &function);
-
 unique_ptr<FunctionData> BindReservoirQuantileDecimal(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	// remember the original (pre-replacement) argument types - these are used to look the function up again
-	// when e.g. re-binding an exported aggregate state
-	if (function.GetOriginalArguments().empty()) {
-		function.GetOriginalArguments() = function.GetArguments();
-	}
 	function.ReplaceImplementation(GetReservoirQuantileAggregateFunction(arguments[0]->GetReturnType().InternalType()));
 	auto bind_data = BindReservoirQuantile(input);
 	function.SetName("reservoir_quantile");
 	function.SetSerializeCallback(ReservoirQuantileBindData::Serialize);
-	function.SetDeserializeCallback(ReservoirQuantileDecimalDeserialize);
-	return bind_data;
-}
-
-unique_ptr<FunctionData> ReservoirQuantileDecimalDeserialize(Deserializer &deserializer,
-                                                             BoundAggregateFunction &function) {
-	auto bind_data = ReservoirQuantileBindData::Deserialize(deserializer, function);
-	auto &return_type = deserializer.Get<const LogicalType &>();
-	auto impl = return_type.id() == LogicalTypeId::LIST
-	                ? GetReservoirQuantileListAggregateFunction(ListType::GetChildType(return_type))
-	                : GetReservoirQuantileAggregateFunction(function.GetArguments()[0].InternalType());
-	function.ReplaceImplementation(impl);
-	function.SetName("reservoir_quantile");
-	function.SetSerializeCallback(ReservoirQuantileBindData::Serialize);
-	function.SetDeserializeCallback(ReservoirQuantileDecimalDeserialize);
+	function.SetDeserializeCallback(ReservoirQuantileBindData::Deserialize);
 	return bind_data;
 }
 
@@ -430,7 +408,7 @@ void GetReservoirQuantileDecimalFunction(AggregateFunctionSet &set, const vector
 	AggregateFunction fun(arguments, return_value, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
 	                      BindReservoirQuantileDecimal);
 	fun.SetSerializeCallback(ReservoirQuantileBindData::Serialize);
-	fun.SetDeserializeCallback(ReservoirQuantileDecimalDeserialize);
+	fun.SetDeserializeCallback(ReservoirQuantileBindData::Deserialize);
 	set.AddFunction(fun);
 
 	fun.GetSignature().AddParameter(LogicalType::INTEGER);
