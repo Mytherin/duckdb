@@ -1,6 +1,7 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "core_functions/aggregate/histogram_helpers.hpp"
 #include "core_functions/aggregate/holistic_functions.hpp"
 #include "duckdb/function/aggregate/sort_key_helpers.hpp"
@@ -384,96 +385,131 @@ void ApproxTopKFinalize(Vector &state_vector, AggregateInputData &, Vector &resu
 //===--------------------------------------------------------------------===//
 //! The exported state is STRUCT(k, "values" LIST(STRUCT("value", "count")), "filter"):
 //! the k parameter, the monitored values with their counters (ordered by descending count),
-//! and the Filtered Space-Saving sketch counters.
-LogicalType ApproxTopKExportType(const LogicalType &input_type) {
-	// strings are stored as-is - all other types are stored as binary-comparable sort keys
-	auto value_type = input_type.InternalType() == PhysicalType::VARCHAR && input_type.id() == LogicalTypeId::VARCHAR
-	                      ? LogicalType::VARCHAR
-	                      : LogicalType::BLOB;
+//! and the Filtered Space-Saving sketch counters. The values are exported with the input type
+//! of the aggregate - values that are stored as sort keys are decoded on export and re-encoded on import.
+AggregateStateLayout ApproxTopKGetStateType(const BoundAggregateFunction &function) {
 	child_list_t<LogicalType> value_children;
-	value_children.emplace_back("value", value_type);
+	value_children.emplace_back("value", function.GetArguments()[0]);
 	value_children.emplace_back("count", LogicalType::UBIGINT);
 
 	child_list_t<LogicalType> children;
 	children.emplace_back("k", LogicalType::UBIGINT);
 	children.emplace_back("values", LogicalType::LIST(LogicalType::STRUCT(std::move(value_children))));
 	children.emplace_back("filter", LogicalType::LIST(LogicalType::UBIGINT));
-	return LogicalType::STRUCT(std::move(children));
-}
 
-AggregateStateLayout ApproxTopKGetStateType(const BoundAggregateFunction &function) {
 	AggregateStateLayout layout;
-	layout.type = ApproxTopKExportType(function.GetArguments()[0]);
+	layout.type = LogicalType::STRUCT(std::move(children));
 	layout.total_state_size = AlignValue<idx_t>(sizeof(ApproxTopKState));
 	return layout;
 }
 
-//! The shape of the exported state: STRUCT(k, "values" LIST(STRUCT("value", "count")), "filter")
-using APPROX_TOP_K_EXPORT_TYPE =
-    VectorStructType<uint64_t, VectorListType<VectorStructType<string_t, uint64_t>>, VectorListType<uint64_t>>;
-
+template <class OP = HistogramGenericFunctor>
 void ApproxTopKSerializeState(Vector &state_vector, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
                               idx_t offset) {
 	D_ASSERT(offset == 0);
 	auto states = state_vector.Values<ApproxTopKState *>();
-	auto writer = FlatVector::Writer<APPROX_TOP_K_EXPORT_TYPE>(result, count);
 
+	auto &mask = FlatVector::ValidityMutable(result);
+	auto &fields = StructVector::GetEntries(result);
+	auto k_data = FlatVector::GetDataMutable<uint64_t>(fields[0]);
+	auto &value_lists = fields[1];
+	auto &filter_lists = fields[2];
+	auto value_entries = FlatVector::ScatterWriter<list_entry_t>(value_lists);
+	auto filter_entries = FlatVector::ScatterWriter<list_entry_t>(filter_lists);
+	idx_t total_values = ListVector::GetListSize(value_lists);
+	idx_t total_filters = ListVector::GetListSize(filter_lists);
+	for (idx_t i = 0; i < count; i++) {
+		auto state_ptr = states[i].GetValue()->state;
+		value_entries[i].offset = total_values;
+		filter_entries[i].offset = total_filters;
+		if (!state_ptr || state_ptr->values.empty()) {
+			// no values have been added to this state - export NULL
+			mask.SetInvalid(i);
+			value_entries[i].length = 0;
+			filter_entries[i].length = 0;
+			k_data[i] = 0;
+			continue;
+		}
+		k_data[i] = state_ptr->k;
+		value_entries[i].length = state_ptr->values.size();
+		filter_entries[i].length = state_ptr->filter.size();
+		total_values += state_ptr->values.size();
+		total_filters += state_ptr->filter.size();
+	}
+
+	ListVector::Reserve(value_lists, total_values);
+	ListVector::Reserve(filter_lists, total_filters);
+	auto &value_structs = ListVector::GetChildMutable(value_lists);
+	auto &value_fields = StructVector::GetEntries(value_structs);
+	auto &value_child = value_fields[0];
+	auto count_data = FlatVector::GetDataMutable<uint64_t>(value_fields[1]);
+	auto filter_data = FlatVector::GetDataMutable<uint64_t>(ListVector::GetChildMutable(filter_lists));
 	for (idx_t i = 0; i < count; i++) {
 		auto state_ptr = states[i].GetValue()->state;
 		if (!state_ptr || state_ptr->values.empty()) {
-			// no values have been added to this state - export NULL
-			writer.WriteNull();
 			continue;
 		}
 		auto &state = *state_ptr;
-		writer.WriteValue([&](auto &k_writer, auto &values_writer, auto &filter_writer) {
-			k_writer.WriteValue(state.k);
-			idx_t val_idx = 0;
-			for (auto &value_writer : values_writer.WriteList(state.values.size())) {
-				auto &val = state.values[val_idx++].get();
-				value_writer.WriteValue([&](auto &str_writer, auto &count_writer) {
-					str_writer.WriteValue(val.str_val.str);
-					count_writer.WriteValue(val.count);
-				});
-			}
-			idx_t filter_idx = 0;
-			for (auto &entry_writer : filter_writer.WriteList(state.filter.size())) {
-				entry_writer.WriteValue(state.filter[filter_idx++]);
-			}
-		});
+		// write the values (in descending count order) - decoding them back to the input type
+		idx_t value_offset = value_entries[i].offset;
+		for (auto &val_ref : state.values) {
+			auto &val = val_ref.get();
+			OP::template HistogramFinalize<string_t>(val.str_val.str, value_child, value_offset);
+			count_data[value_offset] = val.count;
+			value_offset++;
+		}
+		for (idx_t filter_idx = 0; filter_idx < state.filter.size(); filter_idx++) {
+			filter_data[filter_entries[i].offset + filter_idx] = state.filter[filter_idx];
+		}
 	}
+	ListVector::SetListSize(value_lists, total_values);
+	ListVector::SetListSize(filter_lists, total_filters);
+	FlatVector::SetSize(fields[0], count);
+	FlatVector::SetSize(value_lists, count);
+	FlatVector::SetSize(filter_lists, count);
+	FlatVector::SetSize(result, count);
 }
 
+template <class OP = HistogramGenericFunctor>
 void ApproxTopKDeserializeState(const AggregateStateLayout &layout, const Vector &input_vec, idx_t count,
                                 data_ptr_t dest_buffer, ArenaAllocator &allocator) {
-	auto entries = input_vec.Values<APPROX_TOP_K_EXPORT_TYPE>();
+	const auto validity = input_vec.Validity();
+	const auto &fields = StructVector::GetEntries(input_vec);
+	auto k_data = FlatVector::GetData<uint64_t>(fields[0]);
+	auto &value_lists = fields[1];
+	auto &filter_lists = fields[2];
+	auto value_entries = FlatVector::GetData<list_entry_t>(value_lists);
+	auto filter_entries = FlatVector::GetData<list_entry_t>(filter_lists);
+	auto &value_structs = ListVector::GetChild(value_lists);
+	const auto &value_fields = StructVector::GetEntries(value_structs);
+
+	// encode the values - this maps them to the same representation the state stores (e.g. as sort keys)
+	auto extra_state = OP::CreateExtraState();
+	UnifiedVectorFormat value_data;
+	OP::PrepareData(value_fields[0], extra_state, value_data);
+	auto value_strings = UnifiedVectorFormat::GetData<string_t>(value_data);
+	auto count_data = FlatVector::GetData<uint64_t>(value_fields[1]);
+	auto filter_data = FlatVector::GetData<uint64_t>(ListVector::GetChild(filter_lists));
+
 	for (idx_t i = 0; i < count; i++) {
 		auto &state = *reinterpret_cast<ApproxTopKState *>(dest_buffer + i * layout.total_state_size);
 		state.state = nullptr;
-		const auto entry = entries[i];
-		if (!entry.IsValid()) {
+		if (!validity.IsValid(i)) {
 			// NULL input - leave the state empty
 			continue;
 		}
-		const auto k_entry = entry.template GetChildValue<0>();
-		const auto values = entry.template GetChildValue<1>();
-		const auto filter = entry.template GetChildValue<2>();
-		if (!k_entry.IsValid() || !values.IsValid() || !filter.IsValid()) {
-			throw InvalidInputException("Invalid approx_top_k state - the state fields cannot be NULL");
-		}
-
 		auto internal_state = make_uniq<InternalApproxTopKState>();
 		auto &target = *internal_state;
-		target.Initialize(k_entry.GetValue());
-		if (values.GetListLength() > target.capacity || filter.GetListLength() != target.filter.size()) {
+		target.Initialize(k_data[i]);
+		if (value_entries[i].length > target.capacity || filter_entries[i].length != target.filter.size()) {
 			throw InvalidInputException("Invalid approx_top_k state - "
 			                            "the values/filter sizes do not match the k value");
 		}
 		// insert the values - these are ordered by descending count, keeping "values" sorted
-		for (const auto value_entry : values.GetChildValues()) {
-			const auto str_entry = value_entry.template GetChildValue<0>();
-			const auto count_entry = value_entry.template GetChildValue<1>();
-			if (!value_entry.IsValid() || !str_entry.IsValid() || !count_entry.IsValid()) {
+		for (idx_t value_idx = 0; value_idx < value_entries[i].length; value_idx++) {
+			const auto idx = value_entries[i].offset + value_idx;
+			const auto sel_idx = value_data.sel->get_index(idx);
+			if (!value_data.validity.RowIsValid(sel_idx)) {
 				throw InvalidInputException("Invalid approx_top_k state - the state values cannot be NULL");
 			}
 
@@ -481,15 +517,14 @@ void ApproxTopKDeserializeState(const AggregateStateLayout &layout, const Vector
 			val.index = target.values.size();
 			target.values.push_back(val);
 
-			const auto str_val = str_entry.GetValue();
+			const auto &str_val = value_strings[sel_idx];
 			ApproxTopKString topk_string(str_val, Hash(str_val));
 			InternalApproxTopKState::CopyValue(val, topk_string, allocator);
 			target.lookup_map.insert(make_pair(val.str_val, reference<ApproxTopKValue>(val)));
-			val.count = count_entry.GetValue();
+			val.count = count_data[idx];
 		}
-		idx_t filter_idx = 0;
-		for (const auto filter_entry : filter.GetChildValues()) {
-			target.filter[filter_idx++] = filter_entry.IsValid() ? filter_entry.GetValue() : 0;
+		for (idx_t filter_idx = 0; filter_idx < filter_entries[i].length; filter_idx++) {
+			target.filter[filter_idx] = filter_data[filter_entries[i].offset + filter_idx];
 		}
 		target.Verify();
 		state.state = internal_state.release();
@@ -507,6 +542,8 @@ unique_ptr<FunctionData> ApproxTopKBind(BindAggregateFunctionInput &input) {
 	if (arguments[0]->GetReturnType().id() == LogicalTypeId::VARCHAR) {
 		function.SetStateUpdateCallback(ApproxTopKUpdate<string_t, HistogramStringFunctor>);
 		function.SetStateFinalizeCallback(ApproxTopKFinalize<HistogramStringFunctor>);
+		function.SetSerializeStateCallback(ApproxTopKSerializeState<HistogramStringFunctor>);
+		function.SetDeserializeStateCallback(ApproxTopKDeserializeState<HistogramStringFunctor>);
 	}
 	function.GetArguments()[0] = arguments[0]->GetReturnType();
 	function.SetReturnType(LogicalType::LIST(arguments[0]->GetReturnType()));
@@ -523,7 +560,8 @@ AggregateFunction ApproxTopKFun::GetFunction() {
 	                             AggregateFunction::StateInitialize<STATE, OP>, ApproxTopKUpdate,
 	                             AggregateFunction::StateCombine<STATE, OP>, ApproxTopKFinalize, nullptr,
 	                             ApproxTopKBind, AggregateFunction::StateDestroy<STATE, OP>);
-	fun.SetStateExportCallbacks(ApproxTopKGetStateType, ApproxTopKSerializeState, ApproxTopKDeserializeState);
+	fun.SetStateExportCallbacks(ApproxTopKGetStateType, ApproxTopKSerializeState<HistogramGenericFunctor>,
+	                            ApproxTopKDeserializeState<HistogramGenericFunctor>);
 	return fun;
 }
 
