@@ -13,8 +13,6 @@ namespace duckdb {
 namespace {
 
 struct StringAggState {
-	//! The exported state is the accumulated string itself (NULL when no values have been added) -
-	//! the separator is exported as part of the bind data (see StringAggGetStateType)
 	using STATE_TYPE = OptionalStateType<StateString<StateReturnType>>;
 
 	string_t value;

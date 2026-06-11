@@ -497,9 +497,7 @@ struct AggregateStateLayout {
 	LogicalType type;
 	AggregateStateField field;
 	idx_t total_state_size = 0;
-	//! Bind data values required to re-bind the function from an exported state (e.g. the quantile values for
-	//! quantile) - stored in the extension type info of the state type and passed back to the function's
-	//! rebind_aggregate_state callback
+	//! Bind data values required to re-bind the function from an exported state
 	vector<Value> bind_data;
 };
 
