@@ -68,13 +68,8 @@ struct QuantileOperation {
 			}
 			return;
 		}
-		// we cannot absorb the source - copy over the values
-		using INPUT_TYPE = typename STATE::InputType;
-		FlattenedQuantileValues<INPUT_TYPE> flattened(source.v);
-		auto data = flattened.Data();
-		for (idx_t i = 0; i < source.v.total_capacity; i++) {
-			ListSegmentAppendValue<INPUT_TYPE>(input_data.allocator, target.v, data[i]);
-		}
+		// we cannot absorb the source - copy the values by traversing the linked list
+		ListSegmentCopy<typename STATE::InputType>(input_data.allocator, source.v, target.v);
 	}
 
 	template <class STATE>

@@ -444,6 +444,74 @@ void ListSegmentAppendValue(ArenaAllocator &allocator, LinkedList &linked_list, 
 	linked_list.total_capacity++;
 }
 
+template <class T>
+void ListSegmentCopy(ArenaAllocator &allocator, const LinkedList &source, LinkedList &target) {
+	for (auto segment = source.first_segment; segment; segment = segment->next) {
+		auto null_mask = GetNullMask(segment);
+		auto data = GetPrimitiveData<T>(segment);
+		for (idx_t i = 0; i < segment->count; i++) {
+			D_ASSERT(!null_mask[i]);
+			(void)null_mask;
+			ListSegmentAppendValue<T>(allocator, target, Load<T>(data_ptr_cast(data + i)));
+		}
+	}
+}
+
+template <>
+void ListSegmentCopy<string_t>(ArenaAllocator &allocator, const LinkedList &source, LinkedList &target) {
+	vector<char> buffer;
+	for (auto segment = source.first_segment; segment; segment = segment->next) {
+		auto null_mask = GetNullMask(segment);
+		auto str_length_data = GetListLengthData(segment);
+		auto child_list = Load<LinkedList>(const_data_ptr_cast(GetListChildData(segment)));
+		auto child_segment = child_list.first_segment;
+		idx_t child_offset = 0;
+		for (idx_t i = 0; i < segment->count; i++) {
+			D_ASSERT(!null_mask[i]);
+			(void)null_mask;
+			// re-assemble the string from the child segments
+			const auto str_length = Load<uint64_t>(const_data_ptr_cast(str_length_data + i));
+			buffer.resize(MaxValue<idx_t>(str_length, 1));
+			idx_t current_offset = 0;
+			while (current_offset < str_length) {
+				if (!child_segment) {
+					throw InternalException("Insufficient data to read string");
+				}
+				auto child_data = GetStringData(child_segment);
+				idx_t copy_count = MinValue<idx_t>(str_length - current_offset, child_segment->capacity - child_offset);
+				memcpy(buffer.data() + current_offset, child_data + child_offset, copy_count);
+				current_offset += copy_count;
+				child_offset += copy_count;
+				if (child_offset >= child_segment->capacity) {
+					D_ASSERT(child_offset == child_segment->capacity);
+					child_segment = child_segment->next;
+					child_offset = 0;
+				}
+			}
+			ListSegmentAppendValue<string_t>(allocator, target,
+			                                 string_t(buffer.data(), UnsafeNumericCast<uint32_t>(str_length)));
+		}
+	}
+}
+
+template void ListSegmentCopy<bool>(ArenaAllocator &, const LinkedList &, LinkedList &);
+template void ListSegmentCopy<int8_t>(ArenaAllocator &, const LinkedList &, LinkedList &);
+template void ListSegmentCopy<int16_t>(ArenaAllocator &, const LinkedList &, LinkedList &);
+template void ListSegmentCopy<int32_t>(ArenaAllocator &, const LinkedList &, LinkedList &);
+template void ListSegmentCopy<int64_t>(ArenaAllocator &, const LinkedList &, LinkedList &);
+template void ListSegmentCopy<uint8_t>(ArenaAllocator &, const LinkedList &, LinkedList &);
+template void ListSegmentCopy<uint16_t>(ArenaAllocator &, const LinkedList &, LinkedList &);
+template void ListSegmentCopy<uint32_t>(ArenaAllocator &, const LinkedList &, LinkedList &);
+template void ListSegmentCopy<uint64_t>(ArenaAllocator &, const LinkedList &, LinkedList &);
+template void ListSegmentCopy<hugeint_t>(ArenaAllocator &, const LinkedList &, LinkedList &);
+template void ListSegmentCopy<uhugeint_t>(ArenaAllocator &, const LinkedList &, LinkedList &);
+template void ListSegmentCopy<float>(ArenaAllocator &, const LinkedList &, LinkedList &);
+template void ListSegmentCopy<double>(ArenaAllocator &, const LinkedList &, LinkedList &);
+template void ListSegmentCopy<interval_t>(ArenaAllocator &, const LinkedList &, LinkedList &);
+template void ListSegmentCopy<date_t>(ArenaAllocator &, const LinkedList &, LinkedList &);
+template void ListSegmentCopy<dtime_t>(ArenaAllocator &, const LinkedList &, LinkedList &);
+template void ListSegmentCopy<timestamp_t>(ArenaAllocator &, const LinkedList &, LinkedList &);
+
 template void ListSegmentAppendValue<bool>(ArenaAllocator &, LinkedList &, const bool &);
 template void ListSegmentAppendValue<int8_t>(ArenaAllocator &, LinkedList &, const int8_t &);
 template void ListSegmentAppendValue<int16_t>(ArenaAllocator &, LinkedList &, const int16_t &);

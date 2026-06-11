@@ -72,4 +72,13 @@ void ListSegmentAppendValue(ArenaAllocator &allocator, LinkedList &linked_list, 
 template <>
 void ListSegmentAppendValue(ArenaAllocator &allocator, LinkedList &linked_list, const string_t &value);
 
+//! Append all (non-NULL) values of the source linked list to the target linked list by traversing its segments.
+//! The values must have been appended through ListSegmentAppendValue / the standard list segment layout.
+template <class T>
+void ListSegmentCopy(ArenaAllocator &allocator, const LinkedList &source, LinkedList &target);
+
+//! Strings re-assemble their characters from the child segments of the source linked list.
+template <>
+void ListSegmentCopy<string_t>(ArenaAllocator &allocator, const LinkedList &source, LinkedList &target);
+
 } // namespace duckdb
