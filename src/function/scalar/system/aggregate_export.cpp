@@ -147,7 +147,7 @@ struct StoreOp {
 static void SerializeField(const LogicalType &type, const AggregateStateField &field, Vector &result, idx_t count,
                            const data_ptr_t *addresses, idx_t base) {
 	switch (field.kind) {
-	case AggregateFieldKind::OPTIONAL:
+	case AggregateFieldKind::OPTIONAL_VALUE:
 		D_ASSERT(field.children.size() == 1);
 		for (idx_t i = 0; i < count; i++) {
 			if (!Load<bool>(addresses[i] + base + field.field_offset)) {
@@ -199,7 +199,7 @@ static void SerializeField(const LogicalType &type, const AggregateStateField &f
 static void DeserializeField(const LogicalType &type, const AggregateStateField &field, const Vector &input_vec,
                              idx_t count, data_ptr_t dest_buffer, idx_t stride, idx_t base, ArenaAllocator &allocator) {
 	switch (field.kind) {
-	case AggregateFieldKind::OPTIONAL: {
+	case AggregateFieldKind::OPTIONAL_VALUE: {
 		D_ASSERT(field.children.size() == 1);
 		const auto validity = input_vec.Validity();
 		for (idx_t i = 0; i < count; i++) {
@@ -584,6 +584,15 @@ void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data,
 	SerializeState(layout, result, count, addresses_ptrs);
 }
 
+// the executor invokes this callback with combine_aggr's own bind data (ExportAggregateBindData) - the underlying
+// aggregate's combine expects its own bind data, so we forward it here
+void CombineAggrStateCombine(Vector &source, Vector &target, AggregateInputData &aggr_input_data, idx_t count) {
+	auto &bind_data = aggr_input_data.bind_data->Cast<ExportAggregateBindData>();
+	AggregateInputData combine_input(bind_data.aggr, bind_data.bind_data.get(), aggr_input_data.allocator,
+	                                 aggr_input_data.combine_type);
+	bind_data.aggr.GetStateCombineCallback()(source, target, combine_input, count);
+}
+
 unique_ptr<FunctionData> CombineAggrBind(BindAggregateFunctionInput &input) {
 	auto &context = input.GetClientContext();
 	auto &function = input.GetBoundFunction();
@@ -594,7 +603,7 @@ unique_ptr<FunctionData> CombineAggrBind(BindAggregateFunctionInput &input) {
 	// Copy underlying aggregate's callbacks into this function (same pattern as `ExportAggregateFunction::Bind`)
 	function.SetStateSizeCallback(bind_data->aggr.GetStateSizeCallback());
 	function.SetStateInitCallback(bind_data->aggr.GetStateInitCallback());
-	function.SetStateCombineCallback(bind_data->aggr.GetStateCombineCallback());
+	function.SetStateCombineCallback(CombineAggrStateCombine);
 	function.SetStateDestructorCallback(bind_data->aggr.GetStateDestructorCallback());
 
 	function.SetReturnType(arguments[0]->GetReturnType());
@@ -661,9 +670,9 @@ void CombineAggrFinalize(Vector &state, AggregateInputData &aggr_input_data, Vec
 LogicalType CreateAggregateStateType(const BoundAggregateFunction &bound_function,
                                      optional_ptr<FunctionData> bind_data) {
 	auto layout = bound_function.GetStateType(bind_data);
-	// copy the type before modifying it - SetAlias/SetExtensionInfo modify the (shared) extra type info in place,
-	// and the state layout type can share its type info with e.g. the aggregate's input expressions
-	LogicalType state_layout = layout.type.Copy();
+	// deep copy the type before modifying it - SetAlias/SetExtensionInfo modify the (shared) extra type info in
+	// place, and the state layout type can share its type info with e.g. the aggregate's input expressions
+	LogicalType state_layout = layout.type.DeepCopy();
 	state_layout.SetAlias("AGGREGATE_STATE");
 	auto ext_info = make_uniq<ExtensionTypeInfo>();
 	ext_info->properties.emplace("function_name", bound_function.GetName());
