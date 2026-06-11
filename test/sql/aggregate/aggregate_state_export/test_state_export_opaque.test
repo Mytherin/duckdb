@@ -61,13 +61,12 @@ SELECT finalize(skewness(d) EXPORT_STATE) FROM (SELECT NULL::integer d, g FROM d
 
 # you're holding it wrong:
 
-statement error
+# string_agg supports state export (see string_agg_export_state.test)
+statement ok
 SELECT string_agg(d, ',') EXPORT_STATE from dummy;
-----
 
-statement error
+statement ok
 SELECT string_agg(d) EXPORT_STATE from dummy;
-----
 
 statement error
 SELECT FINALIZE(COMBINE(skewness(d) EXPORT_STATE)) FROM dummy;

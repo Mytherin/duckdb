@@ -9,9 +9,29 @@
 #pragma once
 
 #include "core_functions/aggregate/quantile_sort_tree.hpp"
+#include "duckdb/common/types/list_segment.hpp"
 #include "SkipList.h"
 
 namespace duckdb {
+
+//! Flattens the values of a linked list into a contiguous array for interpolation.
+//! The flattened values are mutable - the interpolators partially sort them in place.
+template <class INPUT_TYPE>
+struct FlattenedQuantileValues {
+	explicit FlattenedQuantileValues(const LinkedList &linked_list)
+	    : flat(PrimitiveToLogicalType<INPUT_TYPE>(), MaxValue<idx_t>(linked_list.total_capacity, 1)) {
+		ListSegmentFunctions functions;
+		GetSegmentDataFunctions(functions, PrimitiveToLogicalType<INPUT_TYPE>());
+		functions.BuildListVector(linked_list, flat, 0);
+	}
+
+	INPUT_TYPE *Data() {
+		return FlatVector::GetDataMutable<INPUT_TYPE>(flat);
+	}
+
+	//! The flattened values - strings are materialized into the vector's heap
+	Vector flat;
+};
 
 struct QuantileOperation {
 	template <class STATE>
@@ -33,11 +53,23 @@ struct QuantileOperation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
-		if (source.v.empty()) {
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &input_data) {
+		if (source.v.total_capacity == 0) {
 			return;
 		}
-		target.v.insert(target.v.end(), source.v.begin(), source.v.end());
+		if (input_data.combine_type == AggregateCombineType::ALLOW_DESTRUCTIVE) {
+			// append the source linked list to the target
+			if (target.v.total_capacity == 0) {
+				target.v = source.v;
+			} else {
+				target.v.last_segment->next = source.v.first_segment;
+				target.v.last_segment = source.v.last_segment;
+				target.v.total_capacity += source.v.total_capacity;
+			}
+			return;
+		}
+		// we cannot absorb the source - copy the values by traversing the linked list
+		ListSegmentCopy<typename STATE::InputType>(input_data.allocator, source.v, target.v);
 	}
 
 	template <class STATE>
@@ -266,15 +298,18 @@ struct QuantileState {
 	using InputType = INPUT_TYPE;
 	using CursorType = QuantileCursor<INPUT_TYPE>;
 
-	// Regular aggregation
-	vector<INPUT_TYPE> v;
+	//! The state is a linked list of values - exported/imported as a LIST of the input type
+	using STATE_TYPE = StateListType<StateListOf<StateInputType<0>>>;
 
-	// Window Quantile State
+	//! Regular aggregation: the values are accumulated in a linked list (must be the first member)
+	LinkedList v;
+
+	// Window Quantile State (only used for window execution - not exported)
 	unique_ptr<WindowQuantileState<INPUT_TYPE>> window_state;
 	unique_ptr<CursorType> window_cursor;
 
 	void AddElement(INPUT_TYPE element, AggregateInputData &aggr_input) {
-		v.emplace_back(TYPE_OP::Operation(element, aggr_input));
+		ListSegmentAppendValue<INPUT_TYPE>(aggr_input.allocator, v, element);
 	}
 
 	bool HasTree() const {
@@ -306,5 +341,35 @@ struct QuantileState {
 		return *window_cursor;
 	}
 };
+
+//===--------------------------------------------------------------------===//
+// State Export
+//===--------------------------------------------------------------------===//
+//! The quantile parameters live in the bind data - export them as part of the state type so that the function
+//! can be re-bound when the exported state is used (see RebindQuantileBindData)
+template <class STATE>
+AggregateStateLayout QuantileGetStateType(const BoundAggregateFunction &function,
+                                          optional_ptr<FunctionData> bind_data) {
+	auto layout = AggregateFunction::GetStructStateLayout<STATE>(function);
+	if (bind_data) {
+		auto &quantile_data = bind_data->Cast<QuantileBindData>();
+		vector<Value> quantiles;
+		for (auto &quantile : quantile_data.quantiles) {
+			quantiles.push_back(quantile.val);
+		}
+		vector<Value> order;
+		for (auto &entry : quantile_data.order) {
+			order.push_back(Value::UBIGINT(entry));
+		}
+		auto quantile_type = quantiles.empty() ? LogicalType::DOUBLE : quantiles[0].type();
+		layout.bind_data.push_back(Value::LIST(std::move(quantile_type), std::move(quantiles)));
+		layout.bind_data.push_back(Value::LIST(LogicalType::UBIGINT, std::move(order)));
+		layout.bind_data.push_back(Value::BOOLEAN(quantile_data.desc));
+	}
+	return layout;
+}
+
+//! Reconstructs the QuantileBindData from the values exported by QuantileGetStateType
+unique_ptr<FunctionData> RebindQuantileBindData(const vector<Value> &bind_data);
 
 } // namespace duckdb

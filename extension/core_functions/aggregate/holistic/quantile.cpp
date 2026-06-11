@@ -159,15 +159,16 @@ template <bool DISCRETE, class TYPE_OP = QuantileStandardType>
 struct QuantileScalarOperation : public QuantileOperation {
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		if (state.v.empty()) {
+		if (state.v.total_capacity == 0) {
 			finalize_data.ReturnNull();
 			return;
 		}
 		D_ASSERT(finalize_data.input.bind_data);
 		auto &bind_data = finalize_data.input.bind_data->Cast<QuantileBindData>();
 		D_ASSERT(bind_data.quantiles.size() == 1);
-		QuantileInterpolator<DISCRETE> interp(bind_data.quantiles[0], state.v.size(), bind_data.desc);
-		target = interp.template Operation<typename STATE::InputType, T>(state.v.data(), finalize_data.result);
+		FlattenedQuantileValues<typename STATE::InputType> flattened(state.v);
+		QuantileInterpolator<DISCRETE> interp(bind_data.quantiles[0], state.v.total_capacity, bind_data.desc);
+		target = interp.template Operation<typename STATE::InputType, T>(flattened.Data(), finalize_data.result);
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
@@ -234,15 +235,16 @@ struct QuantileScalarFallback : QuantileOperation {
 
 	template <class STATE>
 	static void Finalize(STATE &state, AggregateFinalizeData &finalize_data) {
-		if (state.v.empty()) {
+		if (state.v.total_capacity == 0) {
 			finalize_data.ReturnNull();
 			return;
 		}
 		D_ASSERT(finalize_data.input.bind_data);
 		auto &bind_data = finalize_data.input.bind_data->Cast<QuantileBindData>();
 		D_ASSERT(bind_data.quantiles.size() == 1);
-		QuantileInterpolator<true> interp(bind_data.quantiles[0], state.v.size(), bind_data.desc);
-		auto interpolation_result = interp.InterpolateInternal<string_t>(state.v.data());
+		FlattenedQuantileValues<string_t> flattened(state.v);
+		QuantileInterpolator<true> interp(bind_data.quantiles[0], state.v.total_capacity, bind_data.desc);
+		auto interpolation_result = interp.InterpolateInternal<string_t>(flattened.Data());
 		CreateSortKeyHelpers::DecodeSortKey(interpolation_result, finalize_data.result, finalize_data.result_idx,
 		                                    OrderModifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST));
 	}
@@ -255,7 +257,7 @@ template <class CHILD_TYPE, bool DISCRETE>
 struct QuantileListOperation : QuantileOperation {
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		if (state.v.empty()) {
+		if (state.v.total_capacity == 0) {
 			finalize_data.ReturnNull();
 			return;
 		}
@@ -268,7 +270,8 @@ struct QuantileListOperation : QuantileOperation {
 		ListVector::Reserve(finalize_data.result, ridx + bind_data.quantiles.size());
 		auto rdata = FlatVector::GetDataMutable<CHILD_TYPE>(result);
 
-		auto v_t = state.v.data();
+		FlattenedQuantileValues<typename STATE::InputType> flattened(state.v);
+		auto v_t = flattened.Data();
 		D_ASSERT(v_t);
 
 		auto &entry = target;
@@ -276,7 +279,7 @@ struct QuantileListOperation : QuantileOperation {
 		idx_t lower = 0;
 		for (const auto &q : bind_data.order) {
 			const auto &quantile = bind_data.quantiles[q];
-			QuantileInterpolator<DISCRETE> interp(quantile, state.v.size(), bind_data.desc);
+			QuantileInterpolator<DISCRETE> interp(quantile, state.v.total_capacity, bind_data.desc);
 			interp.begin = lower;
 			rdata[ridx + q] = interp.template Operation<typename STATE::InputType, CHILD_TYPE>(v_t, result);
 			lower = interp.FRN;
@@ -342,7 +345,7 @@ struct QuantileListFallback : QuantileOperation {
 
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		if (state.v.empty()) {
+		if (state.v.total_capacity == 0) {
 			finalize_data.ReturnNull();
 			return;
 		}
@@ -354,16 +357,16 @@ struct QuantileListFallback : QuantileOperation {
 		auto ridx = ListVector::GetListSize(finalize_data.result);
 		ListVector::Reserve(finalize_data.result, ridx + bind_data.quantiles.size());
 
-		D_ASSERT(state.v.data());
+		FlattenedQuantileValues<string_t> flattened(state.v);
 
 		auto &entry = target;
 		entry.offset = ridx;
 		idx_t lower = 0;
 		for (const auto &q : bind_data.order) {
 			const auto &quantile = bind_data.quantiles[q];
-			QuantileInterpolator<true> interp(quantile, state.v.size(), bind_data.desc);
+			QuantileInterpolator<true> interp(quantile, state.v.total_capacity, bind_data.desc);
 			interp.begin = lower;
-			auto interpolation_result = interp.InterpolateInternal<string_t>(state.v.data());
+			auto interpolation_result = interp.InterpolateInternal<string_t>(flattened.Data());
 			CreateSortKeyHelpers::DecodeSortKey(interpolation_result, result, ridx + q,
 			                                    OrderModifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST));
 			lower = interp.FRN;
@@ -405,6 +408,21 @@ AggregateFunction GetDiscreteQuantileTemplated(const LogicalType &type) {
 	}
 }
 
+unique_ptr<FunctionData> RebindQuantileBindData(const vector<Value> &bind_data) {
+	if (bind_data.size() != 3) {
+		throw InvalidInputException("Invalid quantile state - expected three bind data values");
+	}
+	auto result = make_uniq<QuantileBindData>();
+	for (auto &quantile : ListValue::GetChildren(bind_data[0])) {
+		result->quantiles.emplace_back(QuantileValue(quantile));
+	}
+	for (auto &entry : ListValue::GetChildren(bind_data[1])) {
+		result->order.push_back(entry.GetValue<uint64_t>());
+	}
+	result->desc = BooleanValue::Get(bind_data[2]);
+	return std::move(result);
+}
+
 struct ScalarDiscreteQuantile {
 	template <typename INPUT_TYPE, class TYPE_OP = QuantileStandardType>
 	static AggregateFunction GetFunction(const LogicalType &type) {
@@ -412,6 +430,7 @@ struct ScalarDiscreteQuantile {
 		using OP = QuantileScalarOperation<true>;
 		auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP,
 		                                                       AggregateDestructorType::LEGACY>(type, type);
+		fun.SetStructStateExport(QuantileGetStateType<STATE>);
 #ifndef DUCKDB_SMALLER_BINARY
 		fun.SetWindowBatchCallback(OP::Window<STATE, INPUT_TYPE, INPUT_TYPE>);
 		fun.SetWindowInitCallback(OP::WindowInit<STATE, INPUT_TYPE>);
@@ -436,12 +455,14 @@ struct ScalarDiscreteQuantile {
 template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
 static AggregateFunction QuantileListAggregate(const LogicalType &input_type, const LogicalType &child_type) { // NOLINT
 	LogicalType result_type = LogicalType::LIST(child_type);
-	return AggregateFunction(
+	auto fun = AggregateFunction(
 	    {input_type}, result_type, AggregateFunction::StateSize<STATE>,
 	    AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>,
 	    AggregateFunction::UnaryScatterUpdate<STATE, INPUT_TYPE, OP>, AggregateFunction::StateCombine<STATE, OP>,
 	    AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>, FunctionNullHandling::DEFAULT_NULL_HANDLING,
 	    AggregateFunction::NoClusterUpdate(), AggregateFunction::NoBind(), AggregateFunction::StateDestroy<STATE, OP>);
+	fun.SetStructStateExport(QuantileGetStateType<STATE>);
+	return fun;
 }
 
 struct ListDiscreteQuantile {
@@ -544,6 +565,7 @@ struct ScalarContinuousQuantile {
 		auto fun =
 		    AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, TARGET_TYPE, OP,
 		                                                AggregateDestructorType::LEGACY>(input_type, target_type);
+		fun.SetStructStateExport(QuantileGetStateType<STATE>);
 		fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 #ifndef DUCKDB_SMALLER_BINARY
 		fun.SetWindowBatchCallback(OP::template Window<STATE, INPUT_TYPE, TARGET_TYPE>);
@@ -675,6 +697,7 @@ struct MedianFunction {
 		fun.SetName("median");
 		fun.SetSerializeCallback(QuantileBindData::Serialize);
 		fun.SetDeserializeCallback(Deserialize);
+		fun.SetRebindAggregateStateCallback(Rebind);
 		return fun;
 	}
 
@@ -684,6 +707,12 @@ struct MedianFunction {
 		auto &input_type = function.GetArguments()[0];
 		function.ReplaceImplementation(GetAggregate(input_type));
 		return bind_data;
+	}
+
+	static unique_ptr<FunctionData> Rebind(ClientContext &context, BoundAggregateFunction &function,
+	                                       const vector<Value> &bind_data) {
+		function.ReplaceImplementation(GetAggregate(function.GetArguments()[0]));
+		return RebindQuantileBindData(bind_data);
 	}
 
 	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
@@ -701,10 +730,17 @@ struct DiscreteQuantileListFunction {
 		fun.SetBindCallback(Bind);
 		fun.SetSerializeCallback(QuantileBindData::Serialize);
 		fun.SetDeserializeCallback(Deserialize);
+		fun.SetRebindAggregateStateCallback(Rebind);
 		// temporarily push an argument so we can bind the actual quantile
 		fun.GetSignature().AddParameter(LogicalType::LIST(LogicalType::DOUBLE));
 		fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		return fun;
+	}
+
+	static unique_ptr<FunctionData> Rebind(ClientContext &context, BoundAggregateFunction &function,
+	                                       const vector<Value> &bind_data) {
+		function.ReplaceImplementation(GetAggregate(function.GetArguments()[0]));
+		return RebindQuantileBindData(bind_data);
 	}
 
 	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, BoundAggregateFunction &function) {
@@ -730,6 +766,7 @@ struct DiscreteQuantileFunction {
 		fun.SetBindCallback(Bind);
 		fun.SetSerializeCallback(QuantileBindData::Serialize);
 		fun.SetDeserializeCallback(Deserialize);
+		fun.SetRebindAggregateStateCallback(Rebind);
 		// temporarily push an argument so we can bind the actual quantile
 		fun.GetSignature().AddParameter(LogicalType::DOUBLE);
 		fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
@@ -749,6 +786,19 @@ struct DiscreteQuantileFunction {
 		return bind_data;
 	}
 
+	static unique_ptr<FunctionData> Rebind(ClientContext &context, BoundAggregateFunction &function,
+	                                       const vector<Value> &bind_data) {
+		auto result = RebindQuantileBindData(bind_data);
+		auto &quantile_data = result->Cast<QuantileBindData>();
+		auto &input_type = function.GetArguments()[0];
+		if (quantile_data.quantiles.size() == 1) {
+			function.ReplaceImplementation(GetAggregate(input_type));
+		} else {
+			function.ReplaceImplementation(DiscreteQuantileListFunction::GetAggregate(input_type));
+		}
+		return result;
+	}
+
 	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
 		auto &function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
@@ -764,6 +814,7 @@ struct ContinuousQuantileFunction {
 		fun.SetBindCallback(Bind);
 		fun.SetSerializeCallback(QuantileBindData::Serialize);
 		fun.SetDeserializeCallback(Deserialize);
+		fun.SetRebindAggregateStateCallback(Rebind);
 		// temporarily push an argument so we can bind the actual quantile
 		fun.GetSignature().AddParameter(LogicalType::DOUBLE);
 		fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
@@ -776,6 +827,12 @@ struct ContinuousQuantileFunction {
 		auto &input_type = function.GetArguments()[0];
 		function.ReplaceImplementation(GetAggregate(input_type));
 		return bind_data;
+	}
+
+	static unique_ptr<FunctionData> Rebind(ClientContext &context, BoundAggregateFunction &function,
+	                                       const vector<Value> &bind_data) {
+		function.ReplaceImplementation(GetAggregate(function.GetArguments()[0]));
+		return RebindQuantileBindData(bind_data);
 	}
 
 	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
@@ -796,6 +853,7 @@ struct ContinuousQuantileListFunction {
 		fun.SetBindCallback(Bind);
 		fun.SetSerializeCallback(QuantileBindData::Serialize);
 		fun.SetDeserializeCallback(Deserialize);
+		fun.SetRebindAggregateStateCallback(Rebind);
 		// temporarily push an argument so we can bind the actual quantile
 		auto list_of_double = LogicalType::LIST(LogicalType::DOUBLE);
 		fun.GetSignature().AddParameter(list_of_double);
@@ -809,6 +867,12 @@ struct ContinuousQuantileListFunction {
 		auto &input_type = function.GetArguments()[0];
 		function.ReplaceImplementation(GetAggregate(input_type));
 		return bind_data;
+	}
+
+	static unique_ptr<FunctionData> Rebind(ClientContext &context, BoundAggregateFunction &function,
+	                                       const vector<Value> &bind_data) {
+		function.ReplaceImplementation(GetAggregate(function.GetArguments()[0]));
+		return RebindQuantileBindData(bind_data);
 	}
 
 	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
@@ -831,6 +895,7 @@ static AggregateFunction EmptyQuantileFunction(LogicalType input, const LogicalT
 	}
 	fun.SetSerializeCallback(QuantileBindData::Serialize);
 	fun.SetDeserializeCallback(OP::Deserialize);
+	fun.SetRebindAggregateStateCallback(OP::Rebind);
 	fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	return fun;
 }

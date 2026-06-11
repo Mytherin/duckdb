@@ -10,6 +10,7 @@
 #include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/type_util.hpp"
+#include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/list_segment.hpp"
 
 namespace duckdb {
@@ -50,6 +51,19 @@ struct IsStateInputType : std::false_type {};
 template <idx_t I>
 struct IsStateInputType<StateInputType<I>> : std::true_type {};
 
+//! Phantom marker type: resolves to a LIST of the type described by SOURCE
+//! (e.g. StateListOf<StateInputType<0>> resolves to a LIST of the first argument type).
+template <class SOURCE>
+struct StateListOf {
+	using SOURCE_TYPE = SOURCE;
+};
+
+//! Detection trait: true when T is StateListOf<SOURCE> for some SOURCE.
+template <class T>
+struct IsStateListOfType : std::false_type {};
+template <class S>
+struct IsStateListOfType<StateListOf<S>> : std::true_type {};
+
 //! The runtime types of a bound aggregate function - used to resolve the logical types of state fields that are
 //! only known after binding (see StateReturnType / StateInputType).
 struct StateLayoutTypeInfo {
@@ -57,15 +71,17 @@ struct StateLayoutTypeInfo {
 	const vector<LogicalType> &argument_types;
 };
 
-//! Resolves a type source marker (StateReturnType or StateInputType<INDEX>) to a LogicalType.
+//! Resolves a type source marker (StateReturnType, StateInputType<INDEX> or StateListOf<SOURCE>) to a LogicalType.
 template <class SOURCE>
 LogicalType ResolveStateSourceType(const StateLayoutTypeInfo &info) {
 	if constexpr (IsStateInputType<SOURCE>::value) {
 		D_ASSERT(SOURCE::index < info.argument_types.size());
 		return info.argument_types[SOURCE::index];
+	} else if constexpr (IsStateListOfType<SOURCE>::value) {
+		return LogicalType::LIST(ResolveStateSourceType<typename SOURCE::SOURCE_TYPE>(info));
 	} else {
 		static_assert(std::is_same<SOURCE, StateReturnType>::value,
-		              "the type source must be StateReturnType or StateInputType<INDEX>");
+		              "the type source must be StateReturnType, StateInputType<INDEX> or StateListOf<SOURCE>");
 		return info.return_type;
 	}
 }
@@ -481,6 +497,10 @@ struct AggregateStateLayout {
 	LogicalType type;
 	AggregateStateField field;
 	idx_t total_state_size = 0;
+	//! Bind data values required to re-bind the function from an exported state (e.g. the quantile values for
+	//! quantile) - stored in the extension type info of the state type and passed back to the function's
+	//! rebind_aggregate_state callback
+	vector<Value> bind_data;
 };
 
 } // namespace duckdb

@@ -174,7 +174,7 @@ template <typename MEDIAN_TYPE>
 struct MedianAbsoluteDeviationOperation : QuantileOperation {
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		if (state.v.empty()) {
+		if (state.v.total_capacity == 0) {
 			finalize_data.ReturnNull();
 			return;
 		}
@@ -183,11 +183,12 @@ struct MedianAbsoluteDeviationOperation : QuantileOperation {
 		auto &bind_data = finalize_data.input.bind_data->Cast<QuantileBindData>();
 		D_ASSERT(bind_data.quantiles.size() == 1);
 		const auto &q = bind_data.quantiles[0];
-		QuantileInterpolator<false> interp(q, state.v.size(), false);
-		const auto med = interp.template Operation<INPUT_TYPE, MEDIAN_TYPE>(state.v.data(), finalize_data.result);
+		FlattenedQuantileValues<INPUT_TYPE> flattened(state.v);
+		QuantileInterpolator<false> interp(q, state.v.total_capacity, false);
+		const auto med = interp.template Operation<INPUT_TYPE, MEDIAN_TYPE>(flattened.Data(), finalize_data.result);
 
 		MadAccessor<INPUT_TYPE, T, MEDIAN_TYPE> accessor(med);
-		target = interp.template Operation<INPUT_TYPE, T>(state.v.data(), finalize_data.result, accessor);
+		target = interp.template Operation<INPUT_TYPE, T>(flattened.Data(), finalize_data.result, accessor);
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
@@ -266,6 +267,15 @@ unique_ptr<FunctionData> BindMAD(BindAggregateFunctionInput &input) {
 	return make_uniq<QuantileBindData>(Value::DECIMAL(int16_t(5), 2, 1));
 }
 
+AggregateFunction GetMedianAbsoluteDeviationAggregateFunction(const LogicalType &type);
+
+unique_ptr<FunctionData> MadRebind(ClientContext &context, BoundAggregateFunction &function,
+                                   const vector<Value> &bind_data) {
+	function.ReplaceImplementation(GetMedianAbsoluteDeviationAggregateFunction(function.GetArguments()[0]));
+	function.SetName("mad");
+	return RebindQuantileBindData(bind_data);
+}
+
 template <typename INPUT_TYPE, typename MEDIAN_TYPE, typename TARGET_TYPE>
 AggregateFunction GetTypedMedianAbsoluteDeviationAggregateFunction(const LogicalType &input_type,
                                                                    const LogicalType &target_type) {
@@ -273,6 +283,8 @@ AggregateFunction GetTypedMedianAbsoluteDeviationAggregateFunction(const Logical
 	using OP = MedianAbsoluteDeviationOperation<MEDIAN_TYPE>;
 	auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, TARGET_TYPE, OP,
 	                                                       AggregateDestructorType::LEGACY>(input_type, target_type);
+	fun.SetStructStateExport(QuantileGetStateType<STATE>);
+	fun.SetRebindAggregateStateCallback(MadRebind);
 	fun.SetBindCallback(BindMAD);
 	fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 #ifndef DUCKDB_SMALLER_BINARY
@@ -340,9 +352,11 @@ unique_ptr<FunctionData> BindMedianAbsoluteDeviationDecimal(BindAggregateFunctio
 
 AggregateFunctionSet MadFun::GetFunctions() {
 	AggregateFunctionSet mad("mad");
-	mad.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
-	                                  nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING,
-	                                  AggregateFunction::NoClusterUpdate(), BindMedianAbsoluteDeviationDecimal));
+	auto mad_decimal = AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
+	                                     nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING,
+	                                     AggregateFunction::NoClusterUpdate(), BindMedianAbsoluteDeviationDecimal);
+	mad_decimal.SetRebindAggregateStateCallback(MadRebind);
+	mad.AddFunction(mad_decimal);
 
 	const vector<LogicalType> MAD_TYPES = {LogicalType::FLOAT,     LogicalType::DOUBLE, LogicalType::DATE,
 	                                       LogicalType::TIMESTAMP, LogicalType::TIME,   LogicalType::TIMESTAMP_TZ,

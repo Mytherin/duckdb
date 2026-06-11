@@ -126,7 +126,13 @@ typedef void (*aggregate_serialize_t)(Serializer &serializer, const optional_ptr
 typedef unique_ptr<FunctionData> (*aggregate_deserialize_t)(Deserializer &deserializer,
                                                             BoundAggregateFunction &function);
 
-typedef AggregateStateLayout (*aggregate_get_state_type_t)(const BoundAggregateFunction &function);
+typedef AggregateStateLayout (*aggregate_get_state_type_t)(const BoundAggregateFunction &function,
+                                                           optional_ptr<FunctionData> bind_data);
+
+//! Re-binds an exported aggregate state: reconstructs the function's bind data (and re-applies any function
+//! specialization normally done by the bind callback) from the bind_data values stored in the exported state type.
+typedef unique_ptr<FunctionData> (*aggregate_rebind_state_t)(ClientContext &context, BoundAggregateFunction &function,
+                                                             const vector<Value> &bind_data);
 
 struct AggregateFunctionInfo {
 	DUCKDB_API virtual ~AggregateFunctionInfo();
@@ -209,6 +215,10 @@ public:
 	aggregate_serialize_t GetSerializeCallback() const { return serialize; }
 	aggregate_deserialize_t GetDeserializeCallback() const { return deserialize; }
 
+	bool HasRebindAggregateStateCallback() const { return rebind_aggregate_state != nullptr; }
+	aggregate_rebind_state_t GetRebindAggregateStateCallback() const { return rebind_aggregate_state; }
+	void SetRebindAggregateStateCallback(aggregate_rebind_state_t callback) { rebind_aggregate_state = callback; }
+
 public:
 	//! The hashed aggregate state sizing function
 	aggregate_size_t state_size = nullptr;
@@ -243,6 +253,10 @@ public:
 	aggregate_deserialize_t deserialize = nullptr;
 
 	aggregate_get_state_type_t get_state_type = nullptr;
+
+	//! Re-binds an exported aggregate state from the bind_data values stored in the exported state type - required
+	//! for functions whose get_state_type callback fills AggregateStateLayout::bind_data (may be null)
+	aggregate_rebind_state_t rebind_aggregate_state = nullptr;
 
 	bool operator==(const AggregateFunctionCallbacks &rhs) const;
 	bool operator!=(const AggregateFunctionCallbacks &rhs) const;
@@ -360,6 +374,10 @@ public: // Callbacks
 
 	bool HasGetStateTypeCallback() const { return callbacks.get_state_type != nullptr; }
 	aggregate_get_state_type_t GetStateTypeCallback() const { return callbacks.get_state_type; }
+
+	auto HasRebindAggregateStateCallback() const -> bool { return callbacks.rebind_aggregate_state != nullptr; }
+	auto GetRebindAggregateStateCallback() const -> aggregate_rebind_state_t { return callbacks.rebind_aggregate_state; }
+	auto SetRebindAggregateStateCallback(aggregate_rebind_state_t callback) -> void { callbacks.rebind_aggregate_state = callback; }
 	// clang-format on
 
 public: // Extra function info
@@ -574,6 +592,11 @@ public:
 	template <class STATE>
 	static void WireStructStateType(AggregateFunction &result);
 
+	//! Builds the generic (field-based) state layout for STATE - usable by custom get_state_type callbacks that
+	//! additionally fill in the layout's bind_data
+	template <class STATE>
+	static AggregateStateLayout GetStructStateLayout(const BoundAggregateFunction &bound);
+
 	template <class STATE>
 	static idx_t StateSize(const BoundAggregateFunction &) {
 		return sizeof(STATE);
@@ -694,33 +717,38 @@ public:
 	DUCKDB_API bool operator==(const BoundAggregateFunction &rhs) const;
 	DUCKDB_API bool operator!=(const BoundAggregateFunction &rhs) const;
 
-	AggregateStateLayout GetStateType() const {
+	AggregateStateLayout GetStateType(optional_ptr<FunctionData> bind_data) const {
 		D_ASSERT(callbacks.get_state_type);
-		return callbacks.get_state_type(*this);
+		return callbacks.get_state_type(*this, bind_data);
 	}
 };
 
-// Defined here (after BoundAggregateFunction is complete) so the lambda body can call GetReturnType().
+// Defined here (after BoundAggregateFunction is complete) so the body can call GetReturnType().
+template <class STATE>
+inline AggregateStateLayout AggregateFunction::GetStructStateLayout(const BoundAggregateFunction &bound) {
+	using ST = typename STATE::STATE_TYPE;
+	AggregateStateLayout layout;
+	if (bound.GetReturnType().IsAggregateState()) {
+		// the function has been modified for state export (see ExportAggregateFunction::SetStateExport) -
+		// its return type IS the state type already
+		layout.type = bound.GetReturnType();
+	} else {
+		layout.type = AggregateFunction::BuildStateLogical<ST, STATE>(bound);
+	}
+	layout.total_state_size = AlignValue<idx_t>(sizeof(STATE));
+	layout.field = BuildStateField<ST>();
+	AggregateStateField::PopulateListFunctions(layout.type, layout.field);
+	return layout;
+}
+
 template <class STATE>
 inline void AggregateFunction::WireStructStateType(AggregateFunction &result) {
 	if constexpr (HasStructStateType<STATE>::value) {
-		using ST = typename STATE::STATE_TYPE;
-		result.SetStructStateExport([](const BoundAggregateFunction &bound) {
-			AggregateStateLayout layout;
-			if (bound.GetReturnType().IsAggregateState()) {
-				// the function has been modified for state export (see ExportAggregateFunction::SetStateExport) -
-				// its return type IS the state type already
-				layout.type = bound.GetReturnType();
-			} else {
-				layout.type = AggregateFunction::BuildStateLogical<ST, STATE>(bound);
-			}
-			layout.total_state_size = AlignValue<idx_t>(sizeof(STATE));
-			layout.field = BuildStateField<ST>();
-			AggregateStateField::PopulateListFunctions(layout.type, layout.field);
-			return layout;
+		result.SetStructStateExport([](const BoundAggregateFunction &bound, optional_ptr<FunctionData>) {
+			return AggregateFunction::GetStructStateLayout<STATE>(bound);
 		});
 	} else if constexpr (HasPrimitiveLogicalType<STATE>::value) {
-		result.SetStructStateExport([](const BoundAggregateFunction &) {
+		result.SetStructStateExport([](const BoundAggregateFunction &, optional_ptr<FunctionData>) {
 			return AggregateStateLayout(PrimitiveToLogicalType<STATE>(), AlignValue<idx_t>(sizeof(STATE)));
 		});
 	}
