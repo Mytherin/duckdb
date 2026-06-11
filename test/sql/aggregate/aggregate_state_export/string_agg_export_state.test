@@ -1,0 +1,70 @@
+# name: test/sql/aggregate/aggregate_state_export/string_agg_export_state.test
+# description: Test EXPORT_STATE for string_agg - the state is the accumulated string, the separator is bind data
+# group: [aggregate_state_export]
+
+# empty input exports a NULL state
+query II
+SELECT string_agg(x) EXPORT_STATE, finalize(string_agg(x) EXPORT_STATE) FROM (SELECT 'a' AS x WHERE false) t;
+----
+NULL	NULL
+
+# the state is the accumulated string itself
+query III
+SELECT (string_agg(x, '#') EXPORT_STATE)::VARCHAR, finalize(string_agg(x, '#') EXPORT_STATE), string_agg(x, '#') FROM (VALUES ('a'), ('b'), ('c')) t(x);
+----
+a#b#c	a#b#c	a#b#c
+
+# single-argument string_agg defaults to a comma separator
+query I
+SELECT finalize(string_agg(x) EXPORT_STATE) FROM (VALUES ('a'), ('b')) t(x);
+----
+a,b
+
+# long strings are not inlined
+query I
+SELECT finalize(string_agg(x, '/') EXPORT_STATE) = string_agg(x, '/') FROM (VALUES ('this-is-a-long-string-that-is-not-inlined'), ('another-fairly-long-string-here')) t(x);
+----
+true
+
+# grouped aggregation matches the regular aggregate
+statement ok
+CREATE TABLE dummy AS SELECT range % 10 g, 'v' || range::VARCHAR v FROM range(100);
+
+query II nosort grouped_stringagg
+SELECT g, string_agg(v, '+') FROM dummy GROUP BY g ORDER BY g;
+----
+
+query II nosort grouped_stringagg
+SELECT g, finalize(string_agg(v, '+') EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
+----
+
+# we can persist the state and finalize later
+statement ok
+CREATE TABLE stringagg_state AS SELECT g, string_agg(v, '+') EXPORT_STATE s FROM dummy GROUP BY g;
+
+query II nosort grouped_stringagg
+SELECT g, finalize(s) FROM stringagg_state ORDER BY g;
+----
+
+# combining states uses the separator stored in the state type
+query I
+SELECT finalize(combine(string_agg(x, '|') EXPORT_STATE, (SELECT string_agg(y, '|') EXPORT_STATE FROM (VALUES ('c')) s(y)))) FROM (VALUES ('a'), ('b')) t(x);
+----
+c|a|b
+
+query I
+SELECT finalize(combine_aggr(s)) FROM (
+    SELECT string_agg(x, '|') EXPORT_STATE AS s FROM (VALUES ('a'), ('b')) t(x)
+    UNION ALL
+    SELECT string_agg(x, '|') EXPORT_STATE AS s FROM (VALUES ('c')) t(x)
+    UNION ALL
+    SELECT string_agg(x, '|') EXPORT_STATE AS s FROM (SELECT 'a' AS x WHERE false) t
+) t;
+----
+a|b|c
+
+# to_aggregate_state converts a plain string back into a string_agg state (with the default separator)
+query I
+SELECT finalize(combine(to_aggregate_state('a,b', 'string_agg', ['VARCHAR']), to_aggregate_state('c', 'string_agg', ['VARCHAR'])));
+----
+c,a,b

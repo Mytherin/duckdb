@@ -13,6 +13,10 @@ namespace duckdb {
 namespace {
 
 struct StringAggState {
+	//! The exported state is the accumulated string itself (NULL when no values have been added) -
+	//! the separator is exported as part of the bind data (see StringAggGetStateType)
+	using STATE_TYPE = OptionalStateType<StateString<StateReturnType>>;
+
 	string_t value;
 	bool is_set;
 	uint32_t alloc_size;
@@ -158,6 +162,24 @@ unique_ptr<FunctionData> StringAggDeserialize(Deserializer &deserializer, BoundA
 	return make_uniq<StringAggBindData>(std::move(sep));
 }
 
+AggregateStateLayout StringAggGetStateType(const BoundAggregateFunction &function,
+                                           optional_ptr<FunctionData> bind_data) {
+	auto layout = AggregateFunction::GetStructStateLayout<StringAggState>(function);
+	if (bind_data) {
+		// export the separator - it is required to combine states
+		layout.bind_data.push_back(Value(bind_data->Cast<StringAggBindData>().sep));
+	}
+	return layout;
+}
+
+unique_ptr<FunctionData> StringAggRebind(ClientContext &context, BoundAggregateFunction &function,
+                                         const vector<Value> &bind_data) {
+	if (bind_data.size() != 1) {
+		throw InvalidInputException("Invalid string_agg state - expected one bind data value");
+	}
+	return make_uniq<StringAggBindData>(StringValue::Get(bind_data[0]));
+}
+
 } // namespace
 
 AggregateFunctionSet StringAggFun::GetFunctions() {
@@ -172,6 +194,8 @@ AggregateFunctionSet StringAggFun::GetFunctions() {
 	    FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(), StringAggBind);
 	string_agg_param.SetSerializeCallback(StringAggSerialize);
 	string_agg_param.SetDeserializeCallback(StringAggDeserialize);
+	string_agg_param.SetStructStateExport(StringAggGetStateType);
+	string_agg_param.SetRebindAggregateStateCallback(StringAggRebind);
 	string_agg.AddFunction(string_agg_param);
 	string_agg_param.GetSignature().AddParameter(LogicalType::VARCHAR);
 	string_agg.AddFunction(string_agg_param);
