@@ -17,7 +17,7 @@
       ]
     },
     {
-      "reason": "FIXME: aggregate functions missing state type callback (string_agg, approx_count_distinct, entropy, bitstring_agg, min/max/arg_min/arg_max(N), sum over VARINT, sort key fallbacks, etc.)",
+      "reason": "FIXME: aggregate functions missing state type callback (string_agg, approx_count_distinct, entropy, reservoir/approx_quantile, bitstring_agg, min/max/arg_min/arg_max(N), sum over VARINT, sort key fallbacks, etc.)",
       "paths": [
         "test/extension/test_function_named_args.test",
         "test/fuzzer/duckfuzz/bitstring_agg_minmax.test",
@@ -34,6 +34,7 @@
         "test/sql/aggregate/aggregates/string_agg_union.test",
         "test/sql/aggregate/aggregates/test_aggregate_types.test",
         "test/sql/aggregate/aggregates/test_aggregate_types_scalar.test",
+        "test/sql/aggregate/aggregates/test_approx_quantile.test",
         "test/sql/aggregate/aggregates/test_approximate_distinct_count.test",
         "test/sql/aggregate/aggregates/test_bitstring_agg.test",
         "test/sql/aggregate/aggregates/test_entropy.test",

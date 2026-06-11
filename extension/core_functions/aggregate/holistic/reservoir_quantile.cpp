@@ -1,4 +1,3 @@
-#include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -164,121 +163,6 @@ struct ReservoirQuantileScalarOperation : public ReservoirQuantileOperation {
 		target = v_t[offset];
 	}
 };
-
-//===--------------------------------------------------------------------===//
-// State Export
-//===--------------------------------------------------------------------===//
-//! The exported state is STRUCT("sample_size", "values"): the size of the reservoir and the sampled values.
-//! The sampling weights are not exported - they are regenerated when the state is imported, mirroring how
-//! Combine re-samples the values of the source state.
-template <class T>
-AggregateStateLayout ReservoirQuantileGetStateType(const BoundAggregateFunction &function) {
-	child_list_t<LogicalType> children;
-	children.emplace_back("sample_size", LogicalType::UBIGINT);
-	children.emplace_back("values", LogicalType::LIST(function.GetArguments()[0]));
-	AggregateStateLayout layout;
-	layout.type = LogicalType::STRUCT(std::move(children));
-	layout.total_state_size = AlignValue<idx_t>(sizeof(ReservoirQuantileState<T>));
-	return layout;
-}
-
-//! The shape of the exported state: STRUCT("sample_size", "values")
-template <class T>
-using RESERVOIR_QUANTILE_EXPORT_TYPE = VectorStructType<uint64_t, VectorListType<T>>;
-
-template <class T>
-void ReservoirQuantileSerializeState(Vector &state_vector, AggregateInputData &aggr_input_data, Vector &result,
-                                     idx_t count, idx_t offset) {
-	D_ASSERT(offset == 0);
-	using STATE = ReservoirQuantileState<T>;
-	auto states = state_vector.Values<STATE *>();
-	auto writer = FlatVector::Writer<RESERVOIR_QUANTILE_EXPORT_TYPE<T>>(result, count);
-
-	for (idx_t i = 0; i < count; i++) {
-		auto &state = *states[i].GetValue();
-		if (state.pos == 0) {
-			// no values have been added to this state - export NULL
-			writer.WriteNull();
-			continue;
-		}
-		writer.WriteValue([&](auto &sample_size_writer, auto &values_writer) {
-			sample_size_writer.WriteValue(state.len);
-			idx_t value_idx = 0;
-			for (auto &value_writer : values_writer.WriteList(state.pos)) {
-				value_writer.WriteValue(state.v[value_idx++]);
-			}
-		});
-	}
-}
-
-template <class T>
-void ReservoirQuantileDeserializeState(const AggregateStateLayout &layout, const Vector &input_vec, idx_t count,
-                                       data_ptr_t dest_buffer, ArenaAllocator &allocator) {
-	using STATE = ReservoirQuantileState<T>;
-	auto entries = input_vec.Values<RESERVOIR_QUANTILE_EXPORT_TYPE<T>>();
-	for (idx_t i = 0; i < count; i++) {
-		auto &state = *reinterpret_cast<STATE *>(dest_buffer + i * layout.total_state_size);
-		const auto entry = entries[i];
-		if (!entry.IsValid()) {
-			// NULL input - leave the state empty
-			continue;
-		}
-		const auto sample_size_entry = entry.template GetChildValue<0>();
-		const auto values = entry.template GetChildValue<1>();
-		if (!sample_size_entry.IsValid() || !values.IsValid()) {
-			throw InvalidInputException("Invalid reservoir_quantile state - the state fields cannot be NULL");
-		}
-		state.Resize(MaxValue<idx_t>(sample_size_entry.GetValue(), values.GetListLength()));
-		idx_t value_idx = 0;
-		for (const auto value_entry : values.GetChildValues()) {
-			if (!value_entry.IsValid()) {
-				throw InvalidInputException("Invalid reservoir_quantile state - the state values cannot be NULL");
-			}
-			state.v[value_idx++] = value_entry.GetValue();
-		}
-		state.pos = value_idx;
-		state.r_samp = new BaseReservoirSampling();
-		state.r_samp->InitializeReservoirWeights(state.pos, state.len);
-	}
-}
-
-//! Wires the state export callbacks for the physical type of the input
-void WireReservoirQuantileStateExport(AggregateFunction &fun, PhysicalType type) {
-	switch (type) {
-	case PhysicalType::INT8:
-		fun.SetStateExportCallbacks(ReservoirQuantileGetStateType<int8_t>, ReservoirQuantileSerializeState<int8_t>,
-		                            ReservoirQuantileDeserializeState<int8_t>);
-		break;
-	case PhysicalType::INT16:
-		fun.SetStateExportCallbacks(ReservoirQuantileGetStateType<int16_t>, ReservoirQuantileSerializeState<int16_t>,
-		                            ReservoirQuantileDeserializeState<int16_t>);
-		break;
-	case PhysicalType::INT32:
-		fun.SetStateExportCallbacks(ReservoirQuantileGetStateType<int32_t>, ReservoirQuantileSerializeState<int32_t>,
-		                            ReservoirQuantileDeserializeState<int32_t>);
-		break;
-	case PhysicalType::INT64:
-		fun.SetStateExportCallbacks(ReservoirQuantileGetStateType<int64_t>, ReservoirQuantileSerializeState<int64_t>,
-		                            ReservoirQuantileDeserializeState<int64_t>);
-		break;
-	case PhysicalType::INT128:
-		fun.SetStateExportCallbacks(ReservoirQuantileGetStateType<hugeint_t>,
-		                            ReservoirQuantileSerializeState<hugeint_t>,
-		                            ReservoirQuantileDeserializeState<hugeint_t>);
-		break;
-	case PhysicalType::FLOAT:
-		fun.SetStateExportCallbacks(ReservoirQuantileGetStateType<float>, ReservoirQuantileSerializeState<float>,
-		                            ReservoirQuantileDeserializeState<float>);
-		break;
-	case PhysicalType::DOUBLE:
-		fun.SetStateExportCallbacks(ReservoirQuantileGetStateType<double>, ReservoirQuantileSerializeState<double>,
-		                            ReservoirQuantileDeserializeState<double>);
-		break;
-	default:
-		// not supported - the state cannot be exported
-		break;
-	}
-}
 
 AggregateFunction GetReservoirQuantileAggregateFunction(PhysicalType type) {
 	switch (type) {
@@ -482,10 +366,7 @@ unique_ptr<FunctionData> BindReservoirQuantileDecimal(BindAggregateFunctionInput
 	if (function.GetOriginalArguments().empty()) {
 		function.GetOriginalArguments() = function.GetArguments();
 	}
-	auto physical_type = arguments[0]->GetReturnType().InternalType();
-	auto impl = GetReservoirQuantileAggregateFunction(physical_type);
-	WireReservoirQuantileStateExport(impl, physical_type);
-	function.ReplaceImplementation(impl);
+	function.ReplaceImplementation(GetReservoirQuantileAggregateFunction(arguments[0]->GetReturnType().InternalType()));
 	auto bind_data = BindReservoirQuantile(input);
 	function.SetName("reservoir_quantile");
 	function.SetSerializeCallback(ReservoirQuantileBindData::Serialize);
@@ -497,11 +378,9 @@ unique_ptr<FunctionData> ReservoirQuantileDecimalDeserialize(Deserializer &deser
                                                              BoundAggregateFunction &function) {
 	auto bind_data = ReservoirQuantileBindData::Deserialize(deserializer, function);
 	auto &return_type = deserializer.Get<const LogicalType &>();
-	auto physical_type = function.GetArguments()[0].InternalType();
 	auto impl = return_type.id() == LogicalTypeId::LIST
 	                ? GetReservoirQuantileListAggregateFunction(ListType::GetChildType(return_type))
-	                : GetReservoirQuantileAggregateFunction(physical_type);
-	WireReservoirQuantileStateExport(impl, physical_type);
+	                : GetReservoirQuantileAggregateFunction(function.GetArguments()[0].InternalType());
 	function.ReplaceImplementation(impl);
 	function.SetName("reservoir_quantile");
 	function.SetSerializeCallback(ReservoirQuantileBindData::Serialize);
@@ -514,7 +393,6 @@ AggregateFunction GetReservoirQuantileAggregate(PhysicalType type) {
 	fun.SetBindCallback(BindReservoirQuantile);
 	fun.SetSerializeCallback(ReservoirQuantileBindData::Serialize);
 	fun.SetDeserializeCallback(ReservoirQuantileBindData::Deserialize);
-	WireReservoirQuantileStateExport(fun, type);
 	// temporarily push an argument so we can bind the actual quantile
 	fun.GetSignature().AddParameter(LogicalType::DOUBLE);
 	return fun;
@@ -525,7 +403,6 @@ AggregateFunction GetReservoirQuantileListAggregate(const LogicalType &type) {
 	fun.SetBindCallback(BindReservoirQuantile);
 	fun.SetSerializeCallback(ReservoirQuantileBindData::Serialize);
 	fun.SetDeserializeCallback(ReservoirQuantileBindData::Deserialize);
-	WireReservoirQuantileStateExport(fun, type.InternalType());
 	// temporarily push an argument so we can bind the actual quantile
 	auto list_of_double = LogicalType::LIST(LogicalType::DOUBLE);
 	fun.GetSignature().AddParameter(list_of_double);
