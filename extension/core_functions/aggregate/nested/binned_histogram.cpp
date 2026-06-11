@@ -272,15 +272,19 @@ void IsHistogramOtherBinFunction(DataChunk &args, ExpressionState &state, Vector
 	}
 }
 
-template <class OP, class T>
-void HistogramBinFinalizeFunction(Vector &state_vector, AggregateInputData &, Vector &result, idx_t count,
-                                  idx_t offset) {
+//! Shared implementation for finalizing binned histogram states into a list of (boundary, count) entries.
+//! INCLUDE_OTHER appends the count of the overflow ("other") bucket under the sentinel key produced by
+//! OtherBucketValue - this is used for the regular MAP result, where keys cannot be NULL (and is only supported
+//! for some key types). The exported state stores the overflow count in a separate struct field instead.
+template <class OP, class T, bool INCLUDE_OTHER>
+void HistogramBinFinalizeInternal(Vector &state_vector, Vector &result, idx_t count, idx_t offset) {
 	auto states = state_vector.Values<HistogramBinState<T> *>();
 
 	auto &mask = FlatVector::ValidityMutable(result);
 	auto old_len = ListVector::GetListSize(result);
 	idx_t new_entries = 0;
-	bool supports_other_bucket = SupportsOtherBucket(MapType::KeyType(result.GetType()));
+	const auto &key_type = StructType::GetChildTypes(ListType::GetChildType(result.GetType()))[0].second;
+	const bool supports_other_bucket = INCLUDE_OTHER && SupportsOtherBucket(key_type);
 	// figure out how much space we need
 	for (idx_t i = 0; i < count; i++) {
 		auto &state = *states[i].GetValue();
@@ -295,8 +299,9 @@ void HistogramBinFinalizeFunction(Vector &state_vector, AggregateInputData &, Ve
 	}
 	// reserve space in the list vector
 	ListVector::Reserve(result, old_len + new_entries);
-	auto &keys = MapVector::GetKeys(result);
-	auto &values = MapVector::GetValues(result);
+	auto &entries = StructVector::GetEntries(ListVector::GetChildMutable(result));
+	auto &keys = entries[0];
+	auto &values = entries[1];
 	auto list_entries = FlatVector::GetDataMutable<list_entry_t>(result);
 	auto count_entries = FlatVector::GetDataMutable<uint64_t>(values);
 
@@ -317,8 +322,7 @@ void HistogramBinFinalizeFunction(Vector &state_vector, AggregateInputData &, Ve
 			current_offset++;
 		}
 		if (state.counts->back() > 0 && supports_other_bucket) {
-			// add overflow bucket ("others")
-			// set bin boundary to NULL for overflow bucket
+			// add the overflow bucket ("others") under the sentinel key
 			keys.SetValue(current_offset, OtherBucketValue(keys.GetType()));
 			count_entries[current_offset] = state.counts->back();
 			current_offset++;
@@ -330,52 +334,76 @@ void HistogramBinFinalizeFunction(Vector &state_vector, AggregateInputData &, Ve
 	result.Verify();
 }
 
+template <class OP, class T>
+void HistogramBinFinalizeFunction(Vector &state_vector, AggregateInputData &, Vector &result, idx_t count,
+                                  idx_t offset) {
+	HistogramBinFinalizeInternal<OP, T, true>(state_vector, result, count, offset);
+}
+
 //===--------------------------------------------------------------------===//
 // State Export
 //===--------------------------------------------------------------------===//
-//! The exported state is a MAP of bin boundary -> count, in the same shape as the result of the aggregate:
-//! serialization re-uses the finalize implementation. The count of the overflow ("other") bucket is exported
-//! under the sentinel key produced by OtherBucketValue (and omitted when it is zero).
+//! The exported state mirrors the internal state: a STRUCT holding the histogram bins (a LIST of
+//! (boundary, count) entries, in the same order as the MAP the aggregate returns) and the count of the overflow
+//! ("other") bucket as a separate field. This avoids the sentinel key the MAP result uses for the overflow
+//! bucket, which can collide with an actual bin boundary (and does not exist for all key types).
 template <class OP, class T>
 AggregateStateLayout HistogramBinGetStateType(const BoundAggregateFunction &function,
                                               optional_ptr<FunctionData> bind_data) {
+	child_list_t<LogicalType> entry_children;
+	entry_children.emplace_back("boundary", function.GetArguments()[0]);
+	entry_children.emplace_back("count", LogicalType::UBIGINT);
+	child_list_t<LogicalType> state_children;
+	state_children.emplace_back("histogram", LogicalType::LIST(LogicalType::STRUCT(std::move(entry_children))));
+	state_children.emplace_back("other", LogicalType::UBIGINT);
 	AggregateStateLayout layout;
-	layout.type = LogicalType::MAP(function.GetArguments()[0], LogicalType::UBIGINT);
+	layout.type = LogicalType::STRUCT(std::move(state_children));
 	layout.total_state_size = AlignValue<idx_t>(sizeof(HistogramBinState<T>));
 	return layout;
+}
+
+template <class OP, class T>
+void HistogramBinExportState(Vector &state_vector, AggregateInputData &, Vector &result, idx_t count, idx_t offset) {
+	auto &entries = StructVector::GetEntries(result);
+	// write the bins into the nested histogram list (the overflow bucket is not part of the list)
+	HistogramBinFinalizeInternal<OP, T, false>(state_vector, entries[0], count, offset);
+
+	auto states = state_vector.Values<HistogramBinState<T> *>();
+	auto &mask = FlatVector::ValidityMutable(result);
+	auto other_writer = FlatVector::Writer<uint64_t>(entries[1], count, offset);
+	for (idx_t i = 0; i < count; i++) {
+		auto &state = *states[i].GetValue();
+		if (!state.bin_boundaries) {
+			mask.SetInvalid(i + offset);
+			other_writer.WriteNull();
+			continue;
+		}
+		other_writer.WriteValue(state.counts->back());
+	}
 }
 
 template <class OP, class T>
 void HistogramBinImportState(const AggregateStateLayout &layout, const Vector &input_vec, idx_t count,
                              data_ptr_t dest_buffer, ArenaAllocator &allocator) {
 	const auto validity = input_vec.Validity();
-	auto list_entries = FlatVector::GetData<list_entry_t>(input_vec);
-	auto &child = ListVector::GetChild(input_vec);
+	const auto &state_entries = StructVector::GetEntries(input_vec);
+	auto &histogram_vec = state_entries[0];
+	const auto histogram_validity = histogram_vec.Validity();
+	const auto other_validity = state_entries[1].Validity();
+	auto other_data = FlatVector::GetData<uint64_t>(state_entries[1]);
+	auto list_entries = FlatVector::GetData<list_entry_t>(histogram_vec);
+	auto &child = ListVector::GetChild(histogram_vec);
 	const auto &fields = StructVector::GetEntries(child);
 
 	// encode the bin boundaries - this maps them to the representation the state stores (e.g. as sort keys)
 	auto extra_state = OP::CreateExtraState();
 	UnifiedVectorFormat boundary_data;
 	OP::PrepareData(fields[0], extra_state, boundary_data);
-	auto boundary_values = UnifiedVectorFormat::GetData<T>(boundary_data);
 	auto count_data = FlatVector::GetData<uint64_t>(fields[1]);
-
-	// the overflow ("other") bucket is exported under a sentinel key - encode it the same way for comparison
-	const auto &key_type = MapType::KeyType(input_vec.GetType());
-	const bool supports_other = SupportsOtherBucket(key_type);
-	T other_value {};
-	auto other_extra_state = OP::CreateExtraState();
-	UnifiedVectorFormat other_data;
-	if (supports_other) {
-		Vector other_vec(key_type, 1);
-		other_vec.SetValue(0, OtherBucketValue(key_type));
-		OP::PrepareData(other_vec, other_extra_state, other_data);
-		other_value = UnifiedVectorFormat::GetData<T>(other_data)[other_data.sel->get_index(0)];
-	}
 
 	for (idx_t i = 0; i < count; i++) {
 		auto &state = *reinterpret_cast<HistogramBinState<T> *>(dest_buffer + i * layout.total_state_size);
-		if (!validity.IsValid(i)) {
+		if (!validity.IsValid(i) || !histogram_validity.IsValid(i)) {
 			// NULL input - leave the state empty
 			continue;
 		}
@@ -383,22 +411,17 @@ void HistogramBinImportState(const AggregateStateLayout &layout, const Vector &i
 		state.counts = new unsafe_vector<idx_t>();
 		const auto &list_entry = list_entries[i];
 		state.bin_boundaries->reserve(list_entry.length);
-		idx_t other_count = 0;
 		for (idx_t k = 0; k < list_entry.length; k++) {
 			const auto idx = list_entry.offset + k;
 			const auto sel_idx = boundary_data.sel->get_index(idx);
 			if (!boundary_data.validity.RowIsValid(sel_idx)) {
 				throw InvalidInputException("Invalid histogram state - the bin boundaries cannot be NULL");
 			}
-			if (supports_other && Equals::Operation(boundary_values[sel_idx], other_value)) {
-				// this is the entry of the overflow bucket
-				other_count = count_data[idx];
-				continue;
-			}
 			state.bin_boundaries->push_back(OP::template ExtractValue<T>(boundary_data, idx, allocator));
 			state.counts->push_back(count_data[idx]);
 		}
-		state.counts->push_back(other_count);
+		// the count of the overflow ("other") bucket is stored in a separate field (NULL counts as zero)
+		state.counts->push_back(other_validity.IsValid(i) ? other_data[i] : 0);
 	}
 }
 
@@ -414,7 +437,7 @@ AggregateFunction GetHistogramBinFunction(const LogicalType &type) {
 	    AggregateFunction::StateInitialize<STATE_TYPE, HistogramBinFunction>, HistogramBinUpdateFunction<OP, T, HIST>,
 	    AggregateFunction::StateCombine<STATE_TYPE, HistogramBinFunction>, HistogramBinFinalizeFunction<OP, T>, nullptr,
 	    nullptr, AggregateFunction::StateDestroy<STATE_TYPE, HistogramBinFunction>);
-	fun.SetStateExportCallbacks(HistogramBinGetStateType<OP, T>, HistogramBinFinalizeFunction<OP, T>,
+	fun.SetStateExportCallbacks(HistogramBinGetStateType<OP, T>, HistogramBinExportState<OP, T>,
 	                            HistogramBinImportState<OP, T>);
 	return fun;
 }
