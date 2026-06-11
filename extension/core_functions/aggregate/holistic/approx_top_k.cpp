@@ -387,7 +387,8 @@ void ApproxTopKFinalize(Vector &state_vector, AggregateInputData &, Vector &resu
 //! the k parameter, the monitored values with their counters (ordered by descending count),
 //! and the Filtered Space-Saving sketch counters. The values are exported with the input type
 //! of the aggregate - values that are stored as sort keys are decoded on export and re-encoded on import.
-AggregateStateLayout ApproxTopKGetStateType(const BoundAggregateFunction &function) {
+AggregateStateLayout ApproxTopKGetStateType(const BoundAggregateFunction &function,
+                                            optional_ptr<FunctionData> bind_data) {
 	child_list_t<LogicalType> value_children;
 	value_children.emplace_back("value", function.GetArguments()[0]);
 	value_children.emplace_back("count", LogicalType::UBIGINT);

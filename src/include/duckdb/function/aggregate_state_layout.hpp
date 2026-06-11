@@ -10,6 +10,7 @@
 #include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/type_util.hpp"
+#include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/list_segment.hpp"
 
 namespace duckdb {
@@ -448,6 +449,10 @@ struct AggregateStateLayout {
 	LogicalType type;
 	AggregateStateField field;
 	idx_t total_state_size = 0;
+	//! Bind data values required to re-bind the function from an exported state (e.g. the quantile values for
+	//! quantile) - stored in the extension type info of the state type and passed back to the function's
+	//! rebind_aggregate_state callback
+	vector<Value> bind_data;
 };
 
 } // namespace duckdb

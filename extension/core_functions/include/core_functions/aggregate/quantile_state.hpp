@@ -342,4 +342,34 @@ struct QuantileState {
 	}
 };
 
+//===--------------------------------------------------------------------===//
+// State Export
+//===--------------------------------------------------------------------===//
+//! The quantile parameters live in the bind data - export them as part of the state type so that the function
+//! can be re-bound when the exported state is used (see RebindQuantileBindData)
+template <class STATE>
+AggregateStateLayout QuantileGetStateType(const BoundAggregateFunction &function,
+                                          optional_ptr<FunctionData> bind_data) {
+	auto layout = AggregateFunction::GetStructStateLayout<STATE>(function);
+	if (bind_data) {
+		auto &quantile_data = bind_data->Cast<QuantileBindData>();
+		vector<Value> quantiles;
+		for (auto &quantile : quantile_data.quantiles) {
+			quantiles.push_back(quantile.val);
+		}
+		vector<Value> order;
+		for (auto &entry : quantile_data.order) {
+			order.push_back(Value::UBIGINT(entry));
+		}
+		auto quantile_type = quantiles.empty() ? LogicalType::DOUBLE : quantiles[0].type();
+		layout.bind_data.push_back(Value::LIST(std::move(quantile_type), std::move(quantiles)));
+		layout.bind_data.push_back(Value::LIST(LogicalType::UBIGINT, std::move(order)));
+		layout.bind_data.push_back(Value::BOOLEAN(quantile_data.desc));
+	}
+	return layout;
+}
+
+//! Reconstructs the QuantileBindData from the values exported by QuantileGetStateType
+unique_ptr<FunctionData> RebindQuantileBindData(const vector<Value> &bind_data);
+
 } // namespace duckdb

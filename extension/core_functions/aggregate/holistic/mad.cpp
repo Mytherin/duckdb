@@ -267,6 +267,15 @@ unique_ptr<FunctionData> BindMAD(BindAggregateFunctionInput &input) {
 	return make_uniq<QuantileBindData>(Value::DECIMAL(int16_t(5), 2, 1));
 }
 
+AggregateFunction GetMedianAbsoluteDeviationAggregateFunction(const LogicalType &type);
+
+unique_ptr<FunctionData> MadRebind(ClientContext &context, BoundAggregateFunction &function,
+                                   const vector<Value> &bind_data) {
+	function.ReplaceImplementation(GetMedianAbsoluteDeviationAggregateFunction(function.GetArguments()[0]));
+	function.SetName("mad");
+	return RebindQuantileBindData(bind_data);
+}
+
 template <typename INPUT_TYPE, typename MEDIAN_TYPE, typename TARGET_TYPE>
 AggregateFunction GetTypedMedianAbsoluteDeviationAggregateFunction(const LogicalType &input_type,
                                                                    const LogicalType &target_type) {
@@ -274,6 +283,8 @@ AggregateFunction GetTypedMedianAbsoluteDeviationAggregateFunction(const Logical
 	using OP = MedianAbsoluteDeviationOperation<MEDIAN_TYPE>;
 	auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, TARGET_TYPE, OP,
 	                                                       AggregateDestructorType::LEGACY>(input_type, target_type);
+	fun.SetStructStateExport(QuantileGetStateType<STATE>);
+	fun.SetRebindAggregateStateCallback(MadRebind);
 	fun.SetBindCallback(BindMAD);
 	fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 #ifndef DUCKDB_SMALLER_BINARY
@@ -341,9 +352,11 @@ unique_ptr<FunctionData> BindMedianAbsoluteDeviationDecimal(BindAggregateFunctio
 
 AggregateFunctionSet MadFun::GetFunctions() {
 	AggregateFunctionSet mad("mad");
-	mad.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
-	                                  nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING,
-	                                  AggregateFunction::NoClusterUpdate(), BindMedianAbsoluteDeviationDecimal));
+	auto mad_decimal = AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
+	                                     nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING,
+	                                     AggregateFunction::NoClusterUpdate(), BindMedianAbsoluteDeviationDecimal);
+	mad_decimal.SetRebindAggregateStateCallback(MadRebind);
+	mad.AddFunction(mad_decimal);
 
 	const vector<LogicalType> MAD_TYPES = {LogicalType::FLOAT,     LogicalType::DOUBLE, LogicalType::DATE,
 	                                       LogicalType::TIMESTAMP, LogicalType::TIME,   LogicalType::TIMESTAMP_TZ,

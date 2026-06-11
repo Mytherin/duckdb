@@ -31,7 +31,8 @@ bool AggregateFunctionCallbacks::operator==(const AggregateFunctionCallbacks &rh
 	       window == rhs.window && window_init == rhs.window_init && window_batch == rhs.window_batch &&
 	       bind == rhs.bind && destructor == rhs.destructor && statistics == rhs.statistics &&
 	       serialize == rhs.serialize && deserialize == rhs.deserialize && get_state_type == rhs.get_state_type &&
-	       export_aggregate_state == rhs.export_aggregate_state && import_aggregate_state == rhs.import_aggregate_state;
+	       export_aggregate_state == rhs.export_aggregate_state &&
+	       import_aggregate_state == rhs.import_aggregate_state && rebind_aggregate_state == rhs.rebind_aggregate_state;
 }
 
 bool AggregateFunctionCallbacks::operator!=(const AggregateFunctionCallbacks &rhs) const {

@@ -14,9 +14,6 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/common/printer.hpp"
-#include "duckdb/common/serializer/binary_deserializer.hpp"
-#include "duckdb/common/serializer/binary_serializer.hpp"
-#include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -114,8 +111,8 @@ void TemplateDispatch(PhysicalType type, ARGS &&... args) {
 	}
 }
 
-static AggregateStateLayout GetLayout(const BoundAggregateFunction &aggr) {
-	return aggr.GetStateTypeCallback()(aggr);
+static AggregateStateLayout GetLayout(const BoundAggregateFunction &aggr, optional_ptr<FunctionData> bind_data) {
+	return aggr.GetStateType(bind_data);
 }
 
 // Load rows from input_vec into the packed binary state buffer. Skips null rows.
@@ -313,7 +310,7 @@ struct CombineState : public FunctionLocalState {
 	ArenaAllocator allocator;
 
 	explicit CombineState(const ExportAggregateBindData &bind_data)
-	    : layout(GetLayout(bind_data.aggr)),
+	    : layout(GetLayout(bind_data.aggr, bind_data.bind_data.get())),
 	      state_buffer0(make_unsafe_uniq_array<data_t>(STANDARD_VECTOR_SIZE * layout.total_state_size)),
 	      state_buffer1(make_unsafe_uniq_array<data_t>(STANDARD_VECTOR_SIZE * layout.total_state_size)),
 	      addresses0(LogicalType::POINTER), addresses1(LogicalType::POINTER), allocator(Allocator::DefaultAllocator()) {
@@ -336,7 +333,7 @@ struct FinalizeState : public FunctionLocalState {
 	ArenaAllocator allocator;
 
 	explicit FinalizeState(const ExportAggregateBindData &bind_data)
-	    : layout(GetLayout(bind_data.aggr)),
+	    : layout(GetLayout(bind_data.aggr, bind_data.bind_data.get())),
 	      state_buffer(make_unsafe_uniq_array<data_t>(STANDARD_VECTOR_SIZE * layout.total_state_size)),
 	      addresses(LogicalType::POINTER), allocator(Allocator::DefaultAllocator()) {
 	}
@@ -448,9 +445,7 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 // looks up the aggregate function with the given name in the catalog and binds it with the given argument types
 unique_ptr<ExportAggregateBindData> BindExportedAggregate(ClientContext &context, const string &function_name,
                                                           const vector<LogicalType> &argument_types,
-                                                          const Value &bind_data_blob = Value(),
-                                                          const Value &return_type_val = Value(),
-                                                          const Value &bound_arguments_val = Value()) {
+                                                          const Value &bind_data_val = Value()) {
 	auto &func = Catalog::GetSystemCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(context, DEFAULT_SCHEMA,
 	                                                                                        function_name);
 	if (func.type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {
@@ -466,36 +461,26 @@ unique_ptr<ExportAggregateBindData> BindExportedAggregate(ClientContext &context
 	}
 	const auto &aggr = aggr_entry.functions.GetFunctionByOffset(best_function.GetIndex());
 
-	if (!bind_data_blob.IsNull() && aggr.HasSerializationCallbacks()) {
-		// the exported state holds the serialized bind data of the original aggregate - we can construct the bound
-		// function directly from its parts instead of re-binding it (mirroring FunctionSerializer::Deserialize)
-		const auto return_type = TypeValue::GetType(return_type_val);
-		BoundAggregateFunction bound_aggr(aggr);
-		bound_aggr.GetArguments().clear();
-		for (auto &arg : ListValue::GetChildren(bound_arguments_val)) {
-			bound_aggr.GetArguments().push_back(TypeValue::GetType(arg));
+	if (!bind_data_val.IsNull()) {
+		// the exported state holds the bind data values of the original aggregate - re-bind the function through
+		// its rebind_aggregate_state callback instead of re-binding it with dummy arguments
+		if (!aggr.HasRebindAggregateStateCallback()) {
+			throw InternalException("Exported aggregate state of function \"%s\" has bind data, but the function "
+			                        "does not have a rebind_aggregate_state callback",
+			                        function_name);
 		}
-		bound_aggr.GetOriginalArguments() = argument_types;
-
-		auto &blob = StringValue::Get(bind_data_blob);
-		auto blob_data = make_unsafe_uniq_array<data_t>(blob.size());
-		memcpy(blob_data.get(), blob.c_str(), blob.size());
-		MemoryStream stream(blob_data.get(), blob.size());
-		BinaryDeserializer deserializer(stream);
-		deserializer.Set<ClientContext &>(context);
-		deserializer.Set<const LogicalType &>(return_type);
-		deserializer.Begin();
-		auto bind_info = bound_aggr.GetDeserializeCallback()(deserializer, bound_aggr);
-		deserializer.End();
-		deserializer.Unset<LogicalType>();
-		deserializer.Unset<ClientContext>();
-
-		bound_aggr.SetReturnType(return_type);
+		vector<Value> bind_data_values;
+		for (auto &child : StructValue::GetChildren(bind_data_val)) {
+			bind_data_values.push_back(child);
+		}
+		BoundAggregateFunction bound_aggr(aggr);
+		bound_aggr.GetArguments() = argument_types;
+		auto bind_info = aggr.GetRebindAggregateStateCallback()(context, bound_aggr, bind_data_values);
 		return make_uniq<ExportAggregateBindData>(bound_aggr, std::move(bind_info),
 		                                          bound_aggr.GetStateSizeCallback()(bound_aggr));
 	}
 
-	// no serialized bind data - re-bind the function with constant NULL arguments
+	// no exported bind data - re-bind the function with constant NULL arguments
 	// FIXME: this is really hacky
 	// but the aggregate state export needs a rework around how it handles more complex aggregates anyway
 	vector<unique_ptr<Expression>> args;
@@ -545,29 +530,17 @@ unique_ptr<ExportAggregateBindData> BindAggregateStateInternal(ClientContext &co
 		argument_types.push_back(TypeValue::GetType(val));
 	}
 
-	// read the (optional) serialized bind data, original return type and bound argument types
-	Value bind_data_blob;
-	Value return_type_val;
-	Value bound_arguments_val;
+	// read the (optional) exported bind data values
+	Value bind_data_val;
 	entry = ext_info->properties.find("bind_data");
 	if (entry != ext_info->properties.end()) {
-		bind_data_blob = entry->second;
-		entry = ext_info->properties.find("return_type");
-		if (entry == ext_info->properties.end() || entry->second.type().id() != LogicalTypeId::TYPE ||
-		    entry->second.IsNull()) {
-			throw InternalException("Aggregate state object with bind data should have a return_type property");
+		if (entry->second.type().id() != LogicalTypeId::STRUCT || entry->second.IsNull()) {
+			throw InternalException("The bind_data property of an aggregate state should be a struct of values");
 		}
-		return_type_val = entry->second;
-		entry = ext_info->properties.find("bound_arguments");
-		if (entry == ext_info->properties.end() || entry->second.type().id() != LogicalTypeId::LIST ||
-		    entry->second.IsNull()) {
-			throw InternalException("Aggregate state object with bind data should have a bound_arguments property");
-		}
-		bound_arguments_val = entry->second;
+		bind_data_val = entry->second;
 	}
 
-	return BindExportedAggregate(context, function_name, argument_types, bind_data_blob, return_type_val,
-	                             bound_arguments_val);
+	return BindExportedAggregate(context, function_name, argument_types, bind_data_val);
 }
 
 unique_ptr<FunctionData> BindAggregateState(BindScalarFunctionInput &input) {
@@ -605,7 +578,7 @@ void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data,
 		addresses_ptrs = FlatVector::GetData<data_ptr_t>(state);
 	}
 
-	auto layout = GetLayout(aggr_input_data.function);
+	auto layout = GetLayout(aggr_input_data.function, aggr_input_data.bind_data);
 
 	result.Flatten();
 	SerializeState(layout, result, count, addresses_ptrs);
@@ -636,7 +609,7 @@ void CombineAggrUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx
 	auto &bind_data = aggr_input_data.bind_data->Cast<ExportAggregateBindData>();
 	auto &underlying_aggr = bind_data.aggr;
 
-	auto layout = GetLayout(underlying_aggr);
+	auto layout = GetLayout(underlying_aggr, bind_data.bind_data.get());
 
 	auto aligned_size = layout.total_state_size;
 	unsafe_unique_array<data_t> temp_state_buf = make_unsafe_uniq_array<data_t>(count * aligned_size);
@@ -676,7 +649,7 @@ void CombineAggrFinalize(Vector &state, AggregateInputData &aggr_input_data, Vec
 	auto &bind_data = aggr_input_data.bind_data->Cast<ExportAggregateBindData>();
 	auto &underlying_aggr = bind_data.aggr;
 
-	auto layout = GetLayout(underlying_aggr);
+	auto layout = GetLayout(underlying_aggr, bind_data.bind_data.get());
 
 	result.Flatten();
 	SerializeState(underlying_aggr, bind_data.bind_data.get(), layout, state, count, result, aggr_input_data.allocator);
@@ -687,9 +660,10 @@ void CombineAggrFinalize(Vector &state, AggregateInputData &aggr_input_data, Vec
 // extension type info so that the aggregate can be re-bound later (e.g. by FINALIZE/COMBINE)
 LogicalType CreateAggregateStateType(const BoundAggregateFunction &bound_function,
                                      optional_ptr<FunctionData> bind_data) {
+	auto layout = bound_function.GetStateType(bind_data);
 	// copy the type before modifying it - SetAlias/SetExtensionInfo modify the (shared) extra type info in place,
 	// and the state layout type can share its type info with e.g. the aggregate's input expressions
-	LogicalType state_layout = bound_function.GetStateType().type.Copy();
+	LogicalType state_layout = layout.type.Copy();
 	state_layout.SetAlias("AGGREGATE_STATE");
 	auto ext_info = make_uniq<ExtensionTypeInfo>();
 	ext_info->properties.emplace("function_name", bound_function.GetName());
@@ -699,23 +673,19 @@ LogicalType CreateAggregateStateType(const BoundAggregateFunction &bound_functio
 		arguments.push_back(Value::TYPE(arg));
 	}
 	ext_info->properties.emplace("parameters", Value::LIST(LogicalType::TYPE(), std::move(arguments)));
-	if (bind_data && bound_function.HasSerializationCallbacks()) {
-		// the function has bind data that can be serialized - store it in the state type so that the function can
-		// be reconstructed exactly when re-binding the state (e.g. by FINALIZE/COMBINE)
-		MemoryStream stream;
-		BinarySerializer serializer(stream);
-		serializer.Begin();
-		bound_function.GetSerializeCallback()(serializer, bind_data, bound_function);
-		serializer.End();
-		ext_info->properties.emplace("bind_data", Value::BLOB(stream.GetData(), stream.GetPosition()));
-		ext_info->properties.emplace("return_type", Value::TYPE(bound_function.GetReturnType()));
-		// also store the concrete bound argument types - the "parameters" property holds the original (pre-bind)
-		// types used for the catalog lookup, while deserialization needs the bound types
-		vector<Value> bound_arguments;
-		for (auto &arg : bound_function.GetArguments()) {
-			bound_arguments.push_back(Value::TYPE(arg));
+	if (!layout.bind_data.empty()) {
+		// the function exported its bind data - store the values in the state type so that the function can be
+		// re-bound when the state is used (e.g. by FINALIZE/COMBINE, see the rebind_aggregate_state callback)
+		if (!bound_function.HasRebindAggregateStateCallback()) {
+			throw InternalException("Aggregate function \"%s\" exports bind data in its state type but does not "
+			                        "have a rebind_aggregate_state callback",
+			                        bound_function.GetName());
 		}
-		ext_info->properties.emplace("bound_arguments", Value::LIST(LogicalType::TYPE(), std::move(bound_arguments)));
+		child_list_t<Value> bind_data_children;
+		for (idx_t val_idx = 0; val_idx < layout.bind_data.size(); val_idx++) {
+			bind_data_children.emplace_back("v" + to_string(val_idx), layout.bind_data[val_idx]);
+		}
+		ext_info->properties.emplace("bind_data", Value::STRUCT(std::move(bind_data_children)));
 	}
 	state_layout.SetExtensionInfo(std::move(ext_info));
 	return state_layout;
@@ -764,7 +734,7 @@ unique_ptr<FunctionData> ToAggregateStateBind(BindScalarFunctionInput &input) {
 		    "Aggregate function \"%s\" does not have a state type callback defined - cannot convert to its state",
 		    function_name);
 	}
-	auto state_layout = aggr.GetStateType().type;
+	auto state_layout = aggr.GetStateType(bind_data->bind_data.get()).type;
 	bound_function.GetArguments()[0] = state_layout;
 	bound_function.SetReturnType(CreateAggregateStateType(aggr, bind_data->bind_data.get()));
 	return std::move(bind_data);

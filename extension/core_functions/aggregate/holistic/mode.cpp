@@ -465,7 +465,7 @@ AggregateFunction GetFallbackModeFunction(const LogicalType &type) {
 //! The exported state is a LIST(STRUCT("value", "count", "first_row")): the entries of the frequency map together
 //! with the row at which the value was first seen (used to break ties deterministically).
 template <typename INPUT_TYPE, typename TYPE_OP>
-AggregateStateLayout ModeGetStateType(const BoundAggregateFunction &function) {
+AggregateStateLayout ModeGetStateType(const BoundAggregateFunction &function, optional_ptr<FunctionData> bind_data) {
 	child_list_t<LogicalType> children;
 	children.emplace_back("value", function.GetArguments()[0]);
 	children.emplace_back("count", LogicalType::UBIGINT);

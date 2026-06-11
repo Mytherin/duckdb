@@ -337,7 +337,8 @@ void HistogramBinFinalizeFunction(Vector &state_vector, AggregateInputData &, Ve
 //! serialization re-uses the finalize implementation. The count of the overflow ("other") bucket is exported
 //! under the sentinel key produced by OtherBucketValue (and omitted when it is zero).
 template <class OP, class T>
-AggregateStateLayout HistogramBinGetStateType(const BoundAggregateFunction &function) {
+AggregateStateLayout HistogramBinGetStateType(const BoundAggregateFunction &function,
+                                              optional_ptr<FunctionData> bind_data) {
 	AggregateStateLayout layout;
 	layout.type = LogicalType::MAP(function.GetArguments()[0], LogicalType::UBIGINT);
 	layout.total_state_size = AlignValue<idx_t>(sizeof(HistogramBinState<T>));

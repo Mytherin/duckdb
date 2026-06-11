@@ -137,7 +137,8 @@ void HistogramFinalizeFunction(Vector &state_vector, AggregateInputData &, Vecto
 //! The exported state is the histogram itself: a MAP of value -> count.
 //! Serialization re-uses the finalize implementation - deserialization rebuilds the map.
 template <class OP, class T, class MAP_TYPE>
-AggregateStateLayout HistogramGetStateType(const BoundAggregateFunction &function) {
+AggregateStateLayout HistogramGetStateType(const BoundAggregateFunction &function,
+                                           optional_ptr<FunctionData> bind_data) {
 	AggregateStateLayout layout;
 	layout.type = LogicalType::MAP(function.GetArguments()[0], LogicalType::UBIGINT);
 	layout.total_state_size = AlignValue<idx_t>(sizeof(HistogramAggState<T, typename MAP_TYPE::MAP_TYPE>));
