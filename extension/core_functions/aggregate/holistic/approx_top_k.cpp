@@ -404,8 +404,8 @@ AggregateStateLayout ApproxTopKGetStateType(const BoundAggregateFunction &functi
 }
 
 template <class OP = HistogramGenericFunctor>
-void ApproxTopKSerializeState(Vector &state_vector, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
-                              idx_t offset) {
+void ApproxTopKExportState(Vector &state_vector, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
+                           idx_t offset) {
 	D_ASSERT(offset == 0);
 	auto states = state_vector.Values<ApproxTopKState *>();
 
@@ -471,8 +471,8 @@ void ApproxTopKSerializeState(Vector &state_vector, AggregateInputData &aggr_inp
 }
 
 template <class OP = HistogramGenericFunctor>
-void ApproxTopKDeserializeState(const AggregateStateLayout &layout, const Vector &input_vec, idx_t count,
-                                data_ptr_t dest_buffer, ArenaAllocator &allocator) {
+void ApproxTopKImportState(const AggregateStateLayout &layout, const Vector &input_vec, idx_t count,
+                           data_ptr_t dest_buffer, ArenaAllocator &allocator) {
 	const auto validity = input_vec.Validity();
 	const auto &fields = StructVector::GetEntries(input_vec);
 	auto k_data = FlatVector::GetData<uint64_t>(fields[0]);
@@ -542,8 +542,8 @@ unique_ptr<FunctionData> ApproxTopKBind(BindAggregateFunctionInput &input) {
 	if (arguments[0]->GetReturnType().id() == LogicalTypeId::VARCHAR) {
 		function.SetStateUpdateCallback(ApproxTopKUpdate<string_t, HistogramStringFunctor>);
 		function.SetStateFinalizeCallback(ApproxTopKFinalize<HistogramStringFunctor>);
-		function.SetSerializeStateCallback(ApproxTopKSerializeState<HistogramStringFunctor>);
-		function.SetDeserializeStateCallback(ApproxTopKDeserializeState<HistogramStringFunctor>);
+		function.SetExportAggregateStateCallback(ApproxTopKExportState<HistogramStringFunctor>);
+		function.SetImportAggregateStateCallback(ApproxTopKImportState<HistogramStringFunctor>);
 	}
 	function.GetArguments()[0] = arguments[0]->GetReturnType();
 	function.SetReturnType(LogicalType::LIST(arguments[0]->GetReturnType()));
@@ -560,8 +560,8 @@ AggregateFunction ApproxTopKFun::GetFunction() {
 	                             AggregateFunction::StateInitialize<STATE, OP>, ApproxTopKUpdate,
 	                             AggregateFunction::StateCombine<STATE, OP>, ApproxTopKFinalize, nullptr,
 	                             ApproxTopKBind, AggregateFunction::StateDestroy<STATE, OP>);
-	fun.SetStateExportCallbacks(ApproxTopKGetStateType, ApproxTopKSerializeState<HistogramGenericFunctor>,
-	                            ApproxTopKDeserializeState<HistogramGenericFunctor>);
+	fun.SetStateExportCallbacks(ApproxTopKGetStateType, ApproxTopKExportState<HistogramGenericFunctor>,
+	                            ApproxTopKImportState<HistogramGenericFunctor>);
 	return fun;
 }
 

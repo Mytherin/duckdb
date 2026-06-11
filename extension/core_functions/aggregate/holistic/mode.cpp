@@ -481,8 +481,8 @@ template <typename INPUT_TYPE>
 using MODE_EXPORT_TYPE = VectorListType<VectorStructType<INPUT_TYPE, uint64_t, uint64_t>>;
 
 template <typename INPUT_TYPE, typename TYPE_OP>
-void ModeSerializeState(Vector &state_vector, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
-                        idx_t offset) {
+void ModeExportState(Vector &state_vector, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
+                     idx_t offset) {
 	D_ASSERT(offset == 0);
 	using STATE = ModeState<INPUT_TYPE, TYPE_OP>;
 	auto states = state_vector.Values<STATE *>();
@@ -508,8 +508,8 @@ void ModeSerializeState(Vector &state_vector, AggregateInputData &aggr_input_dat
 }
 
 template <typename INPUT_TYPE, typename TYPE_OP>
-void ModeDeserializeState(const AggregateStateLayout &layout, const Vector &input_vec, idx_t count,
-                          data_ptr_t dest_buffer, ArenaAllocator &allocator) {
+void ModeImportState(const AggregateStateLayout &layout, const Vector &input_vec, idx_t count, data_ptr_t dest_buffer,
+                     ArenaAllocator &allocator) {
 	using STATE = ModeState<INPUT_TYPE, TYPE_OP>;
 	auto entries = input_vec.Values<MODE_EXPORT_TYPE<INPUT_TYPE>>();
 	for (idx_t i = 0; i < count; i++) {
@@ -544,8 +544,8 @@ AggregateFunction GetTypedModeFunction(const LogicalType &type) {
 	    AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP, AggregateDestructorType::LEGACY>(
 	        type, type);
 	func.SetWindowBatchCallback(OP::template Window<STATE, INPUT_TYPE, INPUT_TYPE>);
-	func.SetStateExportCallbacks(ModeGetStateType<INPUT_TYPE, TYPE_OP>, ModeSerializeState<INPUT_TYPE, TYPE_OP>,
-	                             ModeDeserializeState<INPUT_TYPE, TYPE_OP>);
+	func.SetStateExportCallbacks(ModeGetStateType<INPUT_TYPE, TYPE_OP>, ModeExportState<INPUT_TYPE, TYPE_OP>,
+	                             ModeImportState<INPUT_TYPE, TYPE_OP>);
 	return func;
 }
 

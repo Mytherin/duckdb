@@ -145,8 +145,8 @@ AggregateStateLayout HistogramGetStateType(const BoundAggregateFunction &functio
 }
 
 template <class OP, class T, class MAP_TYPE>
-void HistogramDeserializeState(const AggregateStateLayout &layout, const Vector &input_vec, idx_t count,
-                               data_ptr_t dest_buffer, ArenaAllocator &allocator) {
+void HistogramImportState(const AggregateStateLayout &layout, const Vector &input_vec, idx_t count,
+                          data_ptr_t dest_buffer, ArenaAllocator &allocator) {
 	using HIST_STATE = HistogramAggState<T, typename MAP_TYPE::MAP_TYPE>;
 	const auto validity = input_vec.Validity();
 	auto list_entries = FlatVector::GetData<list_entry_t>(input_vec);
@@ -187,7 +187,7 @@ AggregateFunction GetHistogramFunction(const LogicalType &type) {
 	    AggregateFunction::StateCombine<STATE_TYPE, HIST_FUNC>, HistogramFinalizeFunction<OP, T, MAP_TYPE>, nullptr,
 	    nullptr, AggregateFunction::StateDestroy<STATE_TYPE, HIST_FUNC>);
 	fun.SetStateExportCallbacks(HistogramGetStateType<OP, T, MAP_TYPE>, HistogramFinalizeFunction<OP, T, MAP_TYPE>,
-	                            HistogramDeserializeState<OP, T, MAP_TYPE>);
+	                            HistogramImportState<OP, T, MAP_TYPE>);
 	return fun;
 }
 

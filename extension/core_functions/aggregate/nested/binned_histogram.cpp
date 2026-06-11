@@ -345,8 +345,8 @@ AggregateStateLayout HistogramBinGetStateType(const BoundAggregateFunction &func
 }
 
 template <class OP, class T>
-void HistogramBinDeserializeState(const AggregateStateLayout &layout, const Vector &input_vec, idx_t count,
-                                  data_ptr_t dest_buffer, ArenaAllocator &allocator) {
+void HistogramBinImportState(const AggregateStateLayout &layout, const Vector &input_vec, idx_t count,
+                             data_ptr_t dest_buffer, ArenaAllocator &allocator) {
 	const auto validity = input_vec.Validity();
 	auto list_entries = FlatVector::GetData<list_entry_t>(input_vec);
 	auto &child = ListVector::GetChild(input_vec);
@@ -414,7 +414,7 @@ AggregateFunction GetHistogramBinFunction(const LogicalType &type) {
 	    AggregateFunction::StateCombine<STATE_TYPE, HistogramBinFunction>, HistogramBinFinalizeFunction<OP, T>, nullptr,
 	    nullptr, AggregateFunction::StateDestroy<STATE_TYPE, HistogramBinFunction>);
 	fun.SetStateExportCallbacks(HistogramBinGetStateType<OP, T>, HistogramBinFinalizeFunction<OP, T>,
-	                            HistogramBinDeserializeState<OP, T>);
+	                            HistogramBinImportState<OP, T>);
 	return fun;
 }
 

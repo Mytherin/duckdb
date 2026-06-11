@@ -196,8 +196,8 @@ AggregateStateLayout ApproxQuantileGetStateType(const BoundAggregateFunction &fu
 using APPROX_QUANTILE_EXPORT_TYPE =
     VectorStructType<uint64_t, double, double, VectorListType<VectorStructType<double, double>>>;
 
-void ApproxQuantileSerializeState(Vector &state_vector, AggregateInputData &aggr_input_data, Vector &result,
-                                  idx_t count, idx_t offset) {
+void ApproxQuantileExportState(Vector &state_vector, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
+                               idx_t offset) {
 	D_ASSERT(offset == 0);
 	auto states = state_vector.Values<ApproxQuantileState *>();
 	auto writer = FlatVector::Writer<APPROX_QUANTILE_EXPORT_TYPE>(result, count);
@@ -227,8 +227,8 @@ void ApproxQuantileSerializeState(Vector &state_vector, AggregateInputData &aggr
 	}
 }
 
-void ApproxQuantileDeserializeState(const AggregateStateLayout &layout, const Vector &input_vec, idx_t count,
-                                    data_ptr_t dest_buffer, ArenaAllocator &allocator) {
+void ApproxQuantileImportState(const AggregateStateLayout &layout, const Vector &input_vec, idx_t count,
+                               data_ptr_t dest_buffer, ArenaAllocator &allocator) {
 	auto entries = input_vec.Values<APPROX_QUANTILE_EXPORT_TYPE>();
 	for (idx_t i = 0; i < count; i++) {
 		auto &state = *reinterpret_cast<ApproxQuantileState *>(dest_buffer + i * layout.total_state_size);
@@ -368,8 +368,7 @@ AggregateFunction ApproxQuantileDecimalFunction(const LogicalType &type) {
 	function.name = "approx_quantile";
 	function.SetSerializeCallback(ApproximateQuantileBindData::Serialize);
 	function.SetDeserializeCallback(ApproximateQuantileBindData::Deserialize);
-	function.SetStateExportCallbacks(ApproxQuantileGetStateType, ApproxQuantileSerializeState,
-	                                 ApproxQuantileDeserializeState);
+	function.SetStateExportCallbacks(ApproxQuantileGetStateType, ApproxQuantileExportState, ApproxQuantileImportState);
 	return function;
 }
 
@@ -386,8 +385,7 @@ AggregateFunction GetApproximateQuantileAggregate(const LogicalType &type) {
 	fun.SetBindCallback(BindApproxQuantile);
 	fun.SetSerializeCallback(ApproximateQuantileBindData::Serialize);
 	fun.SetDeserializeCallback(ApproximateQuantileBindData::Deserialize);
-	fun.SetStateExportCallbacks(ApproxQuantileGetStateType, ApproxQuantileSerializeState,
-	                            ApproxQuantileDeserializeState);
+	fun.SetStateExportCallbacks(ApproxQuantileGetStateType, ApproxQuantileExportState, ApproxQuantileImportState);
 	// temporarily push an argument so we can bind the actual quantile
 	fun.GetSignature().AddParameter(LogicalType::FLOAT);
 	return fun;
@@ -493,8 +491,7 @@ AggregateFunction ApproxQuantileDecimalListFunction(const LogicalType &type) {
 	function.name = "approx_quantile";
 	function.SetSerializeCallback(ApproximateQuantileBindData::Serialize);
 	function.SetDeserializeCallback(ApproximateQuantileBindData::Deserialize);
-	function.SetStateExportCallbacks(ApproxQuantileGetStateType, ApproxQuantileSerializeState,
-	                                 ApproxQuantileDeserializeState);
+	function.SetStateExportCallbacks(ApproxQuantileGetStateType, ApproxQuantileExportState, ApproxQuantileImportState);
 	return function;
 }
 
@@ -511,8 +508,7 @@ AggregateFunction GetApproxQuantileListAggregate(const LogicalType &type) {
 	fun.SetBindCallback(BindApproxQuantile);
 	fun.SetSerializeCallback(ApproximateQuantileBindData::Serialize);
 	fun.SetDeserializeCallback(ApproximateQuantileBindData::Deserialize);
-	fun.SetStateExportCallbacks(ApproxQuantileGetStateType, ApproxQuantileSerializeState,
-	                            ApproxQuantileDeserializeState);
+	fun.SetStateExportCallbacks(ApproxQuantileGetStateType, ApproxQuantileExportState, ApproxQuantileImportState);
 	// temporarily push an argument so we can bind the actual quantile
 	auto list_of_float = LogicalType::LIST(LogicalType::FLOAT);
 	fun.GetSignature().AddParameter(list_of_float);

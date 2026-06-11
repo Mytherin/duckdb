@@ -131,8 +131,8 @@ typedef AggregateStateLayout (*aggregate_get_state_type_t)(const BoundAggregateF
 //! The type used for explicitly deserializing exported aggregate states into a packed state buffer.
 //! layout is the result of the aggregate_get_state_type_t callback; input_vec holds `count` exported states that
 //! must be deserialized into the buffer (the i'th state lives at dest_buffer + i * layout.total_state_size).
-typedef void (*aggregate_deserialize_state_t)(const AggregateStateLayout &layout, const Vector &input_vec, idx_t count,
-                                              data_ptr_t dest_buffer, ArenaAllocator &allocator);
+typedef void (*aggregate_import_state_t)(const AggregateStateLayout &layout, const Vector &input_vec, idx_t count,
+                                         data_ptr_t dest_buffer, ArenaAllocator &allocator);
 
 struct AggregateFunctionInfo {
 	DUCKDB_API virtual ~AggregateFunctionInfo();
@@ -215,13 +215,13 @@ public:
 	aggregate_serialize_t GetSerializeCallback() const { return serialize; }
 	aggregate_deserialize_t GetDeserializeCallback() const { return deserialize; }
 
-	bool HasSerializeStateCallback() const { return serialize_state != nullptr; }
-	aggregate_finalize_t GetSerializeStateCallback() const { return serialize_state; }
-	void SetSerializeStateCallback(aggregate_finalize_t callback) { serialize_state = callback; }
+	bool HasExportAggregateStateCallback() const { return export_aggregate_state != nullptr; }
+	aggregate_finalize_t GetExportAggregateStateCallback() const { return export_aggregate_state; }
+	void SetExportAggregateStateCallback(aggregate_finalize_t callback) { export_aggregate_state = callback; }
 
-	bool HasDeserializeStateCallback() const { return deserialize_state != nullptr; }
-	aggregate_deserialize_state_t GetDeserializeStateCallback() const { return deserialize_state; }
-	void SetDeserializeStateCallback(aggregate_deserialize_state_t callback) { deserialize_state = callback; }
+	bool HasImportAggregateStateCallback() const { return import_aggregate_state != nullptr; }
+	aggregate_import_state_t GetImportAggregateStateCallback() const { return import_aggregate_state; }
+	void SetImportAggregateStateCallback(aggregate_import_state_t callback) { import_aggregate_state = callback; }
 
 public:
 	//! The hashed aggregate state sizing function
@@ -260,10 +260,10 @@ public:
 
 	//! Explicitly serializes aggregate states into the export format - used instead of the generic field-based
 	//! serialization during aggregate state export (may be null; same signature as finalize)
-	aggregate_finalize_t serialize_state = nullptr;
+	aggregate_finalize_t export_aggregate_state = nullptr;
 	//! Explicitly deserializes exported aggregate states into a packed state buffer - used instead of the generic
 	//! field-based deserialization during aggregate state import (may be null)
-	aggregate_deserialize_state_t deserialize_state = nullptr;
+	aggregate_import_state_t import_aggregate_state = nullptr;
 
 	bool operator==(const AggregateFunctionCallbacks &rhs) const;
 	bool operator!=(const AggregateFunctionCallbacks &rhs) const;
@@ -382,13 +382,13 @@ public: // Callbacks
 	bool HasGetStateTypeCallback() const { return callbacks.get_state_type != nullptr; }
 	aggregate_get_state_type_t GetStateTypeCallback() const { return callbacks.get_state_type; }
 
-	auto HasSerializeStateCallback() const -> bool { return callbacks.serialize_state != nullptr; }
-	auto GetSerializeStateCallback() const -> aggregate_finalize_t { return callbacks.serialize_state; }
-	auto SetSerializeStateCallback(aggregate_finalize_t callback) -> void { callbacks.serialize_state = callback; }
+	auto HasExportAggregateStateCallback() const -> bool { return callbacks.export_aggregate_state != nullptr; }
+	auto GetExportAggregateStateCallback() const -> aggregate_finalize_t { return callbacks.export_aggregate_state; }
+	auto SetExportAggregateStateCallback(aggregate_finalize_t callback) -> void { callbacks.export_aggregate_state = callback; }
 
-	auto HasDeserializeStateCallback() const -> bool { return callbacks.deserialize_state != nullptr; }
-	auto GetDeserializeStateCallback() const -> aggregate_deserialize_state_t { return callbacks.deserialize_state; }
-	auto SetDeserializeStateCallback(aggregate_deserialize_state_t callback) -> void { callbacks.deserialize_state = callback; }
+	auto HasImportAggregateStateCallback() const -> bool { return callbacks.import_aggregate_state != nullptr; }
+	auto GetImportAggregateStateCallback() const -> aggregate_import_state_t { return callbacks.import_aggregate_state; }
+	auto SetImportAggregateStateCallback(aggregate_import_state_t callback) -> void { callbacks.import_aggregate_state = callback; }
 	// clang-format on
 
 public: // Extra function info
@@ -533,11 +533,11 @@ public:
 	//! describes the exported type, while serialization/deserialization is handled by the function itself instead
 	//! of the generic field-based machinery.
 	AggregateFunction &SetStateExportCallbacks(aggregate_get_state_type_t get_state_type_callback,
-	                                           aggregate_finalize_t serialize_state_callback,
-	                                           aggregate_deserialize_state_t deserialize_state_callback) {
+	                                           aggregate_finalize_t export_aggregate_state_callback,
+	                                           aggregate_import_state_t import_aggregate_state_callback) {
 		callbacks.get_state_type = get_state_type_callback;
-		callbacks.serialize_state = serialize_state_callback;
-		callbacks.deserialize_state = deserialize_state_callback;
+		callbacks.export_aggregate_state = export_aggregate_state_callback;
+		callbacks.import_aggregate_state = import_aggregate_state_callback;
 		return *this;
 	}
 

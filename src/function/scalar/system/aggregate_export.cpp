@@ -269,9 +269,9 @@ static void DeserializeField(const LogicalType &type, const AggregateStateField 
 
 static void DeserializeState(const BoundAggregateFunction &aggr, const AggregateStateLayout &layout,
                              const Vector &input_vec, idx_t count, data_ptr_t dest_buffer, ArenaAllocator &allocator) {
-	if (aggr.HasDeserializeStateCallback()) {
+	if (aggr.HasImportAggregateStateCallback()) {
 		// the aggregate explicitly deserializes its own states
-		aggr.GetDeserializeStateCallback()(layout, input_vec, count, dest_buffer, allocator);
+		aggr.GetImportAggregateStateCallback()(layout, input_vec, count, dest_buffer, allocator);
 		return;
 	}
 	DeserializeField(layout.type, layout.field, input_vec, count, dest_buffer, layout.total_state_size, 0, allocator);
@@ -285,10 +285,10 @@ static void SerializeState(const AggregateStateLayout &layout, Vector &result, i
 static void SerializeState(const BoundAggregateFunction &aggr, optional_ptr<FunctionData> bind_data,
                            const AggregateStateLayout &layout, Vector &states, idx_t count, Vector &result,
                            ArenaAllocator &allocator) {
-	if (aggr.HasSerializeStateCallback()) {
+	if (aggr.HasExportAggregateStateCallback()) {
 		// the aggregate explicitly serializes its own states
 		AggregateInputData aggr_input_data(aggr, bind_data, allocator);
-		aggr.GetSerializeStateCallback()(states, aggr_input_data, result, count, 0);
+		aggr.GetExportAggregateStateCallback()(states, aggr_input_data, result, count, 0);
 		return;
 	}
 	const data_ptr_t *addresses;
@@ -779,10 +779,10 @@ void ToAggregateStateFunction(DataChunk &input, ExpressionState &state, Vector &
 
 void ExportAggregateFunction::SetStateExport(BoundAggregateExpression &aggregate, LogicalType state_layout) {
 	auto &bound_function = aggregate.FunctionMutable();
-	// functions that explicitly serialize their own states use their serialize_state callback as the finalize -
+	// functions that explicitly serialize their own states use their export_aggregate_state callback as the finalize -
 	// other functions go through the generic field-based serialization
-	bound_function.SetStateFinalizeCallback(bound_function.HasSerializeStateCallback()
-	                                            ? bound_function.GetSerializeStateCallback()
+	bound_function.SetStateFinalizeCallback(bound_function.HasExportAggregateStateCallback()
+	                                            ? bound_function.GetExportAggregateStateCallback()
 	                                            : ExportAggregateFinalize);
 	// statistics propagation is no longer correct post
 	bound_function.SetStatisticsCallback(nullptr);
@@ -806,11 +806,11 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	D_ASSERT(bound_function.HasStateFinalizeCallback());
 
 	D_ASSERT(child_aggregate->Function().GetReturnType().id() != LogicalTypeId::INVALID);
-	if (bound_function.HasSerializeStateCallback() != bound_function.HasDeserializeStateCallback()) {
-		throw InternalException(
-		    "Aggregate function \"%s\" must define either both or neither of the serialize_state/deserialize_state "
-		    "callbacks",
-		    bound_function.GetName());
+	if (bound_function.HasExportAggregateStateCallback() != bound_function.HasImportAggregateStateCallback()) {
+		throw InternalException("Aggregate function \"%s\" must define either both or neither of the "
+		                        "export_aggregate_state/import_aggregate_state "
+		                        "callbacks",
+		                        bound_function.GetName());
 	}
 	if (!bound_function.HasGetStateTypeCallback()) {
 		throw NotImplementedException(
