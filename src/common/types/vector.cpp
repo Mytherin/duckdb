@@ -19,6 +19,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/function/scalar/variant_utils.hpp"
 
 namespace duckdb {
 
@@ -346,6 +347,17 @@ void Vector::SetValue(idx_t index, const Value &val) {
 }
 
 Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
+	if (v_p.GetType().id() == LogicalTypeId::VARIANT) {
+		// VARIANT vectors store values in the encoded variant format - decode the value at this row and wrap it
+		RecursiveUnifiedVectorFormat format;
+		Vector::RecursiveToUnifiedFormat(v_p, format);
+		auto index = format.unified.sel->get_index(index_p);
+		if (!format.unified.validity.RowIsValid(index)) {
+			return Value(v_p.GetType());
+		}
+		UnifiedVariantVectorData variant_data(format);
+		return Value::VARIANT(VariantUtils::ConvertVariantToValue(variant_data, index_p, 0));
+	}
 	return v_p.buffer->GetValue(v_p.GetType(), index_p);
 }
 

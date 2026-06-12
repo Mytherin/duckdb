@@ -1,6 +1,5 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
-#include "duckdb/common/vector/variant_vector.hpp"
 #include "duckdb/common/types/value.hpp"
 
 #include "duckdb/common/exception.hpp"
@@ -794,13 +793,21 @@ Value Value::STRUCT(child_list_t<Value> values) {
 	return Value::STRUCT(LogicalType::STRUCT(child_types), std::move(struct_values));
 }
 
-Value Value::VARIANT(vector<Value> val) {
-	D_ASSERT(val.size() == 4);
-	D_ASSERT(val[0].type().id() == LogicalTypeId::LIST);
-	D_ASSERT(val[1].type().id() == LogicalTypeId::LIST);
-	D_ASSERT(val[2].type().id() == LogicalTypeId::LIST);
-	D_ASSERT(val[3].type().id() == LogicalTypeId::BLOB);
-	return Value::STRUCT(LogicalType::VARIANT(), std::move(val));
+Value Value::VARIANT(Value val) {
+	if (val.type().id() == LogicalTypeId::VARIANT) {
+		// the value is already a VARIANT - return it as-is
+		return val;
+	}
+	if (val.IsNull()) {
+		return Value(LogicalType::VARIANT());
+	}
+	Value result;
+	vector<Value> variant_value;
+	variant_value.push_back(std::move(val));
+	result.value_info_ = make_shared_ptr<NestedValueInfo>(std::move(variant_value));
+	result.type_ = LogicalType::VARIANT();
+	result.is_null = false;
+	return result;
 }
 
 void MapKeyCheck(value_set_t &unique_keys, const Value &key) {
@@ -1728,12 +1735,7 @@ string Value::ToSQLString() const {
 	}
 	case LogicalTypeId::VARIANT: {
 		string ret = "VARIANT(";
-		Vector tmp(*this, count_t(1));
-		RecursiveUnifiedVectorFormat format;
-		Vector::RecursiveToUnifiedFormat(tmp, format);
-		UnifiedVariantVectorData vector_data(format);
-		auto val = VariantUtils::ConvertVariantToValue(vector_data, 0, 0);
-		ret += val.ToString();
+		ret += VariantUtils::GetVariantValue(*this).ToString();
 		ret += ")";
 		return ret;
 	}
@@ -2085,6 +2087,12 @@ bool Value::TryCastAs(CastFunctionSet &set, GetCastFunctionInput &get_input, con
 		new_value = Copy();
 		return true;
 	}
+	if (target_type.id() == LogicalTypeId::VARIANT) {
+		// casting to VARIANT only wraps the value - the value is converted to the variant encoding when it is
+		// written into a Vector
+		new_value = Value::VARIANT(*this);
+		return true;
+	}
 	Vector input(*this, count_t(1));
 	Vector result(target_type);
 	if (!VectorOperations::TryCast(set, get_input, input, result, 1, error_message, strict)) {
@@ -2221,6 +2229,12 @@ void Value::SerializeInternal(Serializer &serializer, bool serialize_type) const
 		return;
 	}
 
+	if (type_.id() == LogicalTypeId::VARIANT) {
+		// special case for VARIANT values: serialize the underlying value (including its type)
+		serializer.WriteProperty(102, "value", VariantUtils::GetVariantValue(*this));
+		return;
+	}
+
 	switch (type_.InternalType()) {
 	case PhysicalType::BIT:
 		throw InternalException("BIT type should not be serialized");
@@ -2322,6 +2336,12 @@ Value Value::Deserialize(Deserializer &deserializer) {
 		// special case for TYPE values: deserialize the type as a nested object
 		auto type_value = deserializer.ReadProperty<LogicalType>(102, "value");
 		return Value::TYPE(type_value);
+	}
+
+	if (type.id() == LogicalTypeId::VARIANT) {
+		// special case for VARIANT values: deserialize the underlying value (including its type)
+		auto variant_value = deserializer.ReadProperty<Value>(102, "value");
+		return Value::VARIANT(std::move(variant_value));
 	}
 
 	switch (type.InternalType()) {

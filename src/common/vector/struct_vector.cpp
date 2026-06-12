@@ -6,6 +6,8 @@
 #include "duckdb/common/vector/union_vector.hpp"
 #include "duckdb/common/vector/variant_vector.hpp"
 #include "duckdb/common/vector/vector_iterator.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/function/scalar/variant_utils.hpp"
 
 namespace duckdb {
 
@@ -192,12 +194,26 @@ void VectorStructBuffer::SetValue(const LogicalType &type, idx_t index, const Va
 		for (auto &child : children) {
 			child.SetValue(index, Value());
 		}
-	} else {
-		auto &val_children = StructValue::GetChildren(val);
-		D_ASSERT(children.size() == val_children.size());
+		return;
+	}
+	if (type.id() == LogicalTypeId::VARIANT) {
+		// VARIANT values hold the underlying value directly - cast it to obtain the variant encoding
+		Vector input(VariantUtils::GetVariantValue(val), count_t(1));
+		Vector encoded(type, 1);
+		VectorOperations::DefaultCast(input, encoded, 1);
+		// the cast can produce a shredded or constant vector - flatten to get the encoded struct entries
+		encoded.Flatten();
+		auto &encoded_children = StructVector::GetEntries(encoded);
+		D_ASSERT(encoded_children.size() == children.size());
 		for (idx_t i = 0; i < children.size(); i++) {
-			children[i].SetValue(index, val_children[i]);
+			children[i].SetValue(index, encoded_children[i].GetValue(0));
 		}
+		return;
+	}
+	auto &val_children = StructValue::GetChildren(val);
+	D_ASSERT(children.size() == val_children.size());
+	for (idx_t i = 0; i < children.size(); i++) {
+		children[i].SetValue(index, val_children[i]);
 	}
 }
 
@@ -222,14 +238,10 @@ Value VectorStructBuffer::GetValue(const LogicalType &type, idx_t index) const {
 		auto members = UnionType::CopyMemberTypes(type);
 		return Value::UNION(members, tag, std::move(value));
 	}
-	case LogicalTypeId::VARIANT: {
-		duckdb::vector<Value> child_values;
-		child_values.emplace_back(children[0].GetValue(index));
-		child_values.emplace_back(children[1].GetValue(index));
-		child_values.emplace_back(children[2].GetValue(index));
-		child_values.emplace_back(children[3].GetValue(index));
-		return Value::VARIANT(child_values);
-	}
+	case LogicalTypeId::VARIANT:
+		// VARIANT values hold the underlying (decoded) value - decoding requires the full variant vector,
+		// which the struct buffer does not have access to (see Vector::GetValueInternal)
+		throw InternalException("VARIANT values cannot be constructed by the struct buffer - use Vector::GetValue");
 	default: {
 		duckdb::vector<Value> child_values;
 		for (idx_t i = 0; i < children.size(); i++) {

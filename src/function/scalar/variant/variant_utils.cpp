@@ -217,6 +217,13 @@ Value VariantUtils::ConvertVariantToValue(const UnifiedVariantVectorData &varian
 	return VariantVisitor<ValueConverter>::Visit(variant, row, values_idx);
 }
 
+const Value &VariantUtils::GetVariantValue(const Value &value) {
+	D_ASSERT(value.type().id() == LogicalTypeId::VARIANT);
+	auto &children = StructValue::GetChildren(value);
+	D_ASSERT(children.size() == 1);
+	return children[0];
+}
+
 void VariantUtils::FinalizeVariantKeys(Vector &variant, OrderedOwningStringMap<uint32_t> &dictionary,
                                        SelectionVector &sel, idx_t sel_size) {
 	auto &keys = VariantVector::GetKeys(variant);

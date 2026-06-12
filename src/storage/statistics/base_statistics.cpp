@@ -601,8 +601,9 @@ BaseStatistics BaseStatistics::FromConstantType(const Value &input) {
 		if (input.IsNull()) {
 			VariantStats::SetUnshreddedStats(result, FromConstant(Value(unshredded_type)));
 		} else {
-			VariantStats::SetUnshreddedStats(
-			    result, FromConstant(Value::STRUCT(unshredded_type, StructValue::GetChildren(input))));
+			// VARIANT values hold the underlying value directly - the stats of the encoded representation are
+			// only known after the value is materialized into a Vector
+			VariantStats::SetUnshreddedStats(result, BaseStatistics::CreateUnknown(unshredded_type));
 		}
 		return result;
 	}

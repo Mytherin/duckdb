@@ -140,6 +140,8 @@ struct VariantUtils {
 	                                               idx_t count, optional_idx row);
 	DUCKDB_API static Value ConvertVariantToValue(const UnifiedVariantVectorData &variant, idx_t row,
 	                                              uint32_t values_idx);
+	//! Returns the underlying value held by a (non-NULL) VARIANT Value
+	DUCKDB_API static const Value &GetVariantValue(const Value &value);
 	DUCKDB_API static bool Verify(const Vector &variant, const SelectionVector &sel_p, idx_t count);
 	DUCKDB_API static void FinalizeVariantKeys(Vector &variant, OrderedOwningStringMap<uint32_t> &dictionary,
 	                                           SelectionVector &sel, idx_t sel_size);
