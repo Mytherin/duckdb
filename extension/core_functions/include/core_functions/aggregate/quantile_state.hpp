@@ -325,8 +325,7 @@ struct QuantileState {
 	using STATE_TYPE = StateListType<StateListOf<StateInputType<0>>>;
 
 	LinkedList v;
-
-	// Window Quantile State (only used for window execution - not exported)
+	// Window Quantile State (only used for window execution)
 	unique_ptr<WindowQuantileState<INPUT_TYPE>> window_state;
 	unique_ptr<CursorType> window_cursor;
 
