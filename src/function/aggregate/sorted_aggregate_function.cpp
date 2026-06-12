@@ -180,6 +180,17 @@ struct SortedAggregateFinalizeState : FunctionLocalState {
 		scanned.Initialize(buffer_allocator, order_bind.scan_types);
 		sliced.Initialize(buffer_allocator, order_bind.scan_types);
 		prefixed.Initialize(buffer_allocator, order_bind.sort_types);
+
+		//	The local state of the inner aggregate's finalize is kept alive across finalize calls as well
+		const auto &callbacks = order_bind.function.GetCallbacks();
+		if (callbacks.HasInitLocalStateFinalizeCallback()) {
+			inner_local_state =
+			    callbacks.GetInitLocalStateFinalizeCallback()(order_bind.function, order_bind.bind_info.get());
+		}
+	}
+
+	static unique_ptr<FunctionLocalState> Init(const BoundAggregateFunction &, optional_ptr<FunctionData> bind_data) {
+		return make_uniq<SortedAggregateFinalizeState>(bind_data->Cast<SortedAggregateBindData>());
 	}
 
 	//! The execution context for the sort operator
@@ -198,6 +209,8 @@ struct SortedAggregateFinalizeState : FunctionLocalState {
 	vector<data_t> agg_state;
 	//! A vector pointing to the inner aggregate state
 	Vector agg_state_vec;
+	//! The local state used by the inner aggregate's finalize (may be null)
+	unique_ptr<FunctionLocalState> inner_local_state;
 };
 
 struct SortedAggregateFunction {
@@ -299,19 +312,15 @@ struct SortedAggregateFunction {
 		state.linked_list = LinkedList();
 	}
 
-	static void Finalize(Vector &states, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
+	static void Finalize(Vector &states, AggregateFinalizeInputData &finalize_input_data, Vector &result, idx_t count,
 	                     const idx_t offset) {
-		auto &order_bind = aggr_input_data.bind_data->Cast<SortedAggregateBindData>();
+		auto &order_bind = finalize_input_data.bind_data->Cast<SortedAggregateBindData>();
 		auto &client = order_bind.context;
 
-		//	Get or create the finalize state - when the caller provides a local state slot it is cached there,
-		//	so we do not have to re-instantiate the chunks and contexts for every finalize call
-		unique_ptr<FunctionLocalState> local_storage;
-		auto &local_state = aggr_input_data.local_state ? *aggr_input_data.local_state : local_storage;
-		if (!local_state) {
-			local_state = make_uniq<SortedAggregateFinalizeState>(order_bind);
-		}
-		auto &finalize_state = local_state->Cast<SortedAggregateFinalizeState>();
+		//	The local state holds the chunks and contexts - callers can keep it alive across finalize calls
+		//	so they do not have to be re-instantiated for every finalize call
+		D_ASSERT(finalize_input_data.local_state);
+		auto &finalize_state = finalize_input_data.local_state->Cast<SortedAggregateFinalizeState>();
 		auto &scanned = finalize_state.scanned;
 		auto &sliced = finalize_state.sliced;
 		auto &agg_state = finalize_state.agg_state;
@@ -322,7 +331,8 @@ struct SortedAggregateFunction {
 		// State variables
 		auto &aggr = order_bind.function;
 		auto bind_info = order_bind.bind_info.get();
-		AggregateInputData aggr_bind_info(aggr, bind_info, aggr_input_data.allocator);
+		AggregateFinalizeInputData aggr_bind_info(aggr, bind_info, finalize_input_data.allocator,
+		                                          finalize_state.inner_local_state.get());
 
 		// Inner aggregate APIs
 		auto initialize = aggr.GetCallbacks().GetStateInitCallback();
@@ -503,6 +513,7 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateE
 	                                    ListCombineFunction<SortedAggregateFunction>, SortedAggregateFunction::Finalize,
 	                                    bound_function.GetProperties().GetNullHandling(), nullptr, nullptr, nullptr,
 	                                    nullptr, SortedAggregateFunction::WindowBatch);
+	ordered_aggregate.SetInitLocalStateFinalizeCallback(SortedAggregateFinalizeState::Init);
 
 	expr.FunctionMutable().ReplaceImplementation(ordered_aggregate);
 	expr.BindInfoMutable() = std::move(sorted_bind);
@@ -557,6 +568,7 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundWindowExpr
 	    aggregate.GetProperties().GetNullHandling(), nullptr, nullptr, nullptr, nullptr,
 	    SortedAggregateFunction::WindowBatch);
 	ordered_aggregate.SetWindowCallback(SortedAggregateFunction::Window);
+	ordered_aggregate.SetInitLocalStateFinalizeCallback(SortedAggregateFinalizeState::Init);
 
 	aggregate.ReplaceImplementation(ordered_aggregate);
 	expr.BindInfoMutable() = std::move(sorted_bind);
