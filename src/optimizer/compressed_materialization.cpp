@@ -784,6 +784,8 @@ unique_ptr<CompressExpression> CompressedMaterialization::GetVariantCompress(uni
 	// equality, so we can only compress VARIANT in positions where order does not matter. Plain column references
 	// (handled generically) are always payload columns, as key columns are wrapped in "variant_normalize".
 	// Since "variant_normalize" does not change any values, we can strip it and compress the input directly
+	// FIXME: this is a current limitation that should be fixed in the future
+	// variant should have the same sort order as the types it contains
 	if (input->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &function_expr = input->Cast<BoundFunctionExpression>();
 		if (function_expr.Function().GetName() == "variant_normalize") {
