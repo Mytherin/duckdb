@@ -113,20 +113,18 @@ static void TemplatedStructSearch(const Vector &input_vector, const vector<Vecto
 template <class RETURN_TYPE, bool FIND_NULLS>
 static void StructNestedOp(const Vector &input_vector, const vector<Vector> &members, const Vector &target,
                            const idx_t count, Vector &result) {
-	const OrderModifiers order_modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
-
 	// Set up sort keys for nested types.
 	const auto members_size = members.size();
 	vector<Vector> member_sort_key_vectors;
 	for (idx_t i = 0; i < members_size; i++) {
 		Vector member_sort_key_vec(LogicalType::BLOB, count);
-		CreateSortKeyHelpers::CreateSortKeyWithValidity(members[i], member_sort_key_vec, order_modifiers);
+		CreateSortKeyHelpers::CreateDecodableKeyWithValidity(members[i], member_sort_key_vec);
 
 		member_sort_key_vectors.push_back(std::move(member_sort_key_vec));
 	}
 
 	Vector target_sort_key_vec(LogicalType::BLOB, count);
-	CreateSortKeyHelpers::CreateSortKeyWithValidity(target, target_sort_key_vec, order_modifiers);
+	CreateSortKeyHelpers::CreateDecodableKeyWithValidity(target, target_sort_key_vec);
 
 	TemplatedStructSearch<string_t, RETURN_TYPE, FIND_NULLS>(input_vector, member_sort_key_vectors, target_sort_key_vec,
 	                                                         count, result);

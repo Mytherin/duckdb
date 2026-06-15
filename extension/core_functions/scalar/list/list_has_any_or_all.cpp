@@ -34,10 +34,8 @@ static void ListHasAnyFunction(DataChunk &args, ExpressionState &, Vector &resul
 	Vector l_sortkey_vec(LogicalType::BLOB, l_size);
 	Vector r_sortkey_vec(LogicalType::BLOB, r_size);
 
-	const OrderModifiers order_modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
-
-	CreateSortKeyHelpers::CreateSortKey(l_child, order_modifiers, l_sortkey_vec);
-	CreateSortKeyHelpers::CreateSortKey(r_child, order_modifiers, r_sortkey_vec);
+	CreateSortKeyHelpers::CreateDecodableKey(l_child, l_sortkey_vec);
+	CreateSortKeyHelpers::CreateDecodableKey(r_child, r_sortkey_vec);
 
 	const auto l_sortkey_ptr = FlatVector::GetData<string_t>(l_sortkey_vec);
 	const auto r_sortkey_ptr = FlatVector::GetData<string_t>(r_sortkey_vec);
@@ -124,10 +122,8 @@ static void ListHasAllFunction(DataChunk &args, ExpressionState &state, Vector &
 	Vector l_sortkey_vec(LogicalType::BLOB, l_size);
 	Vector r_sortkey_vec(LogicalType::BLOB, r_size);
 
-	const OrderModifiers order_modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
-
-	CreateSortKeyHelpers::CreateSortKey(l_child, order_modifiers, l_sortkey_vec);
-	CreateSortKeyHelpers::CreateSortKey(r_child, order_modifiers, r_sortkey_vec);
+	CreateSortKeyHelpers::CreateDecodableKey(l_child, l_sortkey_vec);
+	CreateSortKeyHelpers::CreateDecodableKey(r_child, r_sortkey_vec);
 
 	const auto build_data = FlatVector::GetData<string_t>(l_sortkey_vec);
 	const auto probe_data = FlatVector::GetData<string_t>(r_sortkey_vec);

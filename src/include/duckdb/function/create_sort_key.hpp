@@ -55,6 +55,13 @@ struct CreateSortKeyHelpers {
 	static void CreateSortKeyWithValidity(const Vector &input, Vector &result, const OrderModifiers &modifiers);
 	static void CreateSortKeyWithValidity(const Vector &input, Vector &result, const OrderModifiers &modifiers,
 	                                      idx_t count);
+
+	//! Creates a sort key that is only used as an encoded blob - i.e. for equality comparison or to be decoded back
+	//! into a value later - rather than for its ordering properties. Because the order does not matter, callers do not
+	//! need to specify (or agree on) order modifiers; a fixed set is used internally.
+	static void CreateDecodableKey(const Vector &input, Vector &result);
+	static void CreateDecodableKeyWithValidity(const Vector &input, Vector &result);
+	static void CreateDecodableKeyWithValidity(const Vector &input, Vector &result, idx_t count);
 };
 
 //! We don't add this function to the catalog, for internal use only

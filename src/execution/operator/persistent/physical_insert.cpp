@@ -338,7 +338,6 @@ static void CheckDistinctnessInternal(ValidityMask &valid, vector<reference<Vect
 
 static void PrepareSortKeys(DataChunk &input, unordered_map<column_t, unique_ptr<Vector>> &sort_keys,
                             const unordered_set<column_t> &column_ids) {
-	OrderModifiers order_modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
 	for (auto &it : column_ids) {
 		auto &sort_key = sort_keys[it];
 		if (sort_key != nullptr) {
@@ -346,7 +345,7 @@ static void PrepareSortKeys(DataChunk &input, unordered_map<column_t, unique_ptr
 		}
 		const auto &column = input.data[it];
 		sort_key = make_uniq<Vector>(LogicalType::BLOB);
-		CreateSortKeyHelpers::CreateSortKey(column, order_modifiers, *sort_key);
+		CreateSortKeyHelpers::CreateDecodableKey(column, *sort_key);
 	}
 }
 

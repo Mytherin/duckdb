@@ -1014,6 +1014,24 @@ void CreateSortKeyHelpers::CreateSortKeyWithValidity(const Vector &input, Vector
 	}
 }
 
+//! Order modifiers used for keys that are only ever encoded/decoded as a blob and never compared for their ordering.
+//! The exact values are arbitrary; they only need to be consistent across encoding and decoding.
+static OrderModifiers DecodableKeyModifiers() {
+	return OrderModifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
+}
+
+void CreateSortKeyHelpers::CreateDecodableKey(const Vector &input, Vector &result) {
+	CreateSortKey(input, DecodableKeyModifiers(), result);
+}
+
+void CreateSortKeyHelpers::CreateDecodableKeyWithValidity(const Vector &input, Vector &result) {
+	CreateSortKeyWithValidity(input, result, DecodableKeyModifiers());
+}
+
+void CreateSortKeyHelpers::CreateDecodableKeyWithValidity(const Vector &input, Vector &result, idx_t count) {
+	CreateSortKeyWithValidity(input, result, DecodableKeyModifiers(), count);
+}
+
 static void CreateSortKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &bind_data = state.expr.Cast<BoundFunctionExpression>().BindInfo()->Cast<SortKeyBindData>();
 
