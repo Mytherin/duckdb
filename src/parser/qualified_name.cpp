@@ -73,7 +73,7 @@ QualifiedName QualifiedName::Parse(const string &input) {
 		throw ParserException("Expected catalog.entry, schema.entry or entry: too many entries found (input: %s)",
 		                      input);
 	}
-	return QualifiedName {catalog, schema, name};
+	return QualifiedName(catalog, schema, name);
 }
 
 QualifiedColumnName::QualifiedColumnName() {

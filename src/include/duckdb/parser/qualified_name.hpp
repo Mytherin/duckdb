@@ -15,15 +15,45 @@
 namespace duckdb {
 
 struct QualifiedName {
-	Identifier catalog;
-	Identifier schema;
+	QualifiedName() = default;
+	QualifiedName(Identifier catalog, Identifier schema, Identifier name)
+	    : name(std::move(name)), catalog(std::move(catalog)), schema(std::move(schema)) {
+	}
+
+public:
+	//! The entry name (not part of the catalog/schema qualification pair)
 	Identifier name;
+
+public:
+	const Identifier &GetCatalog() const {
+		return catalog;
+	}
+	const Identifier &GetSchema() const {
+		return schema;
+	}
+	//! Mutable accessors used by call sites that resolve catalog/schema in-place
+	Identifier &CatalogMutable() {
+		return catalog;
+	}
+	Identifier &SchemaMutable() {
+		return schema;
+	}
+	void SetCatalog(Identifier catalog_p) {
+		catalog = std::move(catalog_p);
+	}
+	void SetSchema(Identifier schema_p) {
+		schema = std::move(schema_p);
+	}
 
 	//! Parse the (optional) schema and a name from a string in the format of e.g. "schema"."table"; if there is no dot
 	//! the schema will be set to INVALID_SCHEMA
 	static QualifiedName Parse(const string &input);
 	static vector<Identifier> ParseComponents(const string &input);
 	string ToString() const;
+
+private:
+	Identifier catalog;
+	Identifier schema;
 };
 
 struct QualifiedColumnName {

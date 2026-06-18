@@ -86,8 +86,8 @@ BoundStatement Binder::BindSummarize(ShowRef &ref) {
 		auto node = make_uniq<SelectNode>();
 		node->select_list.push_back(make_uniq<StarExpression>());
 		auto basetableref = make_uniq<BaseTableRef>();
-		basetableref->catalog_name = table_name.catalog;
-		basetableref->schema_name = table_name.schema;
+		basetableref->catalog_name = table_name.GetCatalog();
+		basetableref->schema_name = table_name.GetSchema();
 		basetableref->table_name = table_name.name;
 		node->from_table = std::move(basetableref);
 		query = std::move(node);
