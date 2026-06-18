@@ -16,33 +16,32 @@ namespace duckdb {
 
 struct QualifiedName {
 	QualifiedName() = default;
-	QualifiedName(Identifier catalog, Identifier schema, Identifier name)
-	    : name(std::move(name)), catalog(std::move(catalog)), schema(std::move(schema)) {
-	}
+	QualifiedName(Identifier catalog, Identifier schema, Identifier name);
 
 public:
 	//! The entry name (not part of the catalog/schema qualification pair)
 	Identifier name;
 
 public:
+	//! The catalog is only set when the name is fully qualified, i.e. schema_path holds [catalog, schema]
 	const Identifier &GetCatalog() const {
-		return catalog;
+		return schema_path.size() >= 2 ? schema_path[0] : EmptyIdentifier();
 	}
+	//! The schema is the last element of the qualification path (empty if the path is empty)
 	const Identifier &GetSchema() const {
-		return schema;
+		if (schema_path.size() == 1) {
+			return schema_path[0];
+		}
+		if (schema_path.size() >= 2) {
+			return schema_path[1];
+		}
+		return EmptyIdentifier();
 	}
-	//! Mutable accessors used by call sites that resolve catalog/schema in-place
-	Identifier &CatalogMutable() {
-		return catalog;
-	}
-	Identifier &SchemaMutable() {
-		return schema;
-	}
-	void SetCatalog(Identifier catalog_p) {
-		catalog = std::move(catalog_p);
-	}
-	void SetSchema(Identifier schema_p) {
-		schema = std::move(schema_p);
+	void SetCatalog(Identifier catalog_p);
+	void SetSchema(Identifier schema_p);
+
+	const vector<Identifier> &GetSchemaPath() const {
+		return schema_path;
 	}
 
 	//! Parse the (optional) schema and a name from a string in the format of e.g. "schema"."table"; if there is no dot
@@ -52,8 +51,12 @@ public:
 	string ToString() const;
 
 private:
-	Identifier catalog;
-	Identifier schema;
+	static const Identifier &EmptyIdentifier();
+
+private:
+	//! Qualification path: element 0 is the catalog (when present), the remainder are schema levels.
+	//! Today this holds at most [catalog, schema]; (catalog, schema) is derived following the size rules above.
+	vector<Identifier> schema_path;
 };
 
 struct QualifiedColumnName {

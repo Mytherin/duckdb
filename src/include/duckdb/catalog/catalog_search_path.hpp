@@ -22,17 +22,25 @@ struct CatalogSearchEntry {
 	CatalogSearchEntry(Identifier catalog, Identifier schema);
 
 public:
+	//! The catalog is only set when the entry is fully qualified, i.e. schema_path holds [catalog, schema]
 	const Identifier &GetCatalog() const {
-		return catalog;
+		return schema_path.size() >= 2 ? schema_path[0] : EmptyIdentifier();
 	}
+	//! The schema is the last element of the qualification path (empty if the path is empty)
 	const Identifier &GetSchema() const {
-		return schema;
+		if (schema_path.size() == 1) {
+			return schema_path[0];
+		}
+		if (schema_path.size() >= 2) {
+			return schema_path[1];
+		}
+		return EmptyIdentifier();
 	}
-	void SetCatalog(Identifier catalog_p) {
-		catalog = std::move(catalog_p);
-	}
-	void SetSchema(Identifier schema_p) {
-		schema = std::move(schema_p);
+	void SetCatalog(Identifier catalog_p);
+	void SetSchema(Identifier schema_p);
+
+	const vector<Identifier> &GetSchemaPath() const {
+		return schema_path;
 	}
 
 	string ToString() const;
@@ -41,12 +49,14 @@ public:
 	static vector<CatalogSearchEntry> ParseList(const string &input);
 
 private:
+	static const Identifier &EmptyIdentifier();
 	static CatalogSearchEntry ParseInternal(const string &input, idx_t &pos);
 	static string WriteOptionallyQuoted(const Identifier &input);
 
 private:
-	Identifier catalog;
-	Identifier schema;
+	//! Qualification path: element 0 is the catalog (when present), the remainder are schema levels.
+	//! Today this holds at most [catalog, schema]; (catalog, schema) is derived following the size rules above.
+	vector<Identifier> schema_path;
 };
 
 enum class CatalogSetPathType { SET_SCHEMA, SET_SCHEMAS, SET_DIRECTLY };
