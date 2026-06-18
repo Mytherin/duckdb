@@ -7,10 +7,10 @@ namespace duckdb {
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatement(PEGTransformer &transformer,
                                                                       const QualifiedName &use_target) {
 	string value_str;
-	if (IsInvalidSchema(use_target.schema)) {
+	if (IsInvalidSchema(use_target.GetSchema())) {
 		value_str = SQLIdentifier::ToString(use_target.name.GetIdentifierName());
 	} else {
-		value_str = SQLIdentifier(use_target.schema) + "." + SQLIdentifier(use_target.name);
+		value_str = SQLIdentifier(use_target.GetSchema()) + "." + SQLIdentifier(use_target.name);
 	}
 
 	auto value_expr = make_uniq<ConstantExpression>(Value(value_str));
@@ -40,11 +40,7 @@ PEGTransformerFactory::TransformUseTargetCatalogSchema(PEGTransformer &transform
 	if (dot_identifier && !dot_identifier->empty()) {
 		throw ParserException("Expected \"USE database\" or \"USE database.schema\"");
 	}
-	QualifiedName result;
-	result.catalog = Identifier::InvalidCatalog();
-	result.schema = catalog_name;
-	result.name = reserved_schema_name;
-	return result;
+	return QualifiedName(Identifier::InvalidCatalog(), catalog_name, reserved_schema_name);
 }
 
 Identifier PEGTransformerFactory::TransformDotIdentifier(PEGTransformer &transformer, const Identifier &identifier) {

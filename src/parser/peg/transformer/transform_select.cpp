@@ -255,21 +255,13 @@ Identifier PEGTransformerFactory::TransformCatalogQualification(PEGTransformer &
 QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaIdentifier(
     PEGTransformer &transformer, const Identifier &catalog_qualification,
     const Identifier &reserved_schema_qualification, const Identifier &reserved_identifier_or_string_literal) {
-	QualifiedName result;
-	result.catalog = catalog_qualification;
-	result.schema = reserved_schema_qualification;
-	result.name = reserved_identifier_or_string_literal;
-	return result;
+	return QualifiedName(catalog_qualification, reserved_schema_qualification, reserved_identifier_or_string_literal);
 }
 
 QualifiedName PEGTransformerFactory::TransformSchemaReservedIdentifierOrStringLiteral(
     PEGTransformer &transformer, const Identifier &schema_qualification,
     const Identifier &reserved_identifier_or_string_literal) {
-	QualifiedName result;
-	result.catalog = INVALID_CATALOG;
-	result.schema = schema_qualification;
-	result.name = reserved_identifier_or_string_literal;
-	return result;
+	return QualifiedName(INVALID_CATALOG, schema_qualification, reserved_identifier_or_string_literal);
 }
 
 static bool IsConditionlessJoin(const JoinRef &join) {
@@ -587,7 +579,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableFunctionLateralOpt(
 	result->with_ordinality =
 	    with_ordinality.value_or(false) ? OrdinalityType::WITH_ORDINALITY : OrdinalityType::WITHOUT_ORDINALITY;
 	result->function =
-	    make_uniq<FunctionExpression>(qualified_table_function.catalog, qualified_table_function.schema,
+	    make_uniq<FunctionExpression>(qualified_table_function.GetCatalog(), qualified_table_function.GetSchema(),
 	                                  qualified_table_function.name, std::move(table_function_arguments));
 	if (table_alias) {
 		result->alias = table_alias->name;
@@ -604,7 +596,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableFunctionAliasColon(
 	result->with_ordinality =
 	    with_ordinality.value_or(false) ? OrdinalityType::WITH_ORDINALITY : OrdinalityType::WITHOUT_ORDINALITY;
 	result->function =
-	    make_uniq<FunctionExpression>(qualified_table_function.catalog, qualified_table_function.schema,
+	    make_uniq<FunctionExpression>(qualified_table_function.GetCatalog(), qualified_table_function.GetSchema(),
 	                                  qualified_table_function.name, std::move(table_function_arguments));
 	result->alias = table_alias_colon;
 	if (sample_clause) {
@@ -1276,15 +1268,13 @@ QualifiedName PEGTransformerFactory::TransformQualifiedTableFunction(PEGTransfor
                                                                      const optional<Identifier> &catalog_qualification,
                                                                      const optional<Identifier> &schema_qualification,
                                                                      const Identifier &table_function_name) {
-	QualifiedName result;
-	result.catalog = catalog_qualification ? *catalog_qualification : INVALID_CATALOG;
-	result.schema = schema_qualification ? *schema_qualification : INVALID_SCHEMA;
-	if (!result.catalog.empty() && result.schema.empty()) {
-		result.schema = result.catalog;
-		result.catalog = INVALID_CATALOG;
+	Identifier catalog = catalog_qualification ? *catalog_qualification : INVALID_CATALOG;
+	Identifier schema = schema_qualification ? *schema_qualification : INVALID_SCHEMA;
+	if (!catalog.empty() && schema.empty()) {
+		schema = catalog;
+		catalog = INVALID_CATALOG;
 	}
-	result.name = table_function_name;
-	return result;
+	return QualifiedName(catalog, schema, table_function_name);
 }
 
 vector<FunctionArgument>

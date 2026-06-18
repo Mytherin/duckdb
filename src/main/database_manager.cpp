@@ -133,7 +133,8 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 				                      info.name, existing_mode_str, attached_mode);
 			}
 			if (!options.default_table.name.empty()) {
-				existing_db->GetCatalog().SetDefaultTable(options.default_table.schema, options.default_table.name);
+				existing_db->GetCatalog().SetDefaultTable(options.default_table.GetSchema(),
+				                                          options.default_table.name);
 			}
 			if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 				// we require the vacuuming threshold for indexed tables to be the same as the already attached db
@@ -215,7 +216,7 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 	} else {
 		attached_db->Initialize(context);
 		if (!options.default_table.name.empty()) {
-			attached_db->GetCatalog().SetDefaultTable(options.default_table.schema, options.default_table.name);
+			attached_db->GetCatalog().SetDefaultTable(options.default_table.GetSchema(), options.default_table.name);
 		}
 		attached_db->FinalizeLoad(context);
 	}
@@ -412,14 +413,14 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, 
 Identifier DatabaseManager::GetDefaultDatabase(ClientContext &context) {
 	auto &config = ClientData::Get(context);
 	auto &default_entry = config.catalog_search_path->GetDefault();
-	if (IsInvalidCatalog(default_entry.catalog)) {
+	if (IsInvalidCatalog(default_entry.GetCatalog())) {
 		auto &result = DatabaseManager::Get(context).default_database;
 		if (result.empty()) {
 			throw InternalException("Calling DatabaseManager::GetDefaultDatabase with no default database set");
 		}
 		return result;
 	}
-	return default_entry.catalog;
+	return default_entry.GetCatalog();
 }
 
 // LCOV_EXCL_START

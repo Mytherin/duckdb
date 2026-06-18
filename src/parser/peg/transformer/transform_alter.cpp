@@ -90,11 +90,11 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterSequenceStmt(PEGTrans
                                                                         const optional<bool> &if_exists,
                                                                         const QualifiedName &qualified_sequence_name,
                                                                         unique_ptr<AlterInfo> alter_sequence_options) {
-	if (qualified_sequence_name.schema.empty()) {
-		alter_sequence_options->schema = qualified_sequence_name.catalog;
+	if (qualified_sequence_name.GetSchema().empty()) {
+		alter_sequence_options->schema = qualified_sequence_name.GetCatalog();
 	} else {
-		alter_sequence_options->catalog = qualified_sequence_name.catalog;
-		alter_sequence_options->schema = qualified_sequence_name.schema;
+		alter_sequence_options->catalog = qualified_sequence_name.GetCatalog();
+		alter_sequence_options->schema = qualified_sequence_name.GetSchema();
 	}
 	alter_sequence_options->name = qualified_sequence_name.name;
 	alter_sequence_options->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
@@ -105,11 +105,8 @@ QualifiedName PEGTransformerFactory::TransformQualifiedSequenceName(PEGTransform
                                                                     const optional<Identifier> &catalog_qualification,
                                                                     const optional<Identifier> &schema_qualification,
                                                                     const Identifier &sequence_name) {
-	QualifiedName result;
-	result.catalog = catalog_qualification ? *catalog_qualification : INVALID_CATALOG;
-	result.schema = schema_qualification ? *schema_qualification : INVALID_SCHEMA;
-	result.name = sequence_name;
-	return result;
+	return QualifiedName(catalog_qualification ? *catalog_qualification : INVALID_CATALOG,
+	                     schema_qualification ? *schema_qualification : INVALID_SCHEMA, sequence_name);
 }
 
 unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterSequenceOptions(PEGTransformer &transformer,
@@ -132,8 +129,8 @@ PEGTransformerFactory::TransformSetSequenceOption(PEGTransformer &transformer,
 			}
 			has_owned = true;
 			auto owned_by = unique_ptr_cast<SequenceOption, QualifiedSequenceOption>(std::move(seq_option.second));
-			auto schema =
-			    owned_by->qualified_name.schema.empty() ? Identifier::DefaultSchema() : owned_by->qualified_name.schema;
+			auto schema = owned_by->qualified_name.GetSchema().empty() ? Identifier::DefaultSchema()
+			                                                           : owned_by->qualified_name.GetSchema();
 			owned_info =
 			    make_uniq<ChangeOwnershipInfo>(CatalogType::SEQUENCE_ENTRY, "", "", "", schema,
 			                                   owned_by->qualified_name.name, OnEntryNotFound::THROW_EXCEPTION);

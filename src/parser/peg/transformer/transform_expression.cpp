@@ -192,8 +192,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 
 		transformer.in_window_definition = true;
 		auto expr = std::move(*over_clause);
-		expr->CatalogMutable() = qualified_function.catalog;
-		expr->SchemaMutable() = qualified_function.schema;
+		expr->CatalogMutable() = qualified_function.GetCatalog();
+		expr->SchemaMutable() = qualified_function.GetSchema();
 		expr->SetFunctionName(lowercase_name);
 
 		for (auto &arg : function_children) {
@@ -326,9 +326,10 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 			throw ParserException("Unknown ordered aggregate \"%s\".", qualified_function.name);
 		}
 	}
-	auto result = make_uniq<FunctionExpression>(
-	    qualified_function.catalog, qualified_function.schema, Identifier(lowercase_name), std::move(function_children),
-	    std::move(filter_expr), std::move(order_modifier), distinct, false, export_clause);
+	auto result =
+	    make_uniq<FunctionExpression>(qualified_function.GetCatalog(), qualified_function.GetSchema(),
+	                                  Identifier(lowercase_name), std::move(function_children), std::move(filter_expr),
+	                                  std::move(order_modifier), distinct, false, export_clause);
 
 	return std::move(result);
 }
@@ -370,11 +371,7 @@ bool PEGTransformerFactory::TransformAllKeyword(PEGTransformer &transformer) {
 QualifiedName PEGTransformerFactory::TransformFunctionIdentifier(PEGTransformer &transformer,
                                                                  ParseResult &choice_result) {
 	if (choice_result.type == ParseResultType::IDENTIFIER) {
-		QualifiedName result;
-		result.catalog = INVALID_CATALOG;
-		result.schema = INVALID_SCHEMA;
-		result.name = choice_result.Cast<IdentifierParseResult>().identifier;
-		return result;
+		return QualifiedName(INVALID_CATALOG, INVALID_SCHEMA, choice_result.Cast<IdentifierParseResult>().identifier);
 	}
 	return transformer.Transform<QualifiedName>(choice_result);
 }
@@ -382,26 +379,16 @@ QualifiedName PEGTransformerFactory::TransformFunctionIdentifier(PEGTransformer 
 QualifiedName PEGTransformerFactory::TransformSchemaReservedFunctionName(PEGTransformer &transformer,
                                                                          const Identifier &schema_qualification,
                                                                          const Identifier &reserved_function_name) {
-	QualifiedName result;
-	result.catalog = INVALID_CATALOG;
-	result.schema = schema_qualification;
-	result.name = reserved_function_name;
-	return result;
+	return QualifiedName(INVALID_CATALOG, schema_qualification, reserved_function_name);
 }
 
 QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaFunctionName(
     PEGTransformer &transformer, const Identifier &catalog_qualification,
     const optional<Identifier> &reserved_schema_qualification, const Identifier &reserved_function_name) {
-	QualifiedName result;
 	if (reserved_schema_qualification) {
-		result.catalog = catalog_qualification;
-		result.schema = *reserved_schema_qualification;
-	} else {
-		result.catalog = INVALID_CATALOG;
-		result.schema = catalog_qualification;
+		return QualifiedName(catalog_qualification, *reserved_schema_qualification, reserved_function_name);
 	}
-	result.name = reserved_function_name;
-	return result;
+	return QualifiedName(INVALID_CATALOG, catalog_qualification, reserved_function_name);
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformArrayBoundedListExpression(

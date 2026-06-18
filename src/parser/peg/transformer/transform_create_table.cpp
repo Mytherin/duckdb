@@ -61,7 +61,8 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTableStmt(
 		throw ParserException("Empty table name not supported");
 	}
 	// Use appropriate constructor
-	auto info = make_uniq<CreateTableInfo>(qualified_name.catalog, qualified_name.schema, qualified_name.name);
+	auto info =
+	    make_uniq<CreateTableInfo>(qualified_name.GetCatalog(), qualified_name.GetSchema(), qualified_name.name);
 
 	info->on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	info->query = std::move(create_table_definition.select_statement);
@@ -185,11 +186,7 @@ PEGTransformerFactory::TransformCreateTableConstraint(PEGTransformer &transforme
 
 QualifiedName PEGTransformerFactory::TransformIdentifierOrStringLiteral(PEGTransformer &transformer,
                                                                         const string &child) {
-	QualifiedName result;
-	result.catalog = INVALID_CATALOG;
-	result.schema = INVALID_SCHEMA;
-	result.name = Identifier(child);
-	return result;
+	return QualifiedName(INVALID_CATALOG, INVALID_SCHEMA, Identifier(child));
 }
 
 string PEGTransformerFactory::TransformColLabelOrString(PEGTransformer &transformer, ParseResult &parse_result) {

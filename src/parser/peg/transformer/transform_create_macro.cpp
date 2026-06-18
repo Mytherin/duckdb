@@ -11,11 +11,11 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateMacroStmt(
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateMacroInfo>(CatalogType::MACRO_ENTRY);
 
-	if (qualified_name.schema.empty()) {
-		info->schema = qualified_name.catalog;
+	if (qualified_name.GetSchema().empty()) {
+		info->schema = qualified_name.GetCatalog();
 	} else {
-		info->catalog = qualified_name.catalog;
-		info->schema = qualified_name.schema;
+		info->catalog = qualified_name.GetCatalog();
+		info->schema = qualified_name.GetSchema();
 	}
 	info->name = qualified_name.name;
 

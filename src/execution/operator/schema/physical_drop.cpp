@@ -34,8 +34,8 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 		// Check if the dropped schema was set as the current schema
 		auto &client_data = ClientData::Get(context.client);
 		auto &default_entry = client_data.catalog_search_path->GetDefault();
-		auto &current_catalog = default_entry.catalog;
-		auto &current_schema = default_entry.schema;
+		auto &current_catalog = default_entry.GetCatalog();
+		auto &current_schema = default_entry.GetSchema();
 		D_ASSERT(info->name != DEFAULT_SCHEMA);
 
 		if (info->catalog == current_catalog && current_schema == info->name) {
