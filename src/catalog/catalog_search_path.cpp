@@ -13,15 +13,48 @@
 
 namespace duckdb {
 
-CatalogSearchEntry::CatalogSearchEntry(Identifier catalog_p, Identifier schema_p)
-    : catalog(std::move(catalog_p)), schema(std::move(schema_p)) {
+const Identifier &CatalogSearchEntry::EmptyIdentifier() {
+	static const Identifier EMPTY;
+	return EMPTY;
+}
+
+CatalogSearchEntry::CatalogSearchEntry(Identifier catalog_p, Identifier schema_p) {
+	if (!catalog_p.empty()) {
+		// fully qualified - the path holds [catalog, schema]
+		schema_path.push_back(std::move(catalog_p));
+		schema_path.push_back(std::move(schema_p));
+	} else if (!schema_p.empty()) {
+		schema_path.push_back(std::move(schema_p));
+	}
+}
+
+void CatalogSearchEntry::SetCatalog(Identifier catalog_p) {
+	auto schema = GetSchema();
+	schema_path.clear();
+	if (!catalog_p.empty()) {
+		schema_path.push_back(std::move(catalog_p));
+		schema_path.push_back(std::move(schema));
+	} else if (!schema.empty()) {
+		schema_path.push_back(std::move(schema));
+	}
+}
+
+void CatalogSearchEntry::SetSchema(Identifier schema_p) {
+	auto catalog = GetCatalog();
+	schema_path.clear();
+	if (!catalog.empty()) {
+		schema_path.push_back(std::move(catalog));
+		schema_path.push_back(std::move(schema_p));
+	} else if (!schema_p.empty()) {
+		schema_path.push_back(std::move(schema_p));
+	}
 }
 
 string CatalogSearchEntry::ToString() const {
-	if (catalog.empty()) {
-		return WriteOptionallyQuoted(schema);
+	if (GetCatalog().empty()) {
+		return WriteOptionallyQuoted(GetSchema());
 	} else {
-		return WriteOptionallyQuoted(catalog) + "." + WriteOptionallyQuoted(schema);
+		return WriteOptionallyQuoted(GetCatalog()) + "." + WriteOptionallyQuoted(GetSchema());
 	}
 }
 
