@@ -35,18 +35,34 @@ string ParseInfo::TypeToString(CatalogType type) {
 	}
 }
 
-string ParseInfo::QualifierToString(const Identifier &catalog, const Identifier &schema, const Identifier &name) {
+string ParseInfo::QualifierToString(const vector<Identifier> &schema_path, const Identifier &name) {
 	string result;
-	if (!catalog.empty()) {
-		result += SQLIdentifier(catalog) + ".";
-		if (!schema.empty()) {
-			result += SQLIdentifier(schema) + ".";
+	if (schema_path.size() == 1) {
+		// only a schema is set - omit it when it is the implicit default schema
+		if (!schema_path[0].empty() && schema_path[0] != DEFAULT_SCHEMA) {
+			result += SQLIdentifier(schema_path[0]) + ".";
 		}
-	} else if (!schema.empty() && schema != DEFAULT_SCHEMA) {
-		result += SQLIdentifier(schema) + ".";
+	} else {
+		// fully qualified - render every level of the path
+		for (auto &entry : schema_path) {
+			if (!entry.empty()) {
+				result += SQLIdentifier(entry) + ".";
+			}
+		}
 	}
 	result += SQLIdentifier(name);
 	return result;
+}
+
+string ParseInfo::QualifierToString(const Identifier &catalog, const Identifier &schema, const Identifier &name) {
+	vector<Identifier> schema_path;
+	if (!catalog.empty()) {
+		schema_path.push_back(catalog);
+		schema_path.push_back(schema);
+	} else if (!schema.empty()) {
+		schema_path.push_back(schema);
+	}
+	return QualifierToString(schema_path, name);
 }
 
 } // namespace duckdb

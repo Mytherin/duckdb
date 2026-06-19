@@ -5,11 +5,6 @@
 
 namespace duckdb {
 
-const Identifier &AlterInfo::EmptyIdentifier() {
-	static const Identifier EMPTY;
-	return EMPTY;
-}
-
 AlterInfo::AlterInfo(AlterType type, Identifier catalog, Identifier schema, Identifier name_p,
                      OnEntryNotFound if_not_found)
     : ParseInfo(TYPE), type(type), if_not_found(if_not_found), name(std::move(name_p)), allow_internal(false) {

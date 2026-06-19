@@ -61,6 +61,9 @@ public:
 
 	virtual void Serialize(Serializer &serializer) const;
 	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer);
+	//! Render a qualified name from a schema_path ([catalog, schema, ...]) and the entry name
+	static string QualifierToString(const vector<Identifier> &schema_path, const Identifier &name);
+	//! Convenience overload for call sites that still carry a separate catalog/schema pair
 	static string QualifierToString(const Identifier &catalog, const Identifier &schema, const Identifier &name);
 	static string TypeToString(CatalogType type);
 };

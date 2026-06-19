@@ -4,11 +4,6 @@
 
 namespace duckdb {
 
-const Identifier &QualifiedName::EmptyIdentifier() {
-	static const Identifier EMPTY;
-	return EMPTY;
-}
-
 QualifiedName::QualifiedName(Identifier catalog, Identifier schema, Identifier name) : name(std::move(name)) {
 	if (!catalog.empty()) {
 		// fully qualified - the path holds [catalog, schema]
@@ -42,7 +37,7 @@ void QualifiedName::SetSchema(Identifier schema_p) {
 }
 
 string QualifiedName::ToString() const {
-	return ParseInfo::QualifierToString(GetCatalog(), GetSchema(), name);
+	return ParseInfo::QualifierToString(GetSchemaPath(), name);
 }
 
 vector<Identifier> QualifiedName::ParseComponents(const string &input) {

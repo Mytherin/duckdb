@@ -52,6 +52,12 @@ public:
 	static Identifier TempCatalog() {
 		return Identifier(TEMP_CATALOG);
 	}
+	//! A reference to a shared empty identifier - for accessors that return `const Identifier &` and need a stable
+	//! reference to return when the value is absent
+	static const Identifier &Empty() {
+		static const Identifier EMPTY;
+		return EMPTY;
+	}
 
 	//! Conversion back to a string is explicit: it discards the case-insensitive semantics, so callers must opt in
 	//! (use GetIdentifierName() for the raw value). Keeping this explicit is what makes the Identifier type safe.

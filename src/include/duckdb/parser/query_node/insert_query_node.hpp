@@ -54,7 +54,7 @@ public:
 public:
 	//! The catalog is only set when fully qualified, i.e. schema_path holds [catalog, schema]
 	const Identifier &GetCatalog() const {
-		return schema_path.size() >= 2 ? schema_path[0] : EmptyIdentifier();
+		return schema_path.size() >= 2 ? schema_path[0] : Identifier::Empty();
 	}
 	//! The schema is the last element of the qualification path (empty if the path is empty)
 	const Identifier &GetSchema() const {
@@ -64,13 +64,16 @@ public:
 		if (schema_path.size() >= 2) {
 			return schema_path[1];
 		}
-		return EmptyIdentifier();
+		return Identifier::Empty();
 	}
 	void SetCatalog(Identifier catalog_p);
 	void SetSchema(Identifier schema_p);
 
 	const vector<Identifier> &GetSchemaPath() const {
 		return schema_path;
+	}
+	void SetSchemaPath(vector<Identifier> path) {
+		schema_path = std::move(path);
 	}
 
 	string ToString() const override;
@@ -83,9 +86,6 @@ public:
 	//! If the INSERT statement is inserted DIRECTLY from a values list (i.e. INSERT INTO tbl VALUES (...)) this returns
 	//! the expression list Otherwise, this returns NULL
 	optional_ptr<ExpressionListRef> GetValuesList() const;
-
-private:
-	static const Identifier &EmptyIdentifier();
 
 private:
 	//! Qualification path: element 0 is the catalog (when present), the remainder are schema levels.

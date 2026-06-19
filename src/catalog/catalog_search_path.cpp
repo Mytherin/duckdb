@@ -13,11 +13,6 @@
 
 namespace duckdb {
 
-const Identifier &CatalogSearchEntry::EmptyIdentifier() {
-	static const Identifier EMPTY;
-	return EMPTY;
-}
-
 CatalogSearchEntry::CatalogSearchEntry(Identifier catalog_p, Identifier schema_p) {
 	if (!catalog_p.empty()) {
 		// fully qualified - the path holds [catalog, schema]

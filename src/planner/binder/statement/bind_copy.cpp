@@ -515,8 +515,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt, const CopyFunction &fun
 	InsertStatement insert;
 	auto &insert_node = *insert.node;
 	insert_node.table = stmt.info->table;
-	insert_node.SetSchema(stmt.info->GetSchema());
-	insert_node.SetCatalog(stmt.info->GetCatalog());
+	insert_node.SetSchemaPath(stmt.info->GetSchemaPath());
 	insert_node.columns = stmt.info->select_list;
 
 	// bind the insert statement to the base table
