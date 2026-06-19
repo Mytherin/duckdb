@@ -26,6 +26,8 @@ public:
 	SetColumnCommentInfo();
 	SetColumnCommentInfo(Identifier catalog, Identifier schema, Identifier name, Identifier column_name,
 	                     Value comment_value, OnEntryNotFound if_not_found);
+	SetColumnCommentInfo(vector<Identifier> schema_path, Identifier name, Identifier column_name, Value comment_value,
+	                     OnEntryNotFound if_not_found);
 
 	//! The resolved Catalog Type
 	CatalogType catalog_entry_type;

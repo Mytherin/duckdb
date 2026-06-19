@@ -12,12 +12,16 @@ CreateTableInfo::CreateTableInfo(Identifier catalog_p, Identifier schema_p, Iden
     : CreateInfo(CatalogType::TABLE_ENTRY, std::move(schema_p), std::move(catalog_p)), table(std::move(name_p)) {
 }
 
+CreateTableInfo::CreateTableInfo(vector<Identifier> schema_path, Identifier name_p)
+    : CreateInfo(CatalogType::TABLE_ENTRY, std::move(schema_path)), table(std::move(name_p)) {
+}
+
 CreateTableInfo::CreateTableInfo(SchemaCatalogEntry &schema, Identifier name_p)
     : CreateTableInfo(schema.catalog.GetName(), schema.name, std::move(name_p)) {
 }
 
 unique_ptr<CreateInfo> CreateTableInfo::Copy() const {
-	auto result = make_uniq<CreateTableInfo>(GetCatalog(), GetSchema(), table);
+	auto result = make_uniq<CreateTableInfo>(GetSchemaPath(), table);
 	CopyProperties(*result);
 	result->columns = columns.Copy();
 	for (auto &constraint : constraints) {

@@ -61,8 +61,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTableStmt(
 		throw ParserException("Empty table name not supported");
 	}
 	// Use appropriate constructor
-	auto info =
-	    make_uniq<CreateTableInfo>(qualified_name.GetCatalog(), qualified_name.GetSchema(), qualified_name.name);
+	auto info = make_uniq<CreateTableInfo>(qualified_name.GetSchemaPath(), qualified_name.name);
 
 	info->on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	info->query = std::move(create_table_definition.select_statement);

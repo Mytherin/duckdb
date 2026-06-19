@@ -26,6 +26,7 @@ public:
 public:
 	explicit CreateInfo(CatalogType type, Identifier schema = Identifier::DefaultSchema(),
 	                    Identifier catalog = Identifier::InvalidCatalog());
+	CreateInfo(CatalogType type, vector<Identifier> schema_path);
 	~CreateInfo() override {
 	}
 

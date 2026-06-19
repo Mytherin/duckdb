@@ -51,6 +51,7 @@ public:
 
 public:
 	AlterInfo(AlterType type, Identifier catalog, Identifier schema, Identifier name, OnEntryNotFound if_not_found);
+	AlterInfo(AlterType type, vector<Identifier> schema_path, Identifier name, OnEntryNotFound if_not_found);
 	~AlterInfo() override;
 
 	AlterType type;

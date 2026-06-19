@@ -25,6 +25,8 @@ struct ChangeOwnershipInfo : public AlterInfo {
 	ChangeOwnershipInfo(CatalogType entry_catalog_type, Identifier entry_catalog, Identifier entry_schema,
 	                    Identifier entry_name, Identifier owner_schema, Identifier owner_name,
 	                    OnEntryNotFound if_not_found);
+	ChangeOwnershipInfo(CatalogType entry_catalog_type, vector<Identifier> schema_path, Identifier entry_name,
+	                    Identifier owner_schema, Identifier owner_name, OnEntryNotFound if_not_found);
 
 	// Catalog type refers to the entry type, since this struct is usually built from an
 	// ALTER <TYPE> <schema>.<name> OWNED BY <owner_schema>.<owner_name> statement
@@ -51,6 +53,8 @@ public:
 struct SetCommentInfo : public AlterInfo {
 	SetCommentInfo(CatalogType entry_catalog_type, Identifier entry_catalog, Identifier entry_schema,
 	               Identifier entry_name, Value new_comment_value_p, OnEntryNotFound if_not_found);
+	SetCommentInfo(CatalogType entry_catalog_type, vector<Identifier> schema_path, Identifier entry_name,
+	               Value new_comment_value_p, OnEntryNotFound if_not_found);
 
 	CatalogType entry_catalog_type;
 	Value comment_value;

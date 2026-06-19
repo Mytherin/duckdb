@@ -17,6 +17,11 @@ AlterInfo::AlterInfo(AlterType type, Identifier catalog, Identifier schema, Iden
 	}
 }
 
+AlterInfo::AlterInfo(AlterType type, vector<Identifier> schema_path_p, Identifier name_p, OnEntryNotFound if_not_found)
+    : ParseInfo(TYPE), type(type), if_not_found(if_not_found), name(std::move(name_p)), allow_internal(false),
+      schema_path(std::move(schema_path_p)) {
+}
+
 AlterInfo::AlterInfo(AlterType type) : ParseInfo(TYPE), type(type) {
 }
 
