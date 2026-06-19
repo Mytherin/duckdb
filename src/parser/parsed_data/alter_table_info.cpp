@@ -17,6 +17,14 @@ ChangeOwnershipInfo::ChangeOwnershipInfo(CatalogType entry_catalog_type, Identif
       owner_name(std::move(owner_name_p)) {
 }
 
+ChangeOwnershipInfo::ChangeOwnershipInfo(CatalogType entry_catalog_type, vector<Identifier> schema_path,
+                                         Identifier entry_name_p, Identifier owner_schema_p, Identifier owner_name_p,
+                                         OnEntryNotFound if_not_found)
+    : AlterInfo(AlterType::CHANGE_OWNERSHIP, std::move(schema_path), std::move(entry_name_p), if_not_found),
+      entry_catalog_type(entry_catalog_type), owner_schema(std::move(owner_schema_p)),
+      owner_name(std::move(owner_name_p)) {
+}
+
 ChangeOwnershipInfo::ChangeOwnershipInfo() : AlterInfo(AlterType::CHANGE_OWNERSHIP) {
 }
 
@@ -25,8 +33,8 @@ CatalogType ChangeOwnershipInfo::GetCatalogType() const {
 }
 
 unique_ptr<AlterInfo> ChangeOwnershipInfo::Copy() const {
-	return make_uniq_base<AlterInfo, ChangeOwnershipInfo>(entry_catalog_type, GetCatalog(), GetSchema(), name,
-	                                                      owner_schema, owner_name, if_not_found);
+	return make_uniq_base<AlterInfo, ChangeOwnershipInfo>(entry_catalog_type, GetSchemaPath(), name, owner_schema,
+	                                                      owner_name, if_not_found);
 }
 
 string ChangeOwnershipInfo::ToString() const {
@@ -60,7 +68,7 @@ CatalogType SetCommentInfo::GetCatalogType() const {
 }
 
 unique_ptr<AlterInfo> SetCommentInfo::Copy() const {
-	return make_uniq_base<AlterInfo, SetCommentInfo>(entry_catalog_type, GetCatalog(), GetSchema(), name, comment_value,
+	return make_uniq_base<AlterInfo, SetCommentInfo>(entry_catalog_type, GetSchemaPath(), name, comment_value,
 	                                                 if_not_found);
 }
 
@@ -76,6 +84,12 @@ string SetCommentInfo::ToString() const {
 
 	result += ";";
 	return result;
+}
+
+SetCommentInfo::SetCommentInfo(CatalogType entry_catalog_type, vector<Identifier> schema_path, Identifier entry_name_p,
+                               Value new_comment_value_p, OnEntryNotFound if_not_found)
+    : AlterInfo(AlterType::SET_COMMENT, std::move(schema_path), std::move(entry_name_p), if_not_found),
+      entry_catalog_type(entry_catalog_type), comment_value(std::move(new_comment_value_p)) {
 }
 
 SetCommentInfo::SetCommentInfo() : AlterInfo(AlterType::SET_COMMENT) {

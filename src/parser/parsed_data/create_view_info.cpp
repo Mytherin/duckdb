@@ -15,6 +15,10 @@ CreateViewInfo::CreateViewInfo(Identifier catalog_p, Identifier schema_p, Identi
       view_name(std::move(view_name_p)) {
 }
 
+CreateViewInfo::CreateViewInfo(vector<Identifier> schema_path, Identifier view_name_p)
+    : CreateInfo(CatalogType::VIEW_ENTRY, std::move(schema_path)), view_name(std::move(view_name_p)) {
+}
+
 CreateViewInfo::CreateViewInfo(SchemaCatalogEntry &schema, Identifier view_name)
     : CreateViewInfo(schema.catalog.GetName(), schema.name, std::move(view_name)) {
 }
@@ -38,7 +42,7 @@ string CreateViewInfo::ToString() const {
 }
 
 unique_ptr<CreateInfo> CreateViewInfo::Copy() const {
-	auto result = make_uniq<CreateViewInfo>(GetCatalog(), GetSchema(), view_name);
+	auto result = make_uniq<CreateViewInfo>(GetSchemaPath(), view_name);
 	CopyProperties(*result);
 	result->aliases = aliases;
 	result->types = types;

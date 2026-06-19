@@ -17,6 +17,11 @@ CreateInfo::CreateInfo(CatalogType type, Identifier schema, Identifier catalog)
 	}
 }
 
+CreateInfo::CreateInfo(CatalogType type, vector<Identifier> schema_path_p)
+    : ParseInfo(TYPE), type(type), on_conflict(OnCreateConflict::ERROR_ON_CONFLICT), temporary(false), internal(false),
+      schema_path(std::move(schema_path_p)) {
+}
+
 void CreateInfo::SetCatalog(Identifier catalog_p) {
 	auto schema = GetSchema();
 	schema_path.clear();

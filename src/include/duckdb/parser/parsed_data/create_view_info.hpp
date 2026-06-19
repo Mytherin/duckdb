@@ -22,6 +22,7 @@ public:
 	CreateViewInfo();
 	CreateViewInfo(SchemaCatalogEntry &schema, Identifier view_name);
 	CreateViewInfo(Identifier catalog_p, Identifier schema_p, Identifier view_name);
+	CreateViewInfo(vector<Identifier> schema_path, Identifier view_name);
 
 public:
 	//! View name
