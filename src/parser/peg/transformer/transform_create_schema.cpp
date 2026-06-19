@@ -11,8 +11,8 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSchemaStmt(PEG
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateSchemaInfo>();
 	info->on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
-	info->catalog = qualified_name.GetSchema();
-	info->schema = qualified_name.name;
+	info->SetCatalog(qualified_name.GetSchema());
+	info->SetSchema(qualified_name.name);
 
 	result->info = std::move(info);
 	return result;

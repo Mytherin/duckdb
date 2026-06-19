@@ -27,8 +27,8 @@ unique_ptr<CatalogEntry> TriggerCatalogEntry::Copy(ClientContext &context) const
 
 unique_ptr<CreateInfo> TriggerCatalogEntry::GetInfo() const {
 	auto result = make_uniq<CreateTriggerInfo>();
-	result->catalog = catalog.GetName();
-	result->schema = schema.name;
+	result->SetCatalog(catalog.GetName());
+	result->SetSchema(schema.name);
 	result->trigger_name = name;
 	result->base_table = unique_ptr_cast<TableRef, BaseTableRef>(base_table->Copy());
 	result->timing = timing;

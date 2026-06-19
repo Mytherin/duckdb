@@ -9,7 +9,7 @@ CreateIndexInfo::CreateIndexInfo() : CreateInfo(CatalogType::INDEX_ENTRY, Identi
 }
 
 CreateIndexInfo::CreateIndexInfo(const duckdb::CreateIndexInfo &info)
-    : CreateInfo(CatalogType::INDEX_ENTRY, info.schema), table(info.table), index_name(info.index_name),
+    : CreateInfo(CatalogType::INDEX_ENTRY, info.GetSchema()), table(info.table), index_name(info.index_name),
       options(info.options), index_type(info.index_type), constraint_type(info.constraint_type),
       column_ids(info.column_ids), scan_types(info.scan_types), names(info.names) {
 }
@@ -71,7 +71,7 @@ string CreateIndexInfo::ToString() const {
 	}
 	result += SQLIdentifier(index_name);
 	result += " ON ";
-	result += QualifierToString(temporary ? Identifier() : catalog, schema, table);
+	result += QualifierToString(temporary ? Identifier() : GetCatalog(), GetSchema(), table);
 	if (index_type != "ART") {
 		result += " USING ";
 		result += SQLIdentifier(index_type);

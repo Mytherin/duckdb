@@ -6,10 +6,47 @@
 
 namespace duckdb {
 
+const Identifier &CreateInfo::EmptyIdentifier() {
+	static const Identifier EMPTY;
+	return EMPTY;
+}
+
+CreateInfo::CreateInfo(CatalogType type, Identifier schema, Identifier catalog)
+    : ParseInfo(TYPE), type(type), on_conflict(OnCreateConflict::ERROR_ON_CONFLICT), temporary(false), internal(false) {
+	if (!catalog.empty()) {
+		// fully qualified - the path holds [catalog, schema]
+		schema_path.push_back(std::move(catalog));
+		schema_path.push_back(std::move(schema));
+	} else if (!schema.empty()) {
+		schema_path.push_back(std::move(schema));
+	}
+}
+
+void CreateInfo::SetCatalog(Identifier catalog_p) {
+	auto schema = GetSchema();
+	schema_path.clear();
+	if (!catalog_p.empty()) {
+		schema_path.push_back(std::move(catalog_p));
+		schema_path.push_back(std::move(schema));
+	} else if (!schema.empty()) {
+		schema_path.push_back(std::move(schema));
+	}
+}
+
+void CreateInfo::SetSchema(Identifier schema_p) {
+	auto catalog = GetCatalog();
+	schema_path.clear();
+	if (!catalog.empty()) {
+		schema_path.push_back(std::move(catalog));
+		schema_path.push_back(std::move(schema_p));
+	} else if (!schema_p.empty()) {
+		schema_path.push_back(std::move(schema_p));
+	}
+}
+
 void CreateInfo::CopyProperties(CreateInfo &other) const {
 	other.type = type;
-	other.catalog = catalog;
-	other.schema = schema;
+	other.schema_path = schema_path;
 	other.on_conflict = on_conflict;
 	other.temporary = temporary;
 	other.internal = internal;

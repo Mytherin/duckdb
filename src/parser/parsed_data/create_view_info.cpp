@@ -21,7 +21,7 @@ CreateViewInfo::CreateViewInfo(SchemaCatalogEntry &schema, Identifier view_name)
 
 string CreateViewInfo::ToString() const {
 	string result = GetCreatePrefix("VIEW");
-	result += QualifierToString(temporary ? Identifier() : catalog, schema, view_name);
+	result += QualifierToString(temporary ? Identifier() : GetCatalog(), GetSchema(), view_name);
 	if (!aliases.empty()) {
 		result += " (";
 		result +=
@@ -38,7 +38,7 @@ string CreateViewInfo::ToString() const {
 }
 
 unique_ptr<CreateInfo> CreateViewInfo::Copy() const {
-	auto result = make_uniq<CreateViewInfo>(catalog, schema, view_name);
+	auto result = make_uniq<CreateViewInfo>(GetCatalog(), GetSchema(), view_name);
 	CopyProperties(*result);
 	result->aliases = aliases;
 	result->types = types;
@@ -91,8 +91,8 @@ unique_ptr<CreateViewInfo> CreateViewInfo::FromCreateView(ClientContext &context
 	}
 
 	auto result = unique_ptr_cast<CreateInfo, CreateViewInfo>(std::move(create_statement.info));
-	result->catalog = schema.ParentCatalog().GetName();
-	result->schema = schema.name;
+	result->SetCatalog(schema.ParentCatalog().GetName());
+	result->SetSchema(schema.name);
 
 	auto view_binder = Binder::CreateBinder(context);
 	view_binder->BindCreateViewInfo(*result);

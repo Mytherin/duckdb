@@ -22,7 +22,7 @@ public:
 		for (auto &entry : view_names) {
 			if (entry_name == entry) {
 				auto result = make_uniq<CreateViewInfo>();
-				result->schema = Identifier::DefaultSchema();
+				result->SetSchema(Identifier::DefaultSchema());
 				result->view_name = entry;
 				result->sql = StringUtil::Format("SELECT * FROM %s", SQLString(file));
 				auto view_info = CreateViewInfo::FromSelect(context, std::move(result));

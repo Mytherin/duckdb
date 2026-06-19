@@ -20,7 +20,7 @@ IndexCatalogEntry::IndexCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schem
 
 unique_ptr<CreateInfo> IndexCatalogEntry::GetInfo() const {
 	auto result = make_uniq<CreateIndexInfo>();
-	result->schema = GetSchemaName();
+	result->SetSchema(GetSchemaName());
 	result->table = GetTableName();
 
 	result->temporary = temporary;

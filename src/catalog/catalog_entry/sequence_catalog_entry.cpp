@@ -93,8 +93,8 @@ unique_ptr<CreateInfo> SequenceCatalogEntry::GetInfo() const {
 	auto seq_data = GetData();
 
 	auto result = make_uniq<CreateSequenceInfo>();
-	result->catalog = catalog.GetName();
-	result->schema = schema.name;
+	result->SetCatalog(catalog.GetName());
+	result->SetSchema(schema.name);
 	result->name = name;
 	result->usage_count = seq_data.usage_count;
 	result->increment = seq_data.increment;

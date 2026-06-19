@@ -19,8 +19,8 @@ namespace duckdb {
 
 void CreateInfo::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<CatalogType>(100, "type", type);
-	serializer.WritePropertyWithDefault<Identifier>(101, "catalog", catalog);
-	serializer.WritePropertyWithDefault<Identifier>(102, "schema", schema);
+	serializer.WritePropertyWithDefault<Identifier>(101, "catalog", GetCatalog());
+	serializer.WritePropertyWithDefault<Identifier>(102, "schema", GetSchema());
 	serializer.WritePropertyWithDefault<bool>(103, "temporary", temporary);
 	serializer.WritePropertyWithDefault<bool>(104, "internal", internal);
 	serializer.WriteProperty<OnCreateConflict>(105, "on_conflict", on_conflict);
@@ -79,8 +79,8 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 		throw SerializationException("Unsupported type for deserialization of CreateInfo!");
 	}
 	deserializer.Unset<CatalogType>();
-	result->catalog = std::move(catalog);
-	result->schema = std::move(schema);
+	result->SetCatalog(std::move(catalog));
+	result->SetSchema(std::move(schema));
 	result->temporary = temporary;
 	result->internal = internal;
 	result->on_conflict = on_conflict;

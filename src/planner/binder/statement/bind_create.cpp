@@ -125,41 +125,45 @@ Identifier Binder::BindCatalog(const Identifier &catalog) {
 }
 
 void Binder::SearchSchema(CreateInfo &info) {
-	BindSchemaOrCatalog(info.catalog, info.schema);
-	if (IsInvalidCatalog(info.catalog) && info.temporary) {
-		info.catalog = Identifier::TempCatalog();
+	auto catalog = info.GetCatalog();
+	auto schema = info.GetSchema();
+	BindSchemaOrCatalog(catalog, schema);
+	if (IsInvalidCatalog(catalog) && info.temporary) {
+		catalog = Identifier::TempCatalog();
 	}
 	auto &search_path = ClientData::Get(context).catalog_search_path;
-	if (IsInvalidCatalog(info.catalog) && IsInvalidSchema(info.schema)) {
+	if (IsInvalidCatalog(catalog) && IsInvalidSchema(schema)) {
 		auto &default_entry = search_path->GetDefault();
-		info.catalog = default_entry.GetCatalog();
-		info.schema = default_entry.GetSchema();
-	} else if (IsInvalidSchema(info.schema)) {
-		info.schema = Identifier(search_path->GetDefaultSchema(context, info.catalog));
-	} else if (IsInvalidCatalog(info.catalog)) {
-		info.catalog = Identifier(search_path->GetDefaultCatalog(info.schema));
+		catalog = default_entry.GetCatalog();
+		schema = default_entry.GetSchema();
+	} else if (IsInvalidSchema(schema)) {
+		schema = Identifier(search_path->GetDefaultSchema(context, catalog));
+	} else if (IsInvalidCatalog(catalog)) {
+		catalog = Identifier(search_path->GetDefaultCatalog(schema));
 	}
-	if (IsInvalidCatalog(info.catalog)) {
-		info.catalog = DatabaseManager::GetDefaultDatabase(context);
+	if (IsInvalidCatalog(catalog)) {
+		catalog = DatabaseManager::GetDefaultDatabase(context);
 	}
 	if (!info.temporary) {
 		// non-temporary create: not read only
-		if (info.catalog == TEMP_CATALOG) {
+		if (catalog == TEMP_CATALOG) {
 			throw ParserException("Only TEMPORARY table names can use the \"%s\" catalog", TEMP_CATALOG);
 		}
 	} else {
-		if (info.catalog != TEMP_CATALOG) {
+		if (catalog != TEMP_CATALOG) {
 			throw ParserException("TEMPORARY table names can *only* use the \"%s\" catalog", TEMP_CATALOG);
 		}
 	}
+	info.SetCatalog(catalog);
+	info.SetSchema(schema);
 }
 
 SchemaCatalogEntry &Binder::BindSchema(CreateInfo &info) {
 	SearchSchema(info);
 	// fetch the schema in which we want to create the object
-	auto &schema_obj = Catalog::GetSchema(context, info.catalog, info.schema);
+	auto &schema_obj = Catalog::GetSchema(context, info.GetCatalog(), info.GetSchema());
 	D_ASSERT(schema_obj.type == CatalogType::SCHEMA_ENTRY);
-	info.schema = schema_obj.name;
+	info.SetSchema(schema_obj.name);
 	if (!info.temporary) {
 		auto &properties = GetStatementProperties();
 		properties.RegisterDBModify(schema_obj.catalog, context, DatabaseModificationType::CREATE_CATALOG_ENTRY);
@@ -230,7 +234,8 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	if (Settings::Get<EnableViewDependenciesSetting>(context)) {
 		dependencies = base.dependencies;
 	}
-	BindView(context, *base.query, base.catalog, base.schema, dependencies, base.aliases, base.types, base.names);
+	BindView(context, *base.query, base.GetCatalog(), base.GetSchema(), dependencies, base.aliases, base.types,
+	         base.names);
 }
 
 SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
@@ -264,7 +269,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 
 	// Bind the catalog/schema
 	SearchSchema(info);
-	auto &catalog = Catalog::GetCatalog(context, info.catalog);
+	auto &catalog = Catalog::GetCatalog(context, info.GetCatalog());
 
 	// Figure out if we can store typed macro parameters
 	auto &attached = catalog.GetAttached();
@@ -496,13 +501,13 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	auto &table = *table_ptr;
 
 	// Trigger inherits catalog/schema from the base table
-	create_trigger_info.catalog = table.catalog.GetName();
-	create_trigger_info.schema = table.schema.name;
+	create_trigger_info.SetCatalog(table.catalog.GetName());
+	create_trigger_info.SetSchema(table.schema.name);
 
 	auto &schema = BindCreateSchema(create_trigger_info);
 
 	// Block trigger creation on databases with an older storage version
-	auto &catalog = Catalog::GetCatalog(context, create_trigger_info.catalog);
+	auto &catalog = Catalog::GetCatalog(context, create_trigger_info.GetCatalog());
 	auto &attached = catalog.GetAttached();
 	if (attached.HasStorageManager()) {
 		auto &storage_manager = attached.GetStorageManager();
@@ -651,7 +656,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	switch (catalog_type) {
 	case CatalogType::SCHEMA_ENTRY: {
 		auto &base = stmt.info->Cast<CreateInfo>();
-		auto catalog = BindCatalog(base.catalog);
+		auto catalog = BindCatalog(base.GetCatalog());
 		properties.RegisterDBModify(Catalog::GetCatalog(context, catalog), context,
 		                            DatabaseModificationType::CREATE_CATALOG_ENTRY);
 		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SCHEMA, std::move(stmt.info));
@@ -696,7 +701,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto &create_index_info = stmt.info->Cast<CreateIndexInfo>();
 
 		// Plan the table scan.
-		TableDescription table_description(create_index_info.catalog, create_index_info.schema,
+		TableDescription table_description(create_index_info.GetCatalog(), create_index_info.GetSchema(),
 		                                   create_index_info.table);
 		auto table_ref = make_uniq<BaseTableRef>(table_description);
 		auto bound_table = Bind(*table_ref);
@@ -738,7 +743,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto &create_type_info = stmt.info->Cast<CreateTypeInfo>();
 		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_TYPE, std::move(stmt.info), &schema);
 
-		auto &catalog = Catalog::GetCatalog(context, create_type_info.catalog);
+		auto &catalog = Catalog::GetCatalog(context, create_type_info.GetCatalog());
 		auto &dependencies = create_type_info.dependencies;
 		auto dependency_callback = [&dependencies, &catalog](CatalogEntry &entry) {
 			if (&catalog != &entry.ParentCatalog()) {
