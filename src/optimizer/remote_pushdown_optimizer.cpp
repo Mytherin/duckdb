@@ -359,8 +359,8 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteNode(SelectNode &node) {
 CatalogPushdownResult RemotePushdownOptimizer::RewriteNode(InsertQueryNode &node) {
 	// first bind the target table for the insert
 	BaseTableRef target_ref;
-	target_ref.catalog_name = node.catalog;
-	target_ref.schema_name = node.schema;
+	target_ref.catalog_name = node.GetCatalog();
+	target_ref.schema_name = node.GetSchema();
 	target_ref.table_name = node.table;
 
 	RemotePushdownOptimizer target_optimizer(this);
@@ -1244,10 +1244,10 @@ void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const Identifier
 			}
 		}
 		// Strip from the target table's catalog/schema fields (these are what ToString() serializes)
-		if (insert.catalog == catalog_name) {
-			insert.catalog = "";
-		} else if (insert.catalog.empty() && insert.schema == catalog_name) {
-			insert.schema = "";
+		if (insert.GetCatalog() == catalog_name) {
+			insert.SetCatalog(Identifier());
+		} else if (insert.GetCatalog().empty() && insert.GetSchema() == catalog_name) {
+			insert.SetSchema(Identifier());
 		}
 		if (insert.select_statement) {
 			StripCatalogName(*insert.select_statement->node, catalog_name);

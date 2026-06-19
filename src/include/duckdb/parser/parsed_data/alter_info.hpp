@@ -56,10 +56,6 @@ public:
 	AlterType type;
 	//! if exists
 	OnEntryNotFound if_not_found;
-	//! Catalog name to alter
-	Identifier catalog;
-	//! Schema name to alter
-	Identifier schema;
 	//! Entry name to alter
 	Identifier name;
 	//! Allow altering internal entries
@@ -70,6 +66,27 @@ public:
 	unique_ptr<LogicalDependencyList> new_dependencies;
 
 public:
+	//! The catalog is only set when fully qualified, i.e. schema_path holds [catalog, schema]
+	const Identifier &GetCatalog() const {
+		return schema_path.size() >= 2 ? schema_path[0] : EmptyIdentifier();
+	}
+	//! The schema is the last element of the qualification path (empty if the path is empty)
+	const Identifier &GetSchema() const {
+		if (schema_path.size() == 1) {
+			return schema_path[0];
+		}
+		if (schema_path.size() >= 2) {
+			return schema_path[1];
+		}
+		return EmptyIdentifier();
+	}
+	void SetCatalog(Identifier catalog_p);
+	void SetSchema(Identifier schema_p);
+
+	const vector<Identifier> &GetSchemaPath() const {
+		return schema_path;
+	}
+
 	virtual CatalogType GetCatalogType() const = 0;
 	virtual unique_ptr<AlterInfo> Copy() const = 0;
 	virtual string ToString() const = 0;
@@ -86,6 +103,14 @@ public:
 
 protected:
 	explicit AlterInfo(AlterType type);
+
+private:
+	static const Identifier &EmptyIdentifier();
+
+private:
+	//! Qualification path: element 0 is the catalog (when present), the remainder are schema levels.
+	//! Today this holds at most [catalog, schema]; (catalog, schema) is derived following the size rules above.
+	vector<Identifier> schema_path;
 };
 
 } // namespace duckdb

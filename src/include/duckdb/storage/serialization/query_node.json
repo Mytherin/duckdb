@@ -286,12 +286,16 @@
       {
         "id": 203,
         "name": "schema",
-        "type": "Identifier"
+        "type": "Identifier",
+        "serialize_property": "GetSchema()",
+        "deserialize_setter": "SetSchema"
       },
       {
         "id": 204,
         "name": "catalog",
-        "type": "Identifier"
+        "type": "Identifier",
+        "serialize_property": "GetCatalog()",
+        "deserialize_setter": "SetCatalog"
       },
       {
         "id": 205,

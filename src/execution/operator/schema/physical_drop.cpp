@@ -28,7 +28,7 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 		break;
 	}
 	case CatalogType::SCHEMA_ENTRY: {
-		auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
+		auto &catalog = Catalog::GetCatalog(context.client, info->GetCatalog());
 		catalog.DropEntry(context.client, *info);
 
 		// Check if the dropped schema was set as the current schema
@@ -38,7 +38,7 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 		auto &current_schema = default_entry.GetSchema();
 		D_ASSERT(info->name != DEFAULT_SCHEMA);
 
-		if (info->catalog == current_catalog && current_schema == info->name) {
+		if (info->GetCatalog() == current_catalog && current_schema == info->name) {
 			// Reset the schema to default
 			SchemaSetting::SetLocal(context.client, DEFAULT_SCHEMA);
 		}
@@ -63,7 +63,7 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 			throw InternalException("DROP TRIGGER: ExtraDropTriggerInfo has no base_table");
 		}
 		auto &base_table_ref = trigger_extra.base_table->Cast<BaseTableRef>();
-		auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context.client, info->catalog, info->schema,
+		auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context.client, info->GetCatalog(), info->GetSchema(),
 		                                                         base_table_ref.table_name);
 		auto &duck_table = table_entry.Cast<DuckTableEntry>();
 		auto transaction = duck_table.catalog.GetCatalogTransaction(context.client);
@@ -76,7 +76,7 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 		break;
 	}
 	default: {
-		auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
+		auto &catalog = Catalog::GetCatalog(context.client, info->GetCatalog());
 		catalog.DropEntry(context.client, *info);
 		break;
 	}

@@ -85,8 +85,8 @@ unique_ptr<ParseInfo> ParseInfo::Deserialize(Deserializer &deserializer) {
 void AlterInfo::Serialize(Serializer &serializer) const {
 	ParseInfo::Serialize(serializer);
 	serializer.WriteProperty<AlterType>(200, "type", type);
-	serializer.WritePropertyWithDefault<Identifier>(201, "catalog", catalog);
-	serializer.WritePropertyWithDefault<Identifier>(202, "schema", schema);
+	serializer.WritePropertyWithDefault<Identifier>(201, "catalog", GetCatalog());
+	serializer.WritePropertyWithDefault<Identifier>(202, "schema", GetSchema());
 	serializer.WritePropertyWithDefault<Identifier>(203, "name", name);
 	serializer.WriteProperty<OnEntryNotFound>(204, "if_not_found", if_not_found);
 	serializer.WritePropertyWithDefault<bool>(205, "allow_internal", allow_internal);
@@ -122,8 +122,8 @@ unique_ptr<ParseInfo> AlterInfo::Deserialize(Deserializer &deserializer) {
 	default:
 		throw SerializationException("Unsupported type for deserialization of AlterInfo!");
 	}
-	result->catalog = std::move(catalog);
-	result->schema = std::move(schema);
+	result->SetCatalog(std::move(catalog));
+	result->SetSchema(std::move(schema));
 	result->name = std::move(name);
 	result->if_not_found = if_not_found;
 	result->allow_internal = allow_internal;
@@ -380,8 +380,8 @@ unique_ptr<ParseInfo> CopyDatabaseInfo::Deserialize(Deserializer &deserializer) 
 
 void CopyInfo::Serialize(Serializer &serializer) const {
 	ParseInfo::Serialize(serializer);
-	serializer.WritePropertyWithDefault<Identifier>(200, "catalog", catalog);
-	serializer.WritePropertyWithDefault<Identifier>(201, "schema", schema);
+	serializer.WritePropertyWithDefault<Identifier>(200, "catalog", GetCatalog());
+	serializer.WritePropertyWithDefault<Identifier>(201, "schema", GetSchema());
 	serializer.WritePropertyWithDefault<Identifier>(202, "table", table);
 	serializer.WritePropertyWithDefault<vector<Identifier>>(203, "select_list", select_list);
 	serializer.WritePropertyWithDefault<bool>(204, "is_from", is_from);
@@ -394,8 +394,10 @@ void CopyInfo::Serialize(Serializer &serializer) const {
 
 unique_ptr<ParseInfo> CopyInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<CopyInfo>(new CopyInfo());
-	deserializer.ReadPropertyWithDefault<Identifier>(200, "catalog", result->catalog);
-	deserializer.ReadPropertyWithDefault<Identifier>(201, "schema", result->schema);
+	auto catalog = deserializer.ReadPropertyWithDefault<Identifier>(200, "catalog");
+	result->SetCatalog(std::move(catalog));
+	auto schema = deserializer.ReadPropertyWithDefault<Identifier>(201, "schema");
+	result->SetSchema(std::move(schema));
 	deserializer.ReadPropertyWithDefault<Identifier>(202, "table", result->table);
 	deserializer.ReadPropertyWithDefault<vector<Identifier>>(203, "select_list", result->select_list);
 	deserializer.ReadPropertyWithDefault<bool>(204, "is_from", result->is_from);
@@ -432,8 +434,8 @@ unique_ptr<ParseInfo> DisconnectInfo::Deserialize(Deserializer &deserializer) {
 void DropInfo::Serialize(Serializer &serializer) const {
 	ParseInfo::Serialize(serializer);
 	serializer.WriteProperty<CatalogType>(200, "type", type);
-	serializer.WritePropertyWithDefault<Identifier>(201, "catalog", catalog);
-	serializer.WritePropertyWithDefault<Identifier>(202, "schema", schema);
+	serializer.WritePropertyWithDefault<Identifier>(201, "catalog", GetCatalog());
+	serializer.WritePropertyWithDefault<Identifier>(202, "schema", GetSchema());
 	serializer.WritePropertyWithDefault<Identifier>(203, "name", name);
 	serializer.WriteProperty<OnEntryNotFound>(204, "if_not_found", if_not_found);
 	serializer.WritePropertyWithDefault<bool>(205, "cascade", cascade);
@@ -444,8 +446,10 @@ void DropInfo::Serialize(Serializer &serializer) const {
 unique_ptr<ParseInfo> DropInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<DropInfo>(new DropInfo());
 	deserializer.ReadProperty<CatalogType>(200, "type", result->type);
-	deserializer.ReadPropertyWithDefault<Identifier>(201, "catalog", result->catalog);
-	deserializer.ReadPropertyWithDefault<Identifier>(202, "schema", result->schema);
+	auto catalog = deserializer.ReadPropertyWithDefault<Identifier>(201, "catalog");
+	result->SetCatalog(std::move(catalog));
+	auto schema = deserializer.ReadPropertyWithDefault<Identifier>(202, "schema");
+	result->SetSchema(std::move(schema));
 	deserializer.ReadPropertyWithDefault<Identifier>(203, "name", result->name);
 	deserializer.ReadProperty<OnEntryNotFound>(204, "if_not_found", result->if_not_found);
 	deserializer.ReadPropertyWithDefault<bool>(205, "cascade", result->cascade);

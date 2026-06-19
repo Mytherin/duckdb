@@ -3,14 +3,42 @@
 
 namespace duckdb {
 
-CopyInfo::CopyInfo()
-    : ParseInfo(TYPE), catalog(INVALID_CATALOG), schema(DEFAULT_SCHEMA), is_from(false), is_format_auto_detected(true) {
+const Identifier &CopyInfo::EmptyIdentifier() {
+	static const Identifier EMPTY;
+	return EMPTY;
+}
+
+CopyInfo::CopyInfo() : ParseInfo(TYPE), is_from(false), is_format_auto_detected(true) {
+	// default qualification: schema = "main", catalog unset
+	schema_path.push_back(Identifier::DefaultSchema());
+}
+
+void CopyInfo::SetCatalog(Identifier catalog_p) {
+	auto schema = GetSchema();
+	schema_path.clear();
+	if (!catalog_p.empty()) {
+		schema_path.push_back(std::move(catalog_p));
+		schema_path.push_back(std::move(schema));
+	} else if (!schema.empty()) {
+		schema_path.push_back(std::move(schema));
+	}
+}
+
+void CopyInfo::SetSchema(Identifier schema_p) {
+	auto catalog = GetCatalog();
+	schema_path.clear();
+	if (!catalog.empty()) {
+		schema_path.push_back(std::move(catalog));
+		schema_path.push_back(std::move(schema_p));
+	} else if (!schema_p.empty()) {
+		schema_path.push_back(std::move(schema_p));
+	}
 }
 
 unique_ptr<CopyInfo> CopyInfo::Copy() const {
 	auto result = make_uniq<CopyInfo>();
-	result->catalog = catalog;
-	result->schema = schema;
+	result->SetCatalog(GetCatalog());
+	result->SetSchema(GetSchema());
 	result->table = table;
 	result->select_list = select_list;
 	result->file_path_expression = file_path_expression ? file_path_expression->Copy() : nullptr;
@@ -78,7 +106,7 @@ string CopyInfo::TablePartToString() const {
 	string result;
 
 	D_ASSERT(!table.empty());
-	result += QualifierToString(catalog, schema, table);
+	result += QualifierToString(GetCatalog(), GetSchema(), table);
 
 	// (c1, c2, ..)
 	if (!select_list.empty()) {

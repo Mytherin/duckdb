@@ -825,7 +825,24 @@ def generate_class_code(class_entry: SerializableClass):
         class_serialize += class_entry.get_serialize_element(entry)
 
         type_name = replace_pointer(entry.type)
-        if entry_idx > last_constructor_index:
+        if entry.deserialize_setter is not None and entry.status == MemberVariableStatus.EXISTING:
+            # read into a local and assign via the setter method (instead of `result->member = value`)
+            local = entry.deserialize_property.replace('.', '_')
+            class_deserialize += get_deserialize_element_template(
+                DESERIALIZE_ELEMENT_FORMAT,
+                local,
+                entry.name,
+                entry.id,
+                type_name,
+                entry.has_default,
+                entry.default,
+                entry.status,
+                class_entry.pointer_type,
+            )
+            move = entry.type in MOVE_LIST or is_container(entry.type) or is_pointer(entry.type)
+            arg = f'std::move({local})' if move else local
+            class_deserialize += f'\tresult->{entry.deserialize_setter}({arg});\n'
+        elif entry_idx > last_constructor_index:
             class_deserialize += get_deserialize_element_template(
                 deserialize_template_str,
                 entry.deserialize_property,

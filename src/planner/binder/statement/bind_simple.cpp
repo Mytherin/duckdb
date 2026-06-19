@@ -61,7 +61,7 @@ BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &e
 	D_ASSERT(!create_index_info->index_name.empty());
 
 	// Plan the table scan.
-	TableDescription table_description(table_info.catalog, table_info.schema, table_info.name);
+	TableDescription table_description(table_info.GetCatalog(), table_info.GetSchema(), table_info.name);
 	auto table_ref = make_uniq<BaseTableRef>(table_description);
 	auto bound_table = Bind(*table_ref);
 	if (bound_table.plan->type != LogicalOperatorType::LOGICAL_GET) {
@@ -112,7 +112,11 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 		return result;
 	}
 
-	BindSchemaOrCatalog(stmt.info->catalog, stmt.info->schema);
+	auto alter_catalog = stmt.info->GetCatalog();
+	auto alter_schema = stmt.info->GetSchema();
+	BindSchemaOrCatalog(alter_catalog, alter_schema);
+	stmt.info->SetCatalog(alter_catalog);
+	stmt.info->SetSchema(alter_schema);
 
 	optional_ptr<CatalogEntry> entry;
 	if (stmt.info->type == AlterType::SET_COLUMN_COMMENT) {
@@ -127,7 +131,8 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	} else {
 		// For any other ALTER, we retrieve the catalog entry directly.
 		EntryLookupInfo lookup_info(stmt.info->GetCatalogType(), stmt.info->name);
-		entry = entry_retriever.GetEntry(stmt.info->catalog, stmt.info->schema, lookup_info, stmt.info->if_not_found);
+		entry = entry_retriever.GetEntry(stmt.info->GetCatalog(), stmt.info->GetSchema(), lookup_info,
+		                                 stmt.info->if_not_found);
 	}
 
 	auto &properties = GetStatementProperties();
@@ -145,7 +150,7 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 
 	// Bind types in the same catalog as the entry
 	auto type_binder = Binder::CreateBinder(context, *this);
-	type_binder->SetSearchPath(catalog, stmt.info->schema);
+	type_binder->SetSearchPath(catalog, stmt.info->GetSchema());
 
 	BindAlterTypes(*type_binder, stmt);
 
@@ -156,8 +161,8 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 		// We can only alter temporary tables and views in read-only mode.
 		properties.RegisterDBModify(catalog, context, DatabaseModificationType::ALTER_TABLE);
 	}
-	stmt.info->catalog = catalog.GetName();
-	stmt.info->schema = entry->ParentSchema().name;
+	stmt.info->SetCatalog(catalog.GetName());
+	stmt.info->SetSchema(entry->ParentSchema().name);
 
 	if (!stmt.info->IsAddPrimaryKey()) {
 		result.plan = make_uniq<LogicalSimple>(LogicalOperatorType::LOGICAL_ALTER, std::move(stmt.info));

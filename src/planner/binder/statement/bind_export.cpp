@@ -119,8 +119,8 @@ string CreateFileName(const string &id_suffix, TableCatalogEntry &table, const s
 
 static unique_ptr<QueryNode> CreateSelectStatement(CopyStatement &stmt, child_list_t<LogicalType> &select_list) {
 	auto ref = make_uniq<BaseTableRef>();
-	ref->catalog_name = stmt.info->catalog;
-	ref->schema_name = stmt.info->schema;
+	ref->catalog_name = stmt.info->GetCatalog();
+	ref->schema_name = stmt.info->GetSchema();
 	ref->table_name = stmt.info->table;
 
 	auto statement = make_uniq<SelectNode>();
@@ -225,8 +225,8 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 			id++;
 		}
 		info->is_from = false;
-		info->catalog = Identifier(catalog);
-		info->schema = table.schema.name;
+		info->SetCatalog(Identifier(catalog));
+		info->SetSchema(table.schema.name);
 		info->table = table.name;
 
 		// We can not export generated columns
@@ -246,7 +246,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		ExportedTableData exported_data;
 		exported_data.database_name = Identifier(catalog);
 		exported_data.table_name = info->table;
-		exported_data.schema_name = info->schema;
+		exported_data.schema_name = info->GetSchema();
 
 		exported_data.file_path = info->file_path;
 
@@ -274,7 +274,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		fs.CreateDirectory(stmt.info->file_path);
 	}
 
-	stmt.info->catalog = Identifier(catalog);
+	stmt.info->SetCatalog(Identifier(catalog));
 	// prepare the options for export
 	auto &format = stmt.info->format;
 	auto &options = stmt.info->options;
