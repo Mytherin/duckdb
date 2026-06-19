@@ -25,7 +25,7 @@ public:
 public:
 	//! The catalog is only set when the name is fully qualified, i.e. schema_path holds [catalog, schema]
 	const Identifier &GetCatalog() const {
-		return schema_path.size() >= 2 ? schema_path[0] : EmptyIdentifier();
+		return schema_path.size() >= 2 ? schema_path[0] : Identifier::Empty();
 	}
 	//! The schema is the last element of the qualification path (empty if the path is empty)
 	const Identifier &GetSchema() const {
@@ -35,7 +35,7 @@ public:
 		if (schema_path.size() >= 2) {
 			return schema_path[1];
 		}
-		return EmptyIdentifier();
+		return Identifier::Empty();
 	}
 	void SetCatalog(Identifier catalog_p);
 	void SetSchema(Identifier schema_p);
@@ -43,15 +43,15 @@ public:
 	const vector<Identifier> &GetSchemaPath() const {
 		return schema_path;
 	}
+	void SetSchemaPath(vector<Identifier> path) {
+		schema_path = std::move(path);
+	}
 
 	//! Parse the (optional) schema and a name from a string in the format of e.g. "schema"."table"; if there is no dot
 	//! the schema will be set to INVALID_SCHEMA
 	static QualifiedName Parse(const string &input);
 	static vector<Identifier> ParseComponents(const string &input);
 	string ToString() const;
-
-private:
-	static const Identifier &EmptyIdentifier();
 
 private:
 	//! Qualification path: element 0 is the catalog (when present), the remainder are schema levels.

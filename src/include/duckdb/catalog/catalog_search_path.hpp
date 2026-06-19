@@ -24,7 +24,7 @@ struct CatalogSearchEntry {
 public:
 	//! The catalog is only set when the entry is fully qualified, i.e. schema_path holds [catalog, schema]
 	const Identifier &GetCatalog() const {
-		return schema_path.size() >= 2 ? schema_path[0] : EmptyIdentifier();
+		return schema_path.size() >= 2 ? schema_path[0] : Identifier::Empty();
 	}
 	//! The schema is the last element of the qualification path (empty if the path is empty)
 	const Identifier &GetSchema() const {
@@ -34,13 +34,16 @@ public:
 		if (schema_path.size() >= 2) {
 			return schema_path[1];
 		}
-		return EmptyIdentifier();
+		return Identifier::Empty();
 	}
 	void SetCatalog(Identifier catalog_p);
 	void SetSchema(Identifier schema_p);
 
 	const vector<Identifier> &GetSchemaPath() const {
 		return schema_path;
+	}
+	void SetSchemaPath(vector<Identifier> path) {
+		schema_path = std::move(path);
 	}
 
 	string ToString() const;
@@ -49,7 +52,6 @@ public:
 	static vector<CatalogSearchEntry> ParseList(const string &input);
 
 private:
-	static const Identifier &EmptyIdentifier();
 	static CatalogSearchEntry ParseInternal(const string &input, idx_t &pos);
 	static string WriteOptionallyQuoted(const Identifier &input);
 

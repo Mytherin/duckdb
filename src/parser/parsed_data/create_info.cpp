@@ -6,11 +6,6 @@
 
 namespace duckdb {
 
-const Identifier &CreateInfo::EmptyIdentifier() {
-	static const Identifier EMPTY;
-	return EMPTY;
-}
-
 CreateInfo::CreateInfo(CatalogType type, Identifier schema, Identifier catalog)
     : ParseInfo(TYPE), type(type), on_conflict(OnCreateConflict::ERROR_ON_CONFLICT), temporary(false), internal(false) {
 	if (!catalog.empty()) {

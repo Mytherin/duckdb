@@ -119,8 +119,7 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropIndex(PEGTransform
 		throw NotImplementedException("Can only drop one object at a time");
 	}
 	const auto &index = qualified_index_name[0];
-	info->SetCatalog(index.GetCatalog());
-	info->SetSchema(index.GetSchema());
+	info->SetSchemaPath(index.GetSchemaPath());
 	info->name = index.name;
 	info->type = CatalogType::INDEX_ENTRY;
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;

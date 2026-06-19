@@ -3,11 +3,6 @@
 
 namespace duckdb {
 
-const Identifier &CopyInfo::EmptyIdentifier() {
-	static const Identifier EMPTY;
-	return EMPTY;
-}
-
 CopyInfo::CopyInfo() : ParseInfo(TYPE), is_from(false), is_format_auto_detected(true) {
 	// default qualification: schema = "main", catalog unset
 	schema_path.push_back(Identifier::DefaultSchema());
@@ -37,8 +32,7 @@ void CopyInfo::SetSchema(Identifier schema_p) {
 
 unique_ptr<CopyInfo> CopyInfo::Copy() const {
 	auto result = make_uniq<CopyInfo>();
-	result->SetCatalog(GetCatalog());
-	result->SetSchema(GetSchema());
+	result->SetSchemaPath(GetSchemaPath());
 	result->table = table;
 	result->select_list = select_list;
 	result->file_path_expression = file_path_expression ? file_path_expression->Copy() : nullptr;
@@ -106,7 +100,7 @@ string CopyInfo::TablePartToString() const {
 	string result;
 
 	D_ASSERT(!table.empty());
-	result += QualifierToString(GetCatalog(), GetSchema(), table);
+	result += QualifierToString(GetSchemaPath(), table);
 
 	// (c1, c2, ..)
 	if (!select_list.empty()) {

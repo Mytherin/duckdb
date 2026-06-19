@@ -4,11 +4,6 @@
 
 namespace duckdb {
 
-const Identifier &DropInfo::EmptyIdentifier() {
-	static const Identifier EMPTY;
-	return EMPTY;
-}
-
 DropInfo::DropInfo() : ParseInfo(TYPE), cascade(false) {
 }
 
@@ -56,7 +51,7 @@ string DropInfo::ToString() const {
 			result += " IF EXISTS";
 		}
 		result += " ";
-		result += QualifierToString(GetCatalog(), GetSchema(), name);
+		result += QualifierToString(GetSchemaPath(), name);
 		if (type == CatalogType::TRIGGER_ENTRY && extra_drop_info) {
 			auto &trigger_info = extra_drop_info->Cast<ExtraDropTriggerInfo>();
 			if (trigger_info.base_table) {
