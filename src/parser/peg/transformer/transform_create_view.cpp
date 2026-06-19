@@ -72,7 +72,7 @@ void PEGTransformerFactory::WrapRecursiveView(unique_ptr<CreateViewInfo> &info, 
 		outer_select->select_list.push_back(make_uniq<ColumnRefExpression>(column));
 	}
 
-	auto table_description = TableDescription(info->catalog, info->schema, info->view_name);
+	auto table_description = TableDescription(info->GetCatalog(), info->GetSchema(), info->view_name);
 	outer_select->from_table = make_uniq<BaseTableRef>(table_description);
 
 	auto outer_select_statement = make_uniq<SelectStatement>();
@@ -95,8 +95,8 @@ PEGTransformerFactory::TransformCreateViewStmt(PEGTransformer &transformer, cons
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateViewInfo>();
 	info->on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
-	info->catalog = qualified_name.GetCatalog();
-	info->schema = qualified_name.GetSchema();
+	info->SetCatalog(qualified_name.GetCatalog());
+	info->SetSchema(qualified_name.GetSchema());
 	info->view_name = qualified_name.name;
 	if (insert_column_list) {
 		info->aliases = StringsToIdentifiers(*insert_column_list);

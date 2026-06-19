@@ -13,7 +13,7 @@ unique_ptr<CreateInfo> CreateSchemaInfo::Copy() const {
 
 string CreateSchemaInfo::ToString() const {
 	string ret = "";
-	string qualified = QualifierToString(temporary ? Identifier() : catalog, Identifier(), schema);
+	string qualified = QualifierToString(temporary ? Identifier() : GetCatalog(), Identifier(), GetSchema());
 
 	switch (on_conflict) {
 	case OnCreateConflict::ALTER_ON_CONFLICT: {

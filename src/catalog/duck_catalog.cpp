@@ -29,7 +29,7 @@ void DuckCatalog::Initialize(bool load_builtin) {
 
 	// create the default schema
 	CreateSchemaInfo info;
-	info.schema = Identifier::DefaultSchema();
+	info.SetSchema(Identifier::DefaultSchema());
 	info.internal = true;
 	info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	CreateSchema(data, info);
@@ -63,12 +63,12 @@ optional_ptr<DependencyManager> DuckCatalog::GetDependencyManager() {
 optional_ptr<CatalogEntry> DuckCatalog::CreateSchemaInternal(CatalogTransaction transaction, CreateSchemaInfo &info) {
 	LogicalDependencyList dependencies;
 
-	if (!info.internal && DefaultSchemaGenerator::IsDefaultSchema(info.schema)) {
+	if (!info.internal && DefaultSchemaGenerator::IsDefaultSchema(info.GetSchema())) {
 		return nullptr;
 	}
 	auto entry = make_uniq<DuckSchemaEntry>(*this, info);
 	auto result = entry.get();
-	if (!schemas->CreateEntry(transaction, info.schema, std::move(entry), dependencies)) {
+	if (!schemas->CreateEntry(transaction, info.GetSchema(), std::move(entry), dependencies)) {
 		return nullptr;
 	}
 	return result;
@@ -80,12 +80,12 @@ optional_ptr<CatalogEntry> DuckCatalog::CreateSchema(CatalogTransaction transact
 	if (!result) {
 		switch (info.on_conflict) {
 		case OnCreateConflict::ERROR_ON_CONFLICT:
-			throw CatalogException::EntryAlreadyExists(CatalogType::SCHEMA_ENTRY, info.schema);
+			throw CatalogException::EntryAlreadyExists(CatalogType::SCHEMA_ENTRY, info.GetSchema());
 		case OnCreateConflict::REPLACE_ON_CONFLICT: {
 			DropInfo drop_info;
 			drop_info.type = CatalogType::SCHEMA_ENTRY;
-			drop_info.catalog = info.catalog;
-			drop_info.name = info.schema;
+			drop_info.catalog = info.GetCatalog();
+			drop_info.name = info.GetSchema();
 			DropSchema(transaction, drop_info);
 			result = CreateSchemaInternal(transaction, info);
 			if (!result) {

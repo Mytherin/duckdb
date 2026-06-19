@@ -18,7 +18,7 @@ LogicalInsert::LogicalInsert(TableCatalogEntry &table, TableIndex table_index)
 
 LogicalInsert::LogicalInsert(ClientContext &context, const unique_ptr<CreateInfo> table_info)
     : LogicalOperator(LogicalOperatorType::LOGICAL_INSERT),
-      table(Catalog::GetEntry<TableCatalogEntry>(context, table_info->catalog, table_info->schema,
+      table(Catalog::GetEntry<TableCatalogEntry>(context, table_info->GetCatalog(), table_info->GetSchema(),
                                                  table_info->Cast<CreateTableInfo>().table)) {
 	auto binder = Binder::CreateBinder(context);
 	bound_constraints = binder->BindConstraints(table);

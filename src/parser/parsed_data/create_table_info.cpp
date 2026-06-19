@@ -17,7 +17,7 @@ CreateTableInfo::CreateTableInfo(SchemaCatalogEntry &schema, Identifier name_p)
 }
 
 unique_ptr<CreateInfo> CreateTableInfo::Copy() const {
-	auto result = make_uniq<CreateTableInfo>(catalog, schema, table);
+	auto result = make_uniq<CreateTableInfo>(GetCatalog(), GetSchema(), table);
 	CopyProperties(*result);
 	result->columns = columns.Copy();
 	for (auto &constraint : constraints) {
@@ -69,7 +69,7 @@ string CreateTableInfo::ExtraOptionsToString() const {
 
 string CreateTableInfo::ToString() const {
 	string ret = GetCreatePrefix("TABLE");
-	ret += QualifierToString(temporary ? Identifier() : catalog, schema, table);
+	ret += QualifierToString(temporary ? Identifier() : GetCatalog(), GetSchema(), table);
 
 	if (query != nullptr) {
 		ret += TableCatalogEntry::ColumnNamesToSQL(columns);

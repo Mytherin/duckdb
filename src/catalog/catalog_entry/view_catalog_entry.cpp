@@ -48,7 +48,7 @@ ViewCatalogEntry::ViewCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema,
 
 unique_ptr<CreateInfo> ViewCatalogEntry::GetInfo() const {
 	auto result = make_uniq<CreateViewInfo>();
-	result->schema = schema.name;
+	result->SetSchema(schema.name);
 	result->view_name = name;
 	result->sql = sql;
 	result->query = query ? unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy()) : nullptr;

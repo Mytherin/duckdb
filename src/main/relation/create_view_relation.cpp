@@ -29,7 +29,7 @@ BoundStatement CreateViewRelation::Bind(Binder &binder) {
 	info->query = std::move(select);
 	info->view_name = view_name;
 	info->temporary = temporary;
-	info->schema = schema_name;
+	info->SetSchema(schema_name);
 	info->on_conflict = replace ? OnCreateConflict::REPLACE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	stmt.info = std::move(info);
 	return binder.Bind(stmt.Cast<SQLStatement>());

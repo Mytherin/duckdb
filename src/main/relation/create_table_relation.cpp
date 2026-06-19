@@ -28,8 +28,8 @@ BoundStatement CreateTableRelation::Bind(Binder &binder) {
 
 	CreateStatement stmt;
 	auto info = make_uniq<CreateTableInfo>();
-	info->catalog = catalog_name;
-	info->schema = schema_name;
+	info->SetCatalog(catalog_name);
+	info->SetSchema(schema_name);
 	info->table = table_name;
 	info->query = std::move(select);
 	info->on_conflict = on_conflict;

@@ -166,7 +166,7 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 			}
 		}
 
-		auto &catalog = Catalog::GetCatalog(context, info->catalog);
+		auto &catalog = Catalog::GetCatalog(context, info->GetCatalog());
 		catalog.Alter(context, *alter_table_info);
 	}
 

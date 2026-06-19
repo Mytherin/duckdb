@@ -11,7 +11,7 @@ unique_ptr<CreateInfo> CreateSequenceInfo::Copy() const {
 	auto result = make_uniq<CreateSequenceInfo>();
 	CopyProperties(*result);
 	result->name = name;
-	result->schema = schema;
+	result->SetSchema(GetSchema());
 	result->usage_count = usage_count;
 	result->increment = increment;
 	result->min_value = min_value;
@@ -35,7 +35,7 @@ string CreateSequenceInfo::ToString() const {
 	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 		ss << " IF NOT EXISTS ";
 	}
-	ss << QualifierToString(temporary ? Identifier() : catalog, schema, name);
+	ss << QualifierToString(temporary ? Identifier() : GetCatalog(), GetSchema(), name);
 	ss << " INCREMENT BY " << increment;
 	ss << " MINVALUE " << min_value;
 	ss << " MAXVALUE " << max_value;

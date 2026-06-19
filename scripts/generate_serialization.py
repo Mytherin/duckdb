@@ -312,6 +312,7 @@ supported_member_entries = [
     'property',
     'serialize_property',
     'deserialize_property',
+    'deserialize_setter',
     'base',
     'default',
     'status',
@@ -381,6 +382,8 @@ class MemberVariable:
             self.serialize_property = entry['serialize_property']
         if 'deserialize_property' in entry:
             self.deserialize_property = entry['deserialize_property']
+        # optional setter method used to assign the deserialized value (instead of `result->member = value`)
+        self.deserialize_setter = entry.get('deserialize_setter', None)
         if 'default' in entry:
             self.has_default = True
             self.default = entry['default']
@@ -687,7 +690,11 @@ def generate_base_class_code(base_class: SerializableClass):
         move = False
         if entry.type in MOVE_LIST or is_container(entry.type) or is_pointer(entry.type):
             move = True
-        if move:
+        if entry.deserialize_setter is not None:
+            base_class_deserialize += (
+                f'\tresult->{entry.deserialize_setter}(std::move({entry.deserialize_property}));\n'
+            )
+        elif move:
             base_class_deserialize += (
                 f'\tresult->{entry.deserialize_property} = std::move({entry.deserialize_property});\n'
             )

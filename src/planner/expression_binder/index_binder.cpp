@@ -61,8 +61,8 @@ void IndexBinder::InitCreateIndexInfo(LogicalGet &get, CreateIndexInfo &info, co
 
 	info.scan_types.emplace_back(LogicalType::ROW_TYPE);
 	info.names = get.names;
-	info.schema = Identifier(schema);
-	info.catalog = get.GetTable()->catalog.GetName();
+	info.SetSchema(Identifier(schema));
+	info.SetCatalog(get.GetTable()->catalog.GetName());
 	get.AddColumnId(COLUMN_IDENTIFIER_ROW_ID);
 }
 
@@ -73,7 +73,7 @@ unique_ptr<LogicalOperator> IndexBinder::BindCreateIndex(ClientContext &context,
                                                          unique_ptr<AlterTableInfo> alter_table_info) {
 	// Add the dependencies.
 	auto &dependencies = create_index_info->dependencies;
-	auto &catalog = Catalog::GetCatalog(context, create_index_info->catalog);
+	auto &catalog = Catalog::GetCatalog(context, create_index_info->GetCatalog());
 	SetCatalogLookupCallback([&dependencies, &catalog](CatalogEntry &entry) {
 		if (&catalog != &entry.ParentCatalog()) {
 			return;
