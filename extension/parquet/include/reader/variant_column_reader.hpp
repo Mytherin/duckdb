@@ -31,6 +31,10 @@ public:
 
 	idx_t Read(ColumnReaderInput &input, Vector &result) override;
 
+	//! Attempt to emit a native SHREDDED_VECTOR directly (only when the chunk is fully shredded).
+	//! Returns false if the chunk has any binary overlay, in which case the caller unshreds instead.
+	bool TryReadShredded(Vector &intermediate_group, idx_t num_values, Vector &result);
+
 	void Skip(idx_t num_values) override;
 	idx_t GroupRowsAvailable() override;
 	uint64_t TotalCompressedSize() override;

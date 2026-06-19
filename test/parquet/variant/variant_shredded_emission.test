@@ -1,0 +1,96 @@
+# name: test/parquet/variant/variant_shredded_emission.test
+# description: Read fully-shredded Parquet variants by emitting a native SHREDDED_VECTOR directly
+# group: [variant]
+
+require parquet
+
+# Fully shredded primitive (multi-chunk), reads back identically
+statement ok
+COPY (SELECT i AS id, (i * 7)::INTEGER::VARIANT AS a FROM range(5000) t(i))
+TO '__TEST_DIR__/fs_prim.parquet' (shredding { a: 'INTEGER' })
+
+query I
+SELECT count(*) FROM '__TEST_DIR__/fs_prim.parquet' WHERE a::VARCHAR = (id * 7)::VARCHAR
+----
+5000
+
+# Fully shredded primitive with interleaved SQL NULL rows (NULLs must be preserved)
+statement ok
+COPY (SELECT i AS id, CASE WHEN i % 5 = 0 THEN NULL ELSE i::INTEGER END::VARIANT AS a FROM range(5000) t(i))
+TO '__TEST_DIR__/fs_null.parquet' (shredding { a: 'INTEGER' })
+
+query III
+SELECT count(*),
+       count(*) FILTER (WHERE a IS NULL),
+       count(*) FILTER (WHERE a IS NULL AND id % 5 = 0)
+FROM '__TEST_DIR__/fs_null.parquet'
+----
+5000	1000	1000
+
+query I
+SELECT count(*) FROM '__TEST_DIR__/fs_null.parquet'
+WHERE a IS NOT NULL AND a::VARCHAR = id::VARCHAR
+----
+4000
+
+# Fully shredded object, with field extraction + filter pushdown
+statement ok
+COPY (SELECT i AS id, {'x': i::INTEGER, 'y': (i * 2)::INTEGER}::VARIANT AS a FROM range(5000) t(i))
+TO '__TEST_DIR__/fs_obj.parquet' (shredding { a: 'STRUCT(x INTEGER, y INTEGER)' })
+
+query I
+SELECT count(*) FROM '__TEST_DIR__/fs_obj.parquet'
+WHERE a['x']::INTEGER = id AND a['y']::INTEGER = id * 2
+----
+5000
+
+query I
+SELECT count(*) FROM '__TEST_DIR__/fs_obj.parquet' WHERE a['x']::INTEGER < 100
+----
+100
+
+# Fully shredded list
+statement ok
+COPY (SELECT i AS id, [i::INTEGER, (i + 1)::INTEGER, (i + 2)::INTEGER]::VARIANT AS a FROM range(5000) t(i))
+TO '__TEST_DIR__/fs_list.parquet' (shredding { a: 'INTEGER[]' })
+
+query I
+SELECT count(*) FROM '__TEST_DIR__/fs_list.parquet'
+WHERE a::VARCHAR = [id, id + 1, id + 2]::VARCHAR
+----
+5000
+
+# Fully shredded list of structs (nested)
+statement ok
+COPY (SELECT i AS id, [{'k': i::INTEGER}, {'k': (i + 1)::INTEGER}]::VARIANT AS a FROM range(5000) t(i))
+TO '__TEST_DIR__/fs_los.parquet' (shredding { a: 'STRUCT(k INTEGER)[]' })
+
+query I
+SELECT count(*) FROM '__TEST_DIR__/fs_los.parquet'
+WHERE a::VARCHAR = [{'k': id}, {'k': id + 1}]::VARCHAR
+----
+5000
+
+# A chunk that contains a binary overlay (here a row whose value does not match the shredded type)
+# is not fully shredded, so it falls back to the unshredding path - but must still read correctly
+statement ok
+COPY (SELECT i AS id, CASE WHEN i = 2500 THEN ('odd_one_out')::VARIANT ELSE i::INTEGER::VARIANT END AS a
+      FROM range(5000) t(i))
+TO '__TEST_DIR__/fs_overlay.parquet' (shredding { a: 'INTEGER' })
+
+query II
+SELECT count(*) FILTER (WHERE id != 2500 AND a::VARCHAR = id::VARCHAR),
+       count(*) FILTER (WHERE id = 2500 AND a::VARCHAR = 'odd_one_out')
+FROM '__TEST_DIR__/fs_overlay.parquet'
+----
+4999	1
+
+# Binary stays consistent with the unshredding path (base64), exercising the BLOB fallback
+statement ok
+COPY (SELECT ('\xCA\xFE\xBA\xBE'::BLOB)::VARIANT AS a FROM range(100) t(i))
+TO '__TEST_DIR__/fs_blob.parquet' (shredding { a: 'BLOB' })
+
+query I
+SELECT count(DISTINCT a::VARCHAR) FROM '__TEST_DIR__/fs_blob.parquet'
+----
+1
