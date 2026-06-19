@@ -515,8 +515,8 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt, const CopyFunction &fun
 	InsertStatement insert;
 	auto &insert_node = *insert.node;
 	insert_node.table = stmt.info->table;
-	insert_node.schema = stmt.info->schema;
-	insert_node.catalog = stmt.info->catalog;
+	insert_node.SetSchema(stmt.info->GetSchema());
+	insert_node.SetCatalog(stmt.info->GetCatalog());
 	insert_node.columns = stmt.info->select_list;
 
 	// bind the insert statement to the base table
@@ -526,9 +526,12 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt, const CopyFunction &fun
 	auto &bound_insert = insert_statement.plan->Cast<LogicalInsert>();
 
 	// lookup the table to copy into
-	BindSchemaOrCatalog(stmt.info->catalog, stmt.info->schema);
-	auto &table =
-	    Catalog::GetEntry<TableCatalogEntry>(context, stmt.info->catalog, stmt.info->schema, stmt.info->table);
+	auto copy_catalog = stmt.info->GetCatalog();
+	auto copy_schema = stmt.info->GetSchema();
+	BindSchemaOrCatalog(copy_catalog, copy_schema);
+	stmt.info->SetCatalog(copy_catalog);
+	stmt.info->SetSchema(copy_schema);
+	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, copy_catalog, copy_schema, stmt.info->table);
 	physical_index_vector_t<idx_t> column_index_map;
 	vector<LogicalIndex> named_column_map;
 	vector<LogicalType> expected_types;
@@ -655,8 +658,8 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 		// copy table into file without a query
 		// generate SELECT * FROM table;
 		auto ref = make_uniq<BaseTableRef>();
-		ref->catalog_name = stmt.info->catalog;
-		ref->schema_name = stmt.info->schema;
+		ref->catalog_name = stmt.info->GetCatalog();
+		ref->schema_name = stmt.info->GetSchema();
 		ref->table_name = stmt.info->table;
 
 		auto statement = make_uniq<SelectNode>();

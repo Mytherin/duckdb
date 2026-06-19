@@ -5,10 +5,21 @@
 
 namespace duckdb {
 
-AlterInfo::AlterInfo(AlterType type, Identifier catalog_p, Identifier schema_p, Identifier name_p,
+const Identifier &AlterInfo::EmptyIdentifier() {
+	static const Identifier EMPTY;
+	return EMPTY;
+}
+
+AlterInfo::AlterInfo(AlterType type, Identifier catalog, Identifier schema, Identifier name_p,
                      OnEntryNotFound if_not_found)
-    : ParseInfo(TYPE), type(type), if_not_found(if_not_found), catalog(std::move(catalog_p)),
-      schema(std::move(schema_p)), name(std::move(name_p)), allow_internal(false) {
+    : ParseInfo(TYPE), type(type), if_not_found(if_not_found), name(std::move(name_p)), allow_internal(false) {
+	if (!catalog.empty()) {
+		// fully qualified - the path holds [catalog, schema]
+		schema_path.push_back(std::move(catalog));
+		schema_path.push_back(std::move(schema));
+	} else if (!schema.empty()) {
+		schema_path.push_back(std::move(schema));
+	}
 }
 
 AlterInfo::AlterInfo(AlterType type) : ParseInfo(TYPE), type(type) {
@@ -17,10 +28,32 @@ AlterInfo::AlterInfo(AlterType type) : ParseInfo(TYPE), type(type) {
 AlterInfo::~AlterInfo() {
 }
 
+void AlterInfo::SetCatalog(Identifier catalog_p) {
+	auto schema = GetSchema();
+	schema_path.clear();
+	if (!catalog_p.empty()) {
+		schema_path.push_back(std::move(catalog_p));
+		schema_path.push_back(std::move(schema));
+	} else if (!schema.empty()) {
+		schema_path.push_back(std::move(schema));
+	}
+}
+
+void AlterInfo::SetSchema(Identifier schema_p) {
+	auto catalog = GetCatalog();
+	schema_path.clear();
+	if (!catalog.empty()) {
+		schema_path.push_back(std::move(catalog));
+		schema_path.push_back(std::move(schema_p));
+	} else if (!schema_p.empty()) {
+		schema_path.push_back(std::move(schema_p));
+	}
+}
+
 AlterEntryData AlterInfo::GetAlterEntryData() const {
 	AlterEntryData data;
-	data.catalog = catalog;
-	data.schema = schema;
+	data.catalog = GetCatalog();
+	data.schema = GetSchema();
 	data.name = name;
 	data.if_not_found = if_not_found;
 	return data;

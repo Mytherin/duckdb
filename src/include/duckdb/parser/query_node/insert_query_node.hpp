@@ -38,10 +38,6 @@ public:
 
 	//! Table name to insert to
 	Identifier table;
-	//! Schema name to insert to
-	Identifier schema;
-	//! The catalog name to insert to
-	Identifier catalog;
 
 	//! keep track of optional returningList if statement contains a RETURNING keyword
 	vector<unique_ptr<ParsedExpression>> returning_list;
@@ -56,6 +52,27 @@ public:
 	InsertColumnOrder column_order;
 
 public:
+	//! The catalog is only set when fully qualified, i.e. schema_path holds [catalog, schema]
+	const Identifier &GetCatalog() const {
+		return schema_path.size() >= 2 ? schema_path[0] : EmptyIdentifier();
+	}
+	//! The schema is the last element of the qualification path (empty if the path is empty)
+	const Identifier &GetSchema() const {
+		if (schema_path.size() == 1) {
+			return schema_path[0];
+		}
+		if (schema_path.size() >= 2) {
+			return schema_path[1];
+		}
+		return EmptyIdentifier();
+	}
+	void SetCatalog(Identifier catalog_p);
+	void SetSchema(Identifier schema_p);
+
+	const vector<Identifier> &GetSchemaPath() const {
+		return schema_path;
+	}
+
 	string ToString() const override;
 	bool Equals(const QueryNode *other) const override;
 	unique_ptr<QueryNode> Copy() const override;
@@ -66,6 +83,14 @@ public:
 	//! If the INSERT statement is inserted DIRECTLY from a values list (i.e. INSERT INTO tbl VALUES (...)) this returns
 	//! the expression list Otherwise, this returns NULL
 	optional_ptr<ExpressionListRef> GetValuesList() const;
+
+private:
+	static const Identifier &EmptyIdentifier();
+
+private:
+	//! Qualification path: element 0 is the catalog (when present), the remainder are schema levels.
+	//! Today this holds at most [catalog, schema]; (catalog, schema) is derived following the size rules above.
+	vector<Identifier> schema_path;
 };
 
 } // namespace duckdb

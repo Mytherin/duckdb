@@ -398,7 +398,7 @@ void Catalog::DropEntry(ClientContext &context, DropInfo &info) {
 
 	CatalogEntryRetriever retriever(context);
 	EntryLookupInfo lookup_info(info.type, info.name);
-	auto lookup = LookupEntry(retriever, info.schema.GetIdentifierName(), lookup_info, info.if_not_found);
+	auto lookup = LookupEntry(retriever, info.GetSchema().GetIdentifierName(), lookup_info, info.if_not_found);
 	if (!lookup.Found()) {
 		return;
 	}
@@ -1240,14 +1240,14 @@ void Catalog::Alter(CatalogTransaction transaction, AlterInfo &info) {
 	if (transaction.HasContext()) {
 		CatalogEntryRetriever retriever(transaction.GetContext());
 		EntryLookupInfo lookup_info(info.GetCatalogType(), info.name);
-		auto lookup = LookupEntry(retriever, info.schema.GetIdentifierName(), lookup_info, info.if_not_found);
+		auto lookup = LookupEntry(retriever, info.GetSchema().GetIdentifierName(), lookup_info, info.if_not_found);
 		if (!lookup.Found()) {
 			return;
 		}
 		return lookup.schema->Alter(transaction, info);
 	}
 	D_ASSERT(info.if_not_found == OnEntryNotFound::THROW_EXCEPTION);
-	auto &schema = GetSchema(transaction, info.schema);
+	auto &schema = GetSchema(transaction, info.GetSchema());
 	return schema.Alter(transaction, info);
 }
 

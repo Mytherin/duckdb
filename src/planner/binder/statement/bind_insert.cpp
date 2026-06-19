@@ -598,8 +598,12 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 	result.names = {"Count"};
 	result.types = {LogicalType::BIGINT};
 
-	BindSchemaOrCatalog(node.catalog, node.schema);
-	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, node.catalog, node.schema, node.table);
+	auto insert_catalog = node.GetCatalog();
+	auto insert_schema = node.GetSchema();
+	BindSchemaOrCatalog(insert_catalog, insert_schema);
+	node.SetCatalog(insert_catalog);
+	node.SetSchema(insert_schema);
+	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, insert_catalog, insert_schema, node.table);
 
 	if (auto expanded = TryExpandTriggers(node, table, TriggerEventType::INSERT_EVENT)) {
 		return std::move(*expanded);

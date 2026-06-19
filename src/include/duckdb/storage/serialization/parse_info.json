@@ -30,12 +30,16 @@
       {
         "id": 201,
         "name": "catalog",
-        "type": "Identifier"
+        "type": "Identifier",
+        "serialize_property": "GetCatalog()",
+        "deserialize_setter": "SetCatalog"
       },
       {
         "id": 202,
         "name": "schema",
-        "type": "Identifier"
+        "type": "Identifier",
+        "serialize_property": "GetSchema()",
+        "deserialize_setter": "SetSchema"
       },
       {
         "id": 203,
@@ -485,12 +489,16 @@
       {
         "id": 200,
         "name": "catalog",
-        "type": "Identifier"
+        "type": "Identifier",
+        "serialize_property": "GetCatalog()",
+        "deserialize_setter": "SetCatalog"
       },
       {
         "id": 201,
         "name": "schema",
-        "type": "Identifier"
+        "type": "Identifier",
+        "serialize_property": "GetSchema()",
+        "deserialize_setter": "SetSchema"
       },
       {
         "id": 202,
@@ -604,12 +612,16 @@
       {
         "id": 201,
         "name": "catalog",
-        "type": "Identifier"
+        "type": "Identifier",
+        "serialize_property": "GetCatalog()",
+        "deserialize_setter": "SetCatalog"
       },
       {
         "id": 202,
         "name": "schema",
-        "type": "Identifier"
+        "type": "Identifier",
+        "serialize_property": "GetSchema()",
+        "deserialize_setter": "SetSchema"
       },
       {
         "id": 203,

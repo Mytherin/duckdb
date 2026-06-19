@@ -23,8 +23,8 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropTable(PEGTransform
 		throw NotImplementedException("Can only drop one object at a time");
 	}
 	auto base_table = std::move(base_table_name[0]);
-	info->catalog = base_table->catalog_name;
-	info->schema = base_table->schema_name;
+	info->SetCatalog(base_table->catalog_name);
+	info->SetSchema(base_table->schema_name);
 	info->name = base_table->table_name;
 	info->type = table_or_view;
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
@@ -54,8 +54,8 @@ PEGTransformerFactory::TransformDropTableFunction(PEGTransformer &transformer, c
 		throw NotImplementedException("Can only drop one object at a time");
 	}
 	info->name = table_function_name[0];
-	info->catalog = INVALID_CATALOG;
-	info->schema = INVALID_SCHEMA;
+	info->SetCatalog(INVALID_CATALOG);
+	info->SetSchema(INVALID_SCHEMA);
 	info->type = comment_macro_table;
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	result->info = std::move(info);
@@ -73,8 +73,8 @@ PEGTransformerFactory::TransformDropFunction(PEGTransformer &transformer, const 
 		throw NotImplementedException("Can only drop one object at a time");
 	}
 	const auto &function = function_identifier[0];
-	info->catalog = function.GetCatalog().empty() ? INVALID_CATALOG : function.GetCatalog();
-	info->schema = function.GetSchema();
+	info->SetCatalog(function.GetCatalog().empty() ? INVALID_CATALOG : function.GetCatalog());
+	info->SetSchema(function.GetSchema());
 	info->name = function.name;
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	info->type = catalog_type;
@@ -91,7 +91,7 @@ PEGTransformerFactory::TransformDropSchema(PEGTransformer &transformer, const op
 		throw NotImplementedException("Can only drop one object at a time");
 	}
 	const auto &schema = qualified_schema_name[0];
-	info->catalog = schema.GetCatalog();
+	info->SetCatalog(schema.GetCatalog());
 	info->name = schema.GetSchema();
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	info->type = CatalogType::SCHEMA_ENTRY;
@@ -119,8 +119,8 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropIndex(PEGTransform
 		throw NotImplementedException("Can only drop one object at a time");
 	}
 	const auto &index = qualified_index_name[0];
-	info->catalog = index.GetCatalog();
-	info->schema = index.GetSchema();
+	info->SetCatalog(index.GetCatalog());
+	info->SetSchema(index.GetSchema());
 	info->name = index.name;
 	info->type = CatalogType::INDEX_ENTRY;
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
@@ -155,10 +155,10 @@ PEGTransformerFactory::TransformDropSequence(PEGTransformer &transformer, const 
 	}
 	const auto &sequence = qualified_sequence_name[0];
 	if (sequence.GetSchema().empty()) {
-		info->schema = sequence.GetCatalog();
+		info->SetSchema(sequence.GetCatalog());
 	} else {
-		info->catalog = sequence.GetCatalog();
-		info->schema = sequence.GetSchema();
+		info->SetCatalog(sequence.GetCatalog());
+		info->SetSchema(sequence.GetSchema());
 	}
 	info->name = sequence.name;
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
@@ -202,10 +202,10 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropType(PEGTransforme
 	}
 	const auto &type = qualified_type_name[0];
 	if (type.GetSchema().empty()) {
-		info->schema = type.GetCatalog();
+		info->SetSchema(type.GetCatalog());
 	} else {
-		info->catalog = type.GetCatalog();
-		info->schema = type.GetSchema();
+		info->SetCatalog(type.GetCatalog());
+		info->SetSchema(type.GetSchema());
 	}
 	info->name = type.name;
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;

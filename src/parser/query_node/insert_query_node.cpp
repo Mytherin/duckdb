@@ -7,9 +7,37 @@
 
 namespace duckdb {
 
+const Identifier &InsertQueryNode::EmptyIdentifier() {
+	static const Identifier EMPTY;
+	return EMPTY;
+}
+
 InsertQueryNode::InsertQueryNode()
-    : QueryNode(QueryNodeType::INSERT_QUERY_NODE), schema(DEFAULT_SCHEMA), catalog(INVALID_CATALOG),
-      column_order(InsertColumnOrder::INSERT_BY_POSITION) {
+    : QueryNode(QueryNodeType::INSERT_QUERY_NODE), column_order(InsertColumnOrder::INSERT_BY_POSITION) {
+	// default qualification: schema = "main", catalog unset
+	schema_path.push_back(Identifier::DefaultSchema());
+}
+
+void InsertQueryNode::SetCatalog(Identifier catalog_p) {
+	auto schema = GetSchema();
+	schema_path.clear();
+	if (!catalog_p.empty()) {
+		schema_path.push_back(std::move(catalog_p));
+		schema_path.push_back(std::move(schema));
+	} else if (!schema.empty()) {
+		schema_path.push_back(std::move(schema));
+	}
+}
+
+void InsertQueryNode::SetSchema(Identifier schema_p) {
+	auto catalog = GetCatalog();
+	schema_path.clear();
+	if (!catalog.empty()) {
+		schema_path.push_back(std::move(catalog));
+		schema_path.push_back(std::move(schema_p));
+	} else if (!schema_p.empty()) {
+		schema_path.push_back(std::move(schema_p));
+	}
 }
 
 string InsertQueryNode::ToString() const {
@@ -23,11 +51,11 @@ string InsertQueryNode::ToString() const {
 		result += " OR REPLACE";
 	}
 	result += " INTO ";
-	if (!catalog.empty()) {
-		result += SQLIdentifier(catalog) + ".";
+	if (!GetCatalog().empty()) {
+		result += SQLIdentifier(GetCatalog()) + ".";
 	}
-	if (!schema.empty()) {
-		result += SQLIdentifier(schema) + ".";
+	if (!GetSchema().empty()) {
+		result += SQLIdentifier(GetSchema()) + ".";
 	}
 	result += SQLIdentifier(table);
 	// Write the (optional) alias of the insert target
@@ -130,10 +158,10 @@ bool InsertQueryNode::Equals(const QueryNode *other_p) const {
 	if (table != other.table) {
 		return false;
 	}
-	if (schema != other.schema) {
+	if (GetSchema() != other.GetSchema()) {
 		return false;
 	}
-	if (catalog != other.catalog) {
+	if (GetCatalog() != other.GetCatalog()) {
 		return false;
 	}
 	if (columns != other.columns) {
@@ -173,8 +201,8 @@ bool InsertQueryNode::Equals(const QueryNode *other_p) const {
 unique_ptr<QueryNode> InsertQueryNode::Copy() const {
 	auto result = make_uniq<InsertQueryNode>();
 	result->table = table;
-	result->schema = schema;
-	result->catalog = catalog;
+	result->SetCatalog(GetCatalog());
+	result->SetSchema(GetSchema());
 	result->columns = columns;
 	result->default_values = default_values;
 	result->column_order = column_order;

@@ -27,10 +27,6 @@ public:
 public:
 	CopyInfo();
 
-	//! The catalog name to copy to/from
-	Identifier catalog;
-	//! The schema name to copy to/from
-	Identifier schema;
 	//! The table name to copy to/from
 	Identifier table;
 	//! List of columns to copy to/from
@@ -53,6 +49,27 @@ public:
 	unique_ptr<QueryNode> select_statement;
 
 public:
+	//! The catalog is only set when fully qualified, i.e. schema_path holds [catalog, schema]
+	const Identifier &GetCatalog() const {
+		return schema_path.size() >= 2 ? schema_path[0] : EmptyIdentifier();
+	}
+	//! The schema is the last element of the qualification path (empty if the path is empty)
+	const Identifier &GetSchema() const {
+		if (schema_path.size() == 1) {
+			return schema_path[0];
+		}
+		if (schema_path.size() >= 2) {
+			return schema_path[1];
+		}
+		return EmptyIdentifier();
+	}
+	void SetCatalog(Identifier catalog_p);
+	void SetSchema(Identifier schema_p);
+
+	const vector<Identifier> &GetSchemaPath() const {
+		return schema_path;
+	}
+
 	string CopyOptionsToString() const;
 
 public:
@@ -62,6 +79,14 @@ public:
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer);
+
+private:
+	static const Identifier &EmptyIdentifier();
+
+private:
+	//! Qualification path: element 0 is the catalog (when present), the remainder are schema levels.
+	//! Today this holds at most [catalog, schema]; (catalog, schema) is derived following the size rules above.
+	vector<Identifier> schema_path;
 };
 
 } // namespace duckdb

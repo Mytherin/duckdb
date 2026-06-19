@@ -84,7 +84,7 @@ optional_ptr<CatalogEntry> DuckCatalog::CreateSchema(CatalogTransaction transact
 		case OnCreateConflict::REPLACE_ON_CONFLICT: {
 			DropInfo drop_info;
 			drop_info.type = CatalogType::SCHEMA_ENTRY;
-			drop_info.catalog = info.GetCatalog();
+			drop_info.SetCatalog(info.GetCatalog());
 			drop_info.name = info.GetSchema();
 			DropSchema(transaction, drop_info);
 			result = CreateSchemaInternal(transaction, info);
