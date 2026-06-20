@@ -321,6 +321,12 @@ supported_member_entries = [
     # equality/hash generation annotations (used by generate_util.py)
     'equals_skip',
     'hash_skip',
+    # serialize this field only for storage versions *older* than 'version' (it has been replaced from 'version'
+    # onwards by a sibling field). Reads are unaffected - the value is still read (with default) and applied.
+    'legacy',
+    # only apply the deserialized value via 'deserialize_setter' when it is non-empty (used when multiple fields
+    # write into the same target across versions, so an absent field does not clobber a value read from a sibling)
+    'deserialize_if_present',
     # accessor annotations (used by generate_util.py for Children/ChildrenMutable generation)
     'accessor_mut',
     'accessor',
@@ -384,6 +390,10 @@ class MemberVariable:
             self.deserialize_property = entry['deserialize_property']
         # optional setter method used to assign the deserialized value (instead of `result->member = value`)
         self.deserialize_setter = entry.get('deserialize_setter', None)
+        # serialize only for versions older than 'version' (replaced by a sibling field from 'version' onwards)
+        self.legacy = entry.get('legacy', False)
+        # only apply the deserialized value (via setter) when it is non-empty
+        self.deserialize_if_present = entry.get('deserialize_if_present', False)
         if 'default' in entry:
             self.has_default = True
             self.default = entry['default']
@@ -598,11 +608,11 @@ class SerializableClass:
 
         if conditional_serialization:
             code = []
-            if entry.status != MemberVariableStatus.EXISTING:
-                # conditional delete
+            if entry.status != MemberVariableStatus.EXISTING or entry.legacy:
+                # legacy field / conditional delete: only written for versions older than 'version'
                 code.append(f'\tif (!serializer.ShouldSerialize({storage_version_enum})) {{')
             else:
-                # conditional serialization
+                # conditional serialization: only written from 'version' onwards
                 code.append(f'\tif (serializer.ShouldSerialize({storage_version_enum})) {{')
             code.append('\t' + serialization_code)
 
@@ -841,7 +851,13 @@ def generate_class_code(class_entry: SerializableClass):
             )
             move = entry.type in MOVE_LIST or is_container(entry.type) or is_pointer(entry.type)
             arg = f'std::move({local})' if move else local
-            class_deserialize += f'\tresult->{entry.deserialize_setter}({arg});\n'
+            if entry.deserialize_if_present:
+                # only apply when non-empty, so an absent field does not clobber a value read from a sibling
+                class_deserialize += f'\tif (!{local}.empty()) {{\n'
+                class_deserialize += f'\t\tresult->{entry.deserialize_setter}({arg});\n'
+                class_deserialize += '\t}\n'
+            else:
+                class_deserialize += f'\tresult->{entry.deserialize_setter}({arg});\n'
         elif entry_idx > last_constructor_index:
             class_deserialize += get_deserialize_element_template(
                 deserialize_template_str,

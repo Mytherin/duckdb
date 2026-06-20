@@ -194,6 +194,19 @@ inline vector<Identifier> StringsToIdentifiers(const vector<string> &strings) {
 	return result;
 }
 
+//! Build a qualification path from a (catalog, schema) pair following the convention used throughout the catalog:
+//! a non-empty catalog yields [catalog, schema], a bare schema yields [schema], and an empty pair yields an empty path.
+inline vector<Identifier> SchemaPathFromCatalogSchema(Identifier catalog, Identifier schema) {
+	vector<Identifier> schema_path;
+	if (!catalog.empty()) {
+		schema_path.push_back(std::move(catalog));
+		schema_path.push_back(std::move(schema));
+	} else if (!schema.empty()) {
+		schema_path.push_back(std::move(schema));
+	}
+	return schema_path;
+}
+
 //! Identifier-aware overloads of the invalid-catalog/schema checks. These live here (rather than next to the
 //! string versions in constants.hpp) because constants.hpp is a dependency of this header.
 inline bool IsInvalidCatalog(const Identifier &catalog) {

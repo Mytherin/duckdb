@@ -1131,17 +1131,17 @@ void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const Ide
 	if (expr.GetExpressionClass() == ExpressionClass::FUNCTION) {
 		auto &func = expr.Cast<FunctionExpression>();
 		if (func.Catalog() == catalog_name) {
-			func.CatalogMutable() = "";
+			func.SetCatalog("");
 		} else if (func.Catalog().empty() && func.Schema() == catalog_name) {
-			func.SchemaMutable() = "";
+			func.SetSchema("");
 		}
 		// Fall through to EnumerateChildren to also strip catalog refs inside arguments
 	} else if (expr.GetExpressionClass() == ExpressionClass::WINDOW) {
 		auto &win = expr.Cast<WindowExpression>();
 		if (win.Catalog() == catalog_name) {
-			win.CatalogMutable() = "";
+			win.SetCatalog("");
 		} else if (win.Catalog().empty() && win.Schema() == catalog_name) {
-			win.SchemaMutable() = "";
+			win.SetSchema("");
 		}
 		// Fall through to EnumerateChildren to strip catalog refs inside partitions/orders/children
 	} else if (expr.GetExpressionClass() == ExpressionClass::CAST) {

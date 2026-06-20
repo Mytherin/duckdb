@@ -40,8 +40,9 @@ unique_ptr<ParsedExpression> WindowExpression::SerializedDefault(Serializer &ser
 }
 
 WindowExpression::WindowExpression(const string &catalog_name, const string &schema, const string &function_name)
-    : ParsedExpression(WindowToExpressionType(function_name), ExpressionClass::WINDOW), catalog(catalog_name),
-      schema(schema), function_name(StringUtil::Lower(function_name)), ignore_nulls(false), distinct(false) {
+    : ParsedExpression(WindowToExpressionType(function_name), ExpressionClass::WINDOW),
+      schema_path(SchemaPathFromCatalogSchema(Identifier(catalog_name), Identifier(schema))),
+      function_name(StringUtil::Lower(function_name)), ignore_nulls(false), distinct(false) {
 }
 
 struct WindowFunctionDefinition {
@@ -92,7 +93,7 @@ void WindowExpression::SetFunctionName(const string &function_name_p) {
 }
 
 string WindowExpression::ToString() const {
-	return ToString<WindowExpression, ParsedExpression, OrderByNode>(*this, schema.GetIdentifierName(),
+	return ToString<WindowExpression, ParsedExpression, OrderByNode>(*this, Schema().GetIdentifierName(),
 	                                                                 function_name.GetIdentifierName());
 }
 
@@ -125,8 +126,11 @@ bool WindowExpression::HasBoundedParts() const {
 void WindowExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
 	serializer.WritePropertyWithDefault<Identifier>(200, "function_name", function_name);
-	serializer.WritePropertyWithDefault<Identifier>(201, "schema", schema);
-	serializer.WritePropertyWithDefault<Identifier>(202, "catalog", catalog);
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		// Legacy serialization: the catalog/schema are written as a separate pair (replaced by schema_path in v2.0).
+		serializer.WritePropertyWithDefault<Identifier>(201, "schema", Schema());
+		serializer.WritePropertyWithDefault<Identifier>(202, "catalog", Catalog());
+	}
 
 	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		// Legacy serialization.
@@ -160,14 +164,17 @@ void WindowExpression::Serialize(Serializer &serializer) const {
 
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WritePropertyWithDefault<vector<FunctionArgument>>(218, "arguments", arguments);
+		serializer.WritePropertyWithDefault<vector<Identifier>>(219, "schema_path", GetSchemaPath());
 	}
 }
 
 unique_ptr<ParsedExpression> WindowExpression::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<WindowExpression>(new WindowExpression());
 	deserializer.ReadPropertyWithDefault<Identifier>(200, "function_name", result->function_name);
-	deserializer.ReadPropertyWithDefault<Identifier>(201, "schema", result->schema);
-	deserializer.ReadPropertyWithDefault<Identifier>(202, "catalog", result->catalog);
+	auto schema = deserializer.ReadPropertyWithDefault<Identifier>(201, "schema");
+	auto catalog = deserializer.ReadPropertyWithDefault<Identifier>(202, "catalog");
+	// Legacy files store the qualification as a separate catalog/schema pair; v2.0+ stores it as schema_path.
+	result->SetSchemaPath(SchemaPathFromCatalogSchema(std::move(catalog), std::move(schema)));
 
 	// Legacy children deserialization
 	vector<unique_ptr<ParsedExpression>> children;
@@ -201,6 +208,10 @@ unique_ptr<ParsedExpression> WindowExpression::Deserialize(Deserializer &deseria
 	// New children deserialization
 	if (children.empty()) {
 		deserializer.ReadPropertyWithDefault<vector<FunctionArgument>>(218, "arguments", result->arguments);
+	}
+	auto schema_path = deserializer.ReadPropertyWithDefault<vector<Identifier>>(219, "schema_path");
+	if (!schema_path.empty()) {
+		result->SetSchemaPath(std::move(schema_path));
 	}
 
 	return std::move(result);

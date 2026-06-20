@@ -99,17 +99,27 @@ public:
 	                              bool is_operator = false, bool export_state = false);
 
 public:
+	//! The catalog is only set when the function is fully qualified, i.e. schema_path holds [catalog, schema]
 	const Identifier &Catalog() const {
-		return catalog;
+		return schema_path.size() >= 2 ? schema_path[0] : Identifier::Empty();
 	}
-	Identifier &CatalogMutable() {
-		return catalog;
-	}
+	//! The schema is the last element of the qualification path (empty if the path is empty)
 	const Identifier &Schema() const {
-		return schema;
+		if (schema_path.size() == 1) {
+			return schema_path[0];
+		}
+		if (schema_path.size() >= 2) {
+			return schema_path[1];
+		}
+		return Identifier::Empty();
 	}
-	Identifier &SchemaMutable() {
-		return schema;
+	void SetCatalog(Identifier catalog_p);
+	void SetSchema(Identifier schema_p);
+	const vector<Identifier> &GetSchemaPath() const {
+		return schema_path;
+	}
+	void SetSchemaPath(vector<Identifier> path) {
+		schema_path = std::move(path);
 	}
 	const Identifier &FunctionName() const {
 		return function_name;
@@ -178,10 +188,9 @@ public:
 	}
 
 private:
-	//! Catalog of the function
-	Identifier catalog;
-	//! Schema of the function
-	Identifier schema;
+	//! Qualification path: element 0 is the catalog (when present), the remainder are schema levels.
+	//! Today this holds at most [catalog, schema]; (catalog, schema) is derived following the size rules above.
+	vector<Identifier> schema_path;
 	//! Function name
 	Identifier function_name;
 	//! Whether or not the function is an operator, only used for rendering

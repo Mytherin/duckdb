@@ -192,8 +192,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 
 		transformer.in_window_definition = true;
 		auto expr = std::move(*over_clause);
-		expr->CatalogMutable() = qualified_function.GetCatalog();
-		expr->SchemaMutable() = qualified_function.GetSchema();
+		expr->SetSchemaPath(qualified_function.GetSchemaPath());
 		expr->SetFunctionName(lowercase_name);
 
 		for (auto &arg : function_children) {
