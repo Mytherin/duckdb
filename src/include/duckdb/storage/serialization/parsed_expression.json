@@ -241,8 +241,9 @@
         "id": 201,
         "name": "schema",
         "type": "Identifier",
-        "accessor_mut": "SchemaMutable()",
-        "accessor": "Schema()"
+        "serialize_property": "Schema()",
+        "equals_skip": true,
+        "hash_skip": true
       },
       {
         "id": 202,
@@ -294,8 +295,9 @@
         "id": 208,
         "name": "catalog",
         "type": "Identifier",
-        "accessor_mut": "CatalogMutable()",
-        "accessor": "Catalog()"
+        "serialize_property": "Catalog()",
+        "equals_skip": true,
+        "hash_skip": true
       },
       {
         "id": 209,
@@ -303,6 +305,12 @@
         "type": "vector<FunctionArgument>",
         "accessor_mut": "GetArgumentsMutable()",
         "accessor": "GetArguments()"
+      },
+      {
+        "id": 210,
+        "name": "schema_path",
+        "type": "vector<Identifier>",
+        "accessor": "GetSchemaPath()"
       }
     ],
     "custom_implementation": true
@@ -484,12 +492,18 @@
       {
         "id": 201,
         "name": "schema",
-        "type": "Identifier"
+        "type": "Identifier",
+        "serialize_property": "Schema()",
+        "equals_skip": true,
+        "hash_skip": true
       },
       {
         "id": 202,
         "name": "catalog",
-        "type": "Identifier"
+        "type": "Identifier",
+        "serialize_property": "Catalog()",
+        "equals_skip": true,
+        "hash_skip": true
       },
       {
         "id": 203,
@@ -595,6 +609,12 @@
         "type": "vector<FunctionArgument>",
         "accessor_mut": "GetArgumentsMutable()",
         "accessor": "GetArguments()"
+      },
+      {
+        "id": 219,
+        "name": "schema_path",
+        "type": "vector<Identifier>",
+        "accessor": "GetSchemaPath()"
       }
     ],
     "custom_implementation": true
@@ -607,12 +627,24 @@
       {
         "id": 200,
         "name": "catalog",
-        "type": "Identifier"
+        "type": "Identifier",
+        "legacy": true,
+        "version": "v2.0.0",
+        "serialize_property": "GetCatalog()",
+        "deserialize_setter": "SetCatalog",
+        "equals_skip": true,
+        "hash_skip": true
       },
       {
         "id": 201,
         "name": "schema",
-        "type": "Identifier"
+        "type": "Identifier",
+        "legacy": true,
+        "version": "v2.0.0",
+        "serialize_property": "GetSchema()",
+        "deserialize_setter": "SetSchema",
+        "equals_skip": true,
+        "hash_skip": true
       },
       {
         "id": 202,
@@ -624,6 +656,15 @@
         "name": "children",
         "type": "vector<unique_ptr<ParsedExpression>>",
         "accessor_mut": "GetChildren()"
+      },
+      {
+        "id": 204,
+        "name": "schema_path",
+        "type": "vector<Identifier>",
+        "version": "v2.0.0",
+        "deserialize_setter": "SetSchemaPath",
+        "deserialize_if_present": true,
+        "accessor": "GetSchemaPath()"
       }
     ]
   }

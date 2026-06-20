@@ -261,7 +261,10 @@ optional_ptr<CatalogEntry> ColumnQualifier::QualifyFunction(FunctionExpression &
 	D_ASSERT(!ExpressionBinder::IsUnnestFunction(function.FunctionName()));
 	// lookup the function in the catalog
 	QueryErrorContext error_context(function.GetQueryLocation());
-	binder.BindSchemaOrCatalog(function.CatalogMutable(), function.SchemaMutable());
+	auto catalog = function.Catalog();
+	auto schema = function.Schema();
+	binder.BindSchemaOrCatalog(catalog, schema);
+	function.SetSchemaPath(SchemaPathFromCatalogSchema(std::move(catalog), std::move(schema)));
 
 	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, function.FunctionName(), error_context);
 	auto func =
@@ -298,8 +301,7 @@ optional_ptr<CatalogEntry> ColumnQualifier::QualifyFunction(FunctionExpression &
 	// we can! transform this into a function call on the column
 	// i.e. "x.lower()" becomes "lower(x)"
 	function.GetArgumentsMutable().insert(function.GetArgumentsMutable().begin(), std::move(new_colref));
-	function.CatalogMutable() = INVALID_CATALOG;
-	function.SchemaMutable() = INVALID_SCHEMA;
+	function.SetSchemaPath({});
 	return func;
 }
 

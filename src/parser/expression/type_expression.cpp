@@ -9,8 +9,9 @@ namespace duckdb {
 
 TypeExpression::TypeExpression(Identifier catalog, Identifier schema, Identifier type_name,
                                vector<unique_ptr<ParsedExpression>> children_p)
-    : ParsedExpression(ExpressionType::TYPE, ExpressionClass::TYPE), catalog(std::move(catalog)),
-      schema(std::move(schema)), type_name(std::move(type_name)), children(std::move(children_p)) {
+    : ParsedExpression(ExpressionType::TYPE, ExpressionClass::TYPE),
+      schema_path(SchemaPathFromCatalogSchema(std::move(catalog), std::move(schema))), type_name(std::move(type_name)),
+      children(std::move(children_p)) {
 	D_ASSERT(!this->type_name.empty());
 }
 
@@ -28,11 +29,11 @@ TypeExpression::TypeExpression() : ParsedExpression(ExpressionType::TYPE, Expres
 
 string TypeExpression::ToString() const {
 	string result;
-	if (!catalog.empty()) {
-		result += SQLIdentifier(catalog) + ".";
+	if (!GetCatalog().empty()) {
+		result += SQLIdentifier(GetCatalog()) + ".";
 	}
-	if (!schema.empty()) {
-		result += SQLIdentifier(schema) + ".";
+	if (!GetSchema().empty()) {
+		result += SQLIdentifier(GetSchema()) + ".";
 	}
 
 	auto &params = children;

@@ -133,8 +133,7 @@ void ExpressionBinder::UnfoldWindowMacroExpression(unique_ptr<ParsedExpression> 
 
 	// Transfer the macro function attributes
 	auto &window_expr = expr->Cast<WindowExpression>();
-	window_expr.CatalogMutable() = agg_fn_expr.Catalog();
-	window_expr.SchemaMutable() = agg_fn_expr.Schema();
+	window_expr.SetSchemaPath(agg_fn_expr.GetSchemaPath());
 	window_expr.FunctionNameMutable() = agg_fn_expr.FunctionName();
 	window_expr.GetArgumentsMutable().clear();
 	for (auto &arg : agg_fn_expr.GetArgumentsMutable()) {
