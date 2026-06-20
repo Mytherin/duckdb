@@ -13,13 +13,18 @@
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
+#include "duckdb/parser/parsed_data/create_info.hpp"
 
 namespace duckdb {
 
 struct RenameColumnInfo;
 struct RenameTableInfo;
+struct CreateSequenceInfo;
 
 class ColumnDefinition;
+
+//! The kind of identity column (SQL standard GENERATED ... AS IDENTITY)
+enum class IdentityType : uint8_t { NONE = 0, ALWAYS = 1 };
 
 //! A column of a table.
 class ColumnDefinition {
@@ -72,6 +77,17 @@ public:
 	bool Generated() const;
 	DUCKDB_API ColumnDefinition Copy() const;
 
+	//===--------------------------------------------------------------------===//
+	// Identity Columns (GENERATED ALWAYS AS IDENTITY)
+	//===--------------------------------------------------------------------===//
+	//! Whether this column is an identity column (backed by an implicit owned sequence)
+	bool IsIdentity() const;
+	IdentityType GetIdentityType() const;
+	//! The CreateSequenceInfo describing the implicit sequence (options + resolved name)
+	optional_ptr<CreateSequenceInfo> GetIdentitySequence() const;
+	//! Marks this column as an identity column with the given implicit-sequence descriptor
+	void SetIdentity(IdentityType type, unique_ptr<CreateInfo> identity_sequence);
+
 	string ToSQLString() const;
 
 	DUCKDB_API void Serialize(Serializer &serializer) const;
@@ -111,6 +127,9 @@ private:
 	Value comment;
 	//! Tags on this column
 	InsertionOrderPreservingMap<string> tags;
+	//! For identity columns: the descriptor of the implicit owned sequence (a CreateSequenceInfo).
+	//! A non-null value marks this column as a GENERATED ALWAYS AS IDENTITY column.
+	unique_ptr<CreateInfo> identity_sequence;
 };
 
 } // namespace duckdb

@@ -90,6 +90,13 @@ void Binder::ExpandDefaultInValuesList(InsertQueryNode &node, TableCatalogEntry 
 
 		// now replace any DEFAULT values with the corresponding default expression
 		for (idx_t list_idx = 0; list_idx < expr_list.values.size(); list_idx++) {
+			auto &value_expr = expr_list.values[list_idx][col_idx];
+			if (column.IsIdentity() && value_expr->GetExpressionType() != ExpressionType::VALUE_DEFAULT) {
+				throw BinderException(
+				    "Cannot insert a non-DEFAULT value into column \"%s\" - it is an identity column defined as "
+				    "GENERATED ALWAYS. Omit the column or use DEFAULT.",
+				    column.Name().GetIdentifierName());
+			}
 			TryReplaceDefaultExpression(expr_list.values[list_idx][col_idx], column);
 		}
 	}
@@ -665,6 +672,22 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 	// Exclude the generated columns from this amount
 	idx_t expected_columns = node.columns.empty() ? table.GetColumns().PhysicalColumnCount() : node.columns.size();
 	ExpandDefaultInValuesList(node, table, values_list, named_column_map);
+
+	// identity columns (GENERATED ALWAYS) cannot be targeted by INSERT ... SELECT (a SELECT always
+	// provides a real value; DEFAULT is only meaningful in a VALUES list, handled above)
+	if (node.select_statement && !values_list) {
+		for (auto &column : table.GetColumns().Physical()) {
+			if (!column.IsIdentity()) {
+				continue;
+			}
+			auto mapped_index = column_index_map.empty() ? column.StorageOid() : column_index_map[column.Physical()];
+			if (mapped_index != DConstants::INVALID_INDEX) {
+				throw BinderException("Cannot insert into column \"%s\" - it is an identity column defined as "
+				                      "GENERATED ALWAYS. Omit the column from the INSERT.",
+				                      column.Name().GetIdentifierName());
+			}
+		}
+	}
 
 	// parse select statement and add to logical plan
 	unique_ptr<LogicalOperator> root;

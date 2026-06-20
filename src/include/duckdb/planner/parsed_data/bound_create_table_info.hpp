@@ -44,6 +44,9 @@ struct BoundCreateTableInfo {
 	unique_ptr<LogicalOperator> query;
 	//! Indexes created by this table
 	vector<IndexStorageInfo> indexes;
+	//! Whether to create the implicit sequences backing identity columns. False when reconstructing an
+	//! existing table (WAL replay / checkpoint load / ALTER), where the sequences already exist.
+	bool create_identity_sequences = true;
 
 	CreateTableInfo &Base() {
 		D_ASSERT(base);

@@ -52,6 +52,11 @@ void Binder::BindUpdateSet(TableIndex proj_index, unique_ptr<LogicalOperator> &r
 		if (column.Generated()) {
 			throw BinderException("Cant update column \"%s\" because it is a generated column!", column.Name());
 		}
+		if (column.IsIdentity() && expr->GetExpressionType() != ExpressionType::VALUE_DEFAULT) {
+			throw BinderException("Cannot update column \"%s\" - it is an identity column defined as GENERATED "
+			                      "ALWAYS. Use DEFAULT to reset it to the sequence value.",
+			                      column.Name().GetIdentifierName());
+		}
 		if (std::find(columns.begin(), columns.end(), column.Physical()) != columns.end()) {
 			throw BinderException("Multiple assignments to same column \"%s\"", colname);
 		}

@@ -1196,7 +1196,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTypeModifiersIn
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformRowTypeInternal(PEGTransformer &transformer,
                                                                                  ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	child_list_t<LogicalType> col_id_type_list {};
+	optional<child_list_t<LogicalType>> col_id_type_list {};
 	auto &col_id_type_list_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (col_id_type_list_opt.HasResult()) {
 		auto col_id_type_list_value =
@@ -2821,11 +2821,18 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformColumnDefinitio
 		    transformer.Transform<GeneratedColumnDefinition>(generated_column_opt.GetResult());
 		generated_column = std::move(generated_column_value);
 	}
+	optional<unique_ptr<CreateSequenceInfo>> identity_column {};
+	auto &identity_column_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
+	if (identity_column_opt.HasResult()) {
+		auto identity_column_value =
+		    transformer.Transform<unique_ptr<CreateSequenceInfo>>(identity_column_opt.GetResult());
+		identity_column = std::move(identity_column_value);
+	}
 	bool has_result {};
-	auto &has_result_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
+	auto &has_result_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
 	has_result = has_result_opt.HasResult();
 	optional<vector<ColumnConstraintEntry>> column_constraint {};
-	auto &column_constraint_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
+	auto &column_constraint_opt = list_pr.GetChild(5).Cast<OptionalParseResult>();
 	if (column_constraint_opt.HasResult()) {
 		vector<ColumnConstraintEntry> column_constraint_value;
 		auto &column_constraint_value_repeat_1 = column_constraint_opt.GetResult().Cast<RepeatParseResult>();
@@ -2837,7 +2844,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformColumnDefinitio
 		column_constraint = std::move(column_constraint_value);
 	}
 	auto result = TransformColumnDefinition(transformer, dotted_identifier, type, std::move(generated_column),
-	                                        has_result, std::move(column_constraint));
+	                                        std::move(identity_column), has_result, std::move(column_constraint));
 	return make_uniq<TypedTransformResult<ConstraintColumnDefinition>>(std::move(result));
 }
 
@@ -3147,6 +3154,33 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformGeneratedColumn
 	}
 	auto result = TransformGeneratedColumn(transformer, has_result, std::move(expression), generated_column_type);
 	return make_uniq<TypedTransformResult<GeneratedColumnDefinition>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformIdentityColumnInternal(PEGTransformer &transformer,
+                                                                                        ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	optional<optional<vector<pair<string, unique_ptr<SequenceOption>>>>> sequence_option {};
+	auto &sequence_option_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
+	if (sequence_option_opt.HasResult()) {
+		optional<vector<pair<string, unique_ptr<SequenceOption>>>> sequence_option_value {};
+		auto &sequence_option_value_opt_1 =
+		    ExtractResultFromParens(sequence_option_opt.GetResult()).Cast<OptionalParseResult>();
+		if (sequence_option_value_opt_1.HasResult()) {
+			vector<pair<string, unique_ptr<SequenceOption>>> sequence_option_value_value_1;
+			auto &sequence_option_value_value_1_repeat_2 =
+			    sequence_option_value_opt_1.GetResult().Cast<RepeatParseResult>();
+			for (auto &sequence_option_value_value_1_item_2 : sequence_option_value_value_1_repeat_2.GetChildren()) {
+				auto sequence_option_value_value_1_value_2 =
+				    transformer.Transform<pair<string, unique_ptr<SequenceOption>>>(
+				        sequence_option_value_value_1_item_2.get());
+				sequence_option_value_value_1.push_back(std::move(sequence_option_value_value_1_value_2));
+			}
+			sequence_option_value = std::move(sequence_option_value_value_1);
+		}
+		sequence_option = std::move(sequence_option_value);
+	}
+	auto result = TransformIdentityColumn(transformer, std::move(sequence_option));
+	return make_uniq<TypedTransformResult<unique_ptr<CreateSequenceInfo>>>(std::move(result));
 }
 
 unique_ptr<TransformResultValue>
@@ -10287,6 +10321,7 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"ColIdOrString", &PEGTransformerFactory::TransformColIdOrStringInternal},
 	    {"TypeFuncName", &PEGTransformerFactory::TransformTypeFuncNameInternal},
 	    {"GeneratedColumn", &PEGTransformerFactory::TransformGeneratedColumnInternal},
+	    {"IdentityColumn", &PEGTransformerFactory::TransformIdentityColumnInternal},
 	    {"GeneratedColumnType", &PEGTransformerFactory::TransformGeneratedColumnTypeInternal},
 	    {"CommitAction", &PEGTransformerFactory::TransformCommitActionInternal},
 	    {"PreserveOrDelete", &PEGTransformerFactory::TransformPreserveOrDeleteInternal},

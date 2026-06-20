@@ -810,7 +810,7 @@ public:
 	static unique_ptr<TransformResultValue> TransformRowTypeInternal(PEGTransformer &transformer,
 	                                                                 ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformRowType(PEGTransformer &transformer,
-	                                                     const child_list_t<LogicalType> &col_id_type_list);
+	                                                     const optional<child_list_t<LogicalType>> &col_id_type_list);
 	static unique_ptr<TransformResultValue> TransformSetofTypeInternal(PEGTransformer &transformer,
 	                                                                   ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformSetofType(PEGTransformer &transformer, const LogicalType &type);
@@ -1363,7 +1363,8 @@ public:
 	static ConstraintColumnDefinition
 	TransformColumnDefinition(PEGTransformer &transformer, const vector<string> &dotted_identifier,
 	                          const optional<LogicalType> &type, optional<GeneratedColumnDefinition> generated_column,
-	                          const bool &has_result, optional<vector<ColumnConstraintEntry>> column_constraint);
+	                          optional<unique_ptr<CreateSequenceInfo>> identity_column, const bool &has_result,
+	                          optional<vector<ColumnConstraintEntry>> column_constraint);
 	static unique_ptr<TransformResultValue> TransformColumnConstraintInternal(PEGTransformer &transformer,
 	                                                                          ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformNotNullConstraintInternal(PEGTransformer &transformer,
@@ -1472,6 +1473,11 @@ public:
 	static GeneratedColumnDefinition TransformGeneratedColumn(PEGTransformer &transformer, const bool &has_result,
 	                                                          unique_ptr<ParsedExpression> expression,
 	                                                          const optional<bool> &generated_column_type);
+	static unique_ptr<TransformResultValue> TransformIdentityColumnInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static unique_ptr<CreateSequenceInfo>
+	TransformIdentityColumn(PEGTransformer &transformer,
+	                        optional<optional<vector<pair<string, unique_ptr<SequenceOption>>>>> sequence_option);
 	static unique_ptr<TransformResultValue> TransformGeneratedColumnTypeInternal(PEGTransformer &transformer,
 	                                                                             ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformCommitActionInternal(PEGTransformer &transformer,

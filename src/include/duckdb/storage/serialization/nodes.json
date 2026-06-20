@@ -454,6 +454,12 @@
         "name": "tags",
         "type": "InsertionOrderPreservingMap<string>",
         "default": "InsertionOrderPreservingMap<string>()"
+      },
+      {
+        "id": 107,
+        "name": "identity_sequence",
+        "type": "CreateInfo*",
+        "default": "nullptr"
       }
     ],
     "constructor": ["name", "type", "expression", "category"],

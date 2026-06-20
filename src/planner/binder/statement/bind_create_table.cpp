@@ -19,6 +19,8 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression_binder/index_binder.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
+#include "duckdb/parser/parsed_data/create_sequence_info.hpp"
+#include "duckdb/common/sql_identifier.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/storage/data_table.hpp"
@@ -321,7 +323,7 @@ void Binder::BindDefaultValue(const ColumnDefinition &column, vector<unique_ptr<
 }
 
 void Binder::BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expression>> &bound_defaults,
-                               const string &catalog_name, const string &schema_p) {
+                               const string &catalog_name, const string &schema_p, bool bind_identity_defaults) {
 	string schema_name = schema_p;
 	if (schema_p.empty()) {
 		schema_name = DEFAULT_SCHEMA;
@@ -331,7 +333,11 @@ void Binder::BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expr
 
 	for (auto &column : columns.Physical()) {
 		unique_ptr<Expression> bound_default;
-		if (column.HasDefaultValue()) {
+		if (column.IsIdentity() && !bind_identity_defaults) {
+			// at CREATE time the implicit sequence does not exist yet, so the synthesized nextval() default
+			// cannot be bound: defer it to INSERT time (push a placeholder here)
+			bound_default = make_uniq<BoundConstantExpression>(Value(column.Type()));
+		} else if (column.HasDefaultValue()) {
 			// we bind a copy of the DEFAULT value because binding is destructive
 			// and we want to keep the original expression around for serialization
 			auto default_copy = column.DefaultValue().Copy();
@@ -349,6 +355,83 @@ void Binder::BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expr
 	}
 }
 
+//! Resolves the implicit sequence for each identity column: computes a unique name, fills in the
+//! CreateSequenceInfo descriptor, and synthesizes the nextval() default expression on the column.
+static void BindIdentityColumns(ClientContext &context, CreateTableInfo &base, SchemaCatalogEntry &schema) {
+	auto &catalog = schema.ParentCatalog();
+	bool has_identity = false;
+	for (auto &column : base.columns.Physical()) {
+		if (column.IsIdentity()) {
+			has_identity = true;
+			break;
+		}
+	}
+	if (!has_identity) {
+		return;
+	}
+	if (!catalog.IsDuckCatalog()) {
+		throw BinderException("Identity columns (GENERATED ALWAYS AS IDENTITY) are only supported on DuckDB databases");
+	}
+
+	auto transaction = catalog.GetCatalogTransaction(context);
+	auto &catalog_name = catalog.GetName();
+	auto &schema_name = schema.name;
+	// names allocated within this statement, to avoid two identity columns colliding with each other
+	case_insensitive_set_t allocated_names;
+
+	for (idx_t i = 0; i < base.columns.PhysicalColumnCount(); i++) {
+		auto &column = base.columns.GetColumnMutable(PhysicalIndex(i));
+		if (!column.IsIdentity()) {
+			continue;
+		}
+		if (!column.Type().IsIntegral()) {
+			throw BinderException("Identity column \"%s\" must have an integer type, not %s",
+			                      column.Name().GetIdentifierName(), column.Type().ToString());
+		}
+		auto seq_info = column.GetIdentitySequence();
+		D_ASSERT(seq_info);
+
+		// This runs again whenever a table with identity columns is re-bound (e.g. ALTER). Only resolve the
+		// implicit sequence on the first bind (name still unset); on re-binds reuse the already-resolved
+		// sequence so we never rename or recreate it.
+		if (seq_info->name.GetIdentifierName().empty()) {
+			// compute a unique implicit sequence name "<table>_<column>_seq", resolving collisions with "_N"
+			string base_name = base.table.GetIdentifierName() + "_" + column.Name().GetIdentifierName() + "_seq";
+			string seq_name = base_name;
+			for (idx_t suffix = 1;; suffix++) {
+				bool collision = allocated_names.find(seq_name) != allocated_names.end();
+				if (!collision && schema.GetEntry(transaction, CatalogType::SEQUENCE_ENTRY, Identifier(seq_name))) {
+					collision = true;
+				}
+				if (!collision && schema.GetEntry(transaction, CatalogType::TABLE_ENTRY, Identifier(seq_name))) {
+					collision = true;
+				}
+				if (!collision) {
+					break;
+				}
+				seq_name = base_name + "_" + to_string(suffix);
+			}
+			allocated_names.insert(seq_name);
+
+			seq_info->catalog = catalog_name;
+			seq_info->schema = schema_name;
+			seq_info->name = Identifier(seq_name);
+			seq_info->temporary = base.temporary;
+			seq_info->internal = false;
+			seq_info->on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
+		}
+
+		// (re)synthesize the column default: nextval('<catalog>.<schema>.<seq_name>'). Doing this on every
+		// bind keeps the default consistent even if an ALTER cleared or changed it.
+		string seq_ref = SQLIdentifier::ToString(seq_info->catalog.GetIdentifierName()) + "." +
+		                 SQLIdentifier::ToString(seq_info->schema.GetIdentifierName()) + "." +
+		                 SQLIdentifier::ToString(seq_info->name.GetIdentifierName());
+		vector<unique_ptr<ParsedExpression>> children;
+		children.push_back(make_uniq<ConstantExpression>(Value(seq_ref)));
+		column.SetDefaultValue(make_uniq<FunctionExpression>("nextval", std::move(children)));
+	}
+}
+
 unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema,
                                                              AlterBindMode bind_mode) {
 	vector<unique_ptr<Expression>> bound_defaults;
@@ -358,6 +441,8 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableCheckpoint(unique_ptr<CreateInfo> info,
                                                                    SchemaCatalogEntry &schema) {
 	auto result = make_uniq<BoundCreateTableInfo>(schema, std::move(info));
+	// the table (and its identity sequences) already exist in storage: do not recreate the sequences
+	result->create_identity_sequences = false;
 	CreateColumnDependencyManager(*result);
 	return result;
 }
@@ -683,6 +768,8 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		auto &config = DBConfig::Get(catalog.GetAttached());
 		VerifyCompressionType(context, storage_manager, config, *result);
 		CreateColumnDependencyManager(*result);
+		// resolve identity columns: name their implicit sequences and synthesize nextval() defaults
+		BindIdentityColumns(context, base, schema);
 		// bind the generated column expressions
 		BindGeneratedColumns(*result);
 		// bind any constraints
@@ -698,7 +785,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 			auto &catalog_name = schema.ParentCatalog().GetName();
 			auto &schema_name = schema.name;
 			BindDefaultValues(base.columns, bound_defaults, catalog_name.GetIdentifierName(),
-			                  schema_name.GetIdentifierName());
+			                  schema_name.GetIdentifierName(), /*bind_identity_defaults=*/false);
 		}
 	}
 

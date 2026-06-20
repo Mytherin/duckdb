@@ -33,4 +33,9 @@ public:
 	QualifiedName qualified_name;
 };
 
+//! Builds a CreateSequenceInfo from a list of parsed sequence options, applying defaults and validating bounds.
+//! Shared between CREATE SEQUENCE and GENERATED ALWAYS AS IDENTITY columns.
+unique_ptr<CreateSequenceInfo>
+BuildSequenceInfoFromOptions(optional<vector<pair<string, unique_ptr<SequenceOption>>>> sequence_option);
+
 } // namespace duckdb

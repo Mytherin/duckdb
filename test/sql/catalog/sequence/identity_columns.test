@@ -1,0 +1,184 @@
+# name: test/sql/catalog/sequence/identity_columns.test
+# description: Test GENERATED ALWAYS AS IDENTITY columns (Postgres-style)
+# group: [sequence]
+
+# basic identity column: auto-increment starting at 1
+statement ok
+CREATE TABLE t(id INTEGER GENERATED ALWAYS AS IDENTITY, v VARCHAR);
+
+statement ok
+INSERT INTO t (v) VALUES ('a'), ('b'), ('c');
+
+query IT
+SELECT id, v FROM t ORDER BY id;
+----
+1	a
+2	b
+3	c
+
+# DEFAULT keyword uses the sequence
+statement ok
+INSERT INTO t VALUES (DEFAULT, 'd');
+
+query IT
+SELECT id, v FROM t ORDER BY id;
+----
+1	a
+2	b
+3	c
+4	d
+
+# an implicit sequence was created
+query I
+SELECT count(*) FROM duckdb_sequences() WHERE sequence_name = 't_id_seq';
+----
+1
+
+# inserting an explicit value into an identity column is rejected (named)
+statement error
+INSERT INTO t (id, v) VALUES (10, 'x');
+----
+identity column
+
+# inserting an explicit value positionally is rejected
+statement error
+INSERT INTO t VALUES (10, 'x');
+----
+identity column
+
+# INSERT ... SELECT targeting the identity column is rejected
+statement error
+INSERT INTO t SELECT 5, 'z';
+----
+identity column
+
+# updating an identity column with a value is rejected
+statement error
+UPDATE t SET id = 99 WHERE v = 'a';
+----
+identity column
+
+# identity columns must be integer typed
+statement error
+CREATE TABLE bad(id VARCHAR GENERATED ALWAYS AS IDENTITY);
+----
+must have an integer type
+
+# a column cannot have both DEFAULT and IDENTITY
+statement error
+CREATE TABLE bad(id INTEGER GENERATED ALWAYS AS IDENTITY DEFAULT 5);
+----
+identity
+
+# sequence options are honored
+statement ok
+CREATE TABLE s(id BIGINT GENERATED ALWAYS AS IDENTITY (START WITH 100 INCREMENT BY 5), v VARCHAR);
+
+statement ok
+INSERT INTO s(v) VALUES ('x'), ('y'), ('z');
+
+query IT
+SELECT id, v FROM s ORDER BY id;
+----
+100	x
+105	y
+110	z
+
+# (DROP TABLE cascade and standalone-DROP-SEQUENCE protection are covered in
+#  identity_columns_ownership.test, which is excluded from reload configs - owned
+#  sequences are not preserved across a WAL restart, matching DuckDB's OWNED BY.)
+
+# name collision: an existing sequence forces a suffixed name
+statement ok
+CREATE SEQUENCE u_id_seq;
+
+statement ok
+CREATE TABLE u(id INTEGER GENERATED ALWAYS AS IDENTITY, v VARCHAR);
+
+# the implicit sequence got a suffixed name (u_id_seq was taken)
+query I
+SELECT count(*) FROM duckdb_sequences() WHERE sequence_name = 'u_id_seq_1';
+----
+1
+
+statement ok
+INSERT INTO u(v) VALUES ('a');
+
+query IT
+SELECT id, v FROM u;
+----
+1	a
+
+# two identity columns in one table get distinct sequences
+statement ok
+CREATE TABLE two(a INTEGER GENERATED ALWAYS AS IDENTITY, b BIGINT GENERATED ALWAYS AS IDENTITY (START WITH 50), v VARCHAR);
+
+statement ok
+INSERT INTO two(v) VALUES ('p'), ('q');
+
+query IIT
+SELECT a, b, v FROM two ORDER BY a;
+----
+1	50	p
+2	51	q
+
+# the GENERATED ALWAYS AS IDENTITY clause round-trips through the catalog SQL
+query I
+SELECT count(*) FROM duckdb_tables() WHERE table_name = 't' AND sql LIKE '%GENERATED ALWAYS AS IDENTITY%';
+----
+1
+
+# unrelated ALTERs on a table with an identity column must not disturb the identity sequence
+statement ok
+CREATE TABLE alt(id INTEGER GENERATED ALWAYS AS IDENTITY, v VARCHAR);
+
+statement ok
+INSERT INTO alt(v) VALUES ('a'), ('b');
+
+statement ok
+ALTER TABLE alt ADD COLUMN w INTEGER DEFAULT 7;
+
+statement ok
+ALTER TABLE alt RENAME COLUMN v TO vv;
+
+# the identity sequence continues from where it was, no rename, no duplicate
+statement ok
+INSERT INTO alt(vv) VALUES ('c');
+
+query IT
+SELECT id, vv FROM alt ORDER BY id;
+----
+1	a
+2	b
+3	c
+
+query I
+SELECT count(*) FROM duckdb_sequences() WHERE sequence_name = 'alt_id_seq';
+----
+1
+
+# the implicit default cannot be dropped or overridden via ALTER (it is GENERATED ALWAYS)
+statement error
+ALTER TABLE alt ALTER COLUMN id DROP DEFAULT;
+----
+identity column
+
+statement error
+ALTER TABLE alt ALTER COLUMN id SET DEFAULT 5;
+----
+identity column
+
+# CREATE TABLE AS does not propagate identity (the target column is plain)
+statement ok
+CREATE TABLE ctas AS SELECT * FROM alt;
+
+query I
+SELECT count(*) FROM duckdb_tables() WHERE table_name = 'ctas' AND sql LIKE '%IDENTITY%';
+----
+0
+
+# the CTAS target has no implicit sequence of its own
+query I
+SELECT count(*) FROM duckdb_sequences() WHERE sequence_name LIKE 'ctas%';
+----
+0

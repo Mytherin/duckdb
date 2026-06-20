@@ -1,0 +1,89 @@
+# name: test/sql/catalog/sequence/identity_columns_ownership.test
+# description: Identity column implicit-sequence ownership (DROP cascade / protection)
+# group: [sequence]
+
+# The implicit sequence is owned by the table. Like DuckDB's ALTER SEQUENCE ... OWNED BY,
+# this ownership is not preserved across a WAL restart, so exclude this test from reload configs.
+require skip_reload
+
+statement ok
+CREATE TABLE s(id BIGINT GENERATED ALWAYS AS IDENTITY (START WITH 100 INCREMENT BY 5), v VARCHAR);
+
+statement ok
+INSERT INTO s(v) VALUES ('x'), ('y');
+
+# the implicit sequence cannot be dropped on its own while the column exists
+statement error
+DROP SEQUENCE s_id_seq;
+----
+depend
+
+# DROP TABLE cascades to the implicit sequence (no explicit CASCADE needed)
+statement ok
+DROP TABLE s;
+
+query I
+SELECT count(*) FROM duckdb_sequences() WHERE sequence_name LIKE 's\_%' ESCAPE '\';
+----
+0
+
+# two identity columns: both implicit sequences are cascade-dropped with the table
+statement ok
+CREATE TABLE two(a INTEGER GENERATED ALWAYS AS IDENTITY, b BIGINT GENERATED ALWAYS AS IDENTITY (START WITH 50), v VARCHAR);
+
+query I
+SELECT count(*) FROM duckdb_sequences() WHERE sequence_name LIKE 'two\_%' ESCAPE '\';
+----
+2
+
+statement ok
+DROP TABLE two;
+
+query I
+SELECT count(*) FROM duckdb_sequences() WHERE sequence_name LIKE 'two\_%' ESCAPE '\';
+----
+0
+
+# temp table identity columns cascade-drop their implicit sequence too
+statement ok
+CREATE TEMP TABLE tmp(id INTEGER GENERATED ALWAYS AS IDENTITY, v VARCHAR);
+
+statement ok
+INSERT INTO tmp(v) VALUES ('a'), ('b');
+
+query IT
+SELECT id, v FROM tmp ORDER BY id;
+----
+1	a
+2	b
+
+statement ok
+DROP TABLE tmp;
+
+query I
+SELECT count(*) FROM duckdb_sequences() WHERE sequence_name LIKE 'tmp%';
+----
+0
+
+# CREATE OR REPLACE drops the old implicit sequence and makes a fresh one
+statement ok
+CREATE TABLE r(id INTEGER GENERATED ALWAYS AS IDENTITY, v VARCHAR);
+
+statement ok
+INSERT INTO r(v) VALUES ('x');
+
+statement ok
+CREATE OR REPLACE TABLE r(id INTEGER GENERATED ALWAYS AS IDENTITY, w VARCHAR);
+
+statement ok
+INSERT INTO r(w) VALUES ('y');
+
+query IT
+SELECT id, w FROM r ORDER BY id;
+----
+1	y
+
+query I
+SELECT count(*) FROM duckdb_sequences() WHERE sequence_name LIKE 'r\_%' ESCAPE '\';
+----
+1

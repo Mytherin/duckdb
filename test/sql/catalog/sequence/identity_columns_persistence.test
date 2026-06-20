@@ -1,0 +1,42 @@
+# name: test/sql/catalog/sequence/identity_columns_persistence.test
+# description: Identity columns survive reload and continue their sequence state
+# group: [sequence]
+
+load {TEST_DIR}/identity_persist.db
+
+statement ok
+CREATE TABLE t(id INTEGER GENERATED ALWAYS AS IDENTITY (START WITH 100), v VARCHAR);
+
+statement ok
+INSERT INTO t(v) VALUES ('a'), ('b');
+
+query IT
+SELECT id, v FROM t ORDER BY id;
+----
+100	a
+101	b
+
+restart
+
+# the sequence continues where it left off after reload
+statement ok
+INSERT INTO t(v) VALUES ('c');
+
+query IT
+SELECT id, v FROM t ORDER BY id;
+----
+100	a
+101	b
+102	c
+
+# identity enforcement is preserved across reload
+statement error
+INSERT INTO t VALUES (5, 'x');
+----
+identity column
+
+# the implicit sequence is still owned: cannot be dropped on its own
+statement error
+DROP SEQUENCE t_id_seq;
+----
+depend

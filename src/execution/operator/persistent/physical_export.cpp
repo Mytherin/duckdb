@@ -11,6 +11,8 @@
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 
 #include <algorithm>
 #include <sstream>
@@ -122,19 +124,31 @@ void PhysicalExport::ExtractEntries(ClientContext &context, vector<reference<Sch
 		if (!schema.internal) {
 			result.schemas.push_back(schema);
 		}
+		// the implicit sequences backing identity columns are recreated implicitly by the owning table's
+		// definition, so they must not be exported as standalone CREATE SEQUENCE statements
+		case_insensitive_set_t identity_sequence_names;
 		schema.Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
 			if (entry.internal) {
 				return;
 			}
 			if (entry.type != CatalogType::TABLE_ENTRY) {
 				result.views.push_back(entry);
+				return;
 			}
-			if (entry.type == CatalogType::TABLE_ENTRY) {
-				result.tables.push_back(entry);
+			result.tables.push_back(entry);
+			auto &table = entry.Cast<TableCatalogEntry>();
+			for (auto &column : table.GetColumns().Physical()) {
+				auto seq = column.GetIdentitySequence();
+				if (seq) {
+					identity_sequence_names.insert(seq->name.GetIdentifierName());
+				}
 			}
 		});
 		schema.Scan(context, CatalogType::SEQUENCE_ENTRY, [&](CatalogEntry &entry) {
 			if (entry.internal) {
+				return;
+			}
+			if (identity_sequence_names.find(entry.name.GetIdentifierName()) != identity_sequence_names.end()) {
 				return;
 			}
 			result.sequences.push_back(entry);

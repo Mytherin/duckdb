@@ -4,15 +4,9 @@
 
 namespace duckdb {
 
-unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSequenceStmt(
-    PEGTransformer &transformer, const optional<bool> &if_not_exists, const QualifiedName &qualified_name,
-    optional<vector<pair<string, unique_ptr<SequenceOption>>>> sequence_option) {
-	auto result = make_uniq<CreateStatement>();
+unique_ptr<CreateSequenceInfo>
+BuildSequenceInfoFromOptions(optional<vector<pair<string, unique_ptr<SequenceOption>>>> sequence_option) {
 	auto info = make_uniq<CreateSequenceInfo>();
-	info->catalog = qualified_name.catalog;
-	info->schema = qualified_name.schema;
-	info->name = qualified_name.name;
-	info->on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	case_insensitive_map_t<unique_ptr<SequenceOption>> sequence_options;
 	if (sequence_option) {
 		for (auto &seq_option : *sequence_option) {
@@ -108,6 +102,18 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSequenceStmt(
 		throw ParserException("START value (%lld) cannot be greater than MAXVALUE (%lld)", info->start_value,
 		                      info->max_value);
 	}
+	return info;
+}
+
+unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSequenceStmt(
+    PEGTransformer &transformer, const optional<bool> &if_not_exists, const QualifiedName &qualified_name,
+    optional<vector<pair<string, unique_ptr<SequenceOption>>>> sequence_option) {
+	auto result = make_uniq<CreateStatement>();
+	auto info = BuildSequenceInfoFromOptions(std::move(sequence_option));
+	info->catalog = qualified_name.catalog;
+	info->schema = qualified_name.schema;
+	info->name = qualified_name.name;
+	info->on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	result->info = std::move(info);
 	return result;
 }

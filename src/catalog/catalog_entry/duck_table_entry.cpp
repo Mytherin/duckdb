@@ -1012,6 +1012,11 @@ unique_ptr<CatalogEntry> DuckTableEntry::SetDefault(ClientContext &context, SetD
 	if (col.Generated()) {
 		throw BinderException("Cannot SET DEFAULT for generated column \"%s\"", col.Name());
 	}
+	if (col.IsIdentity()) {
+		throw BinderException("Cannot SET/DROP DEFAULT on column \"%s\" - it is an identity column defined as "
+		                      "GENERATED ALWAYS",
+		                      col.Name());
+	}
 	col.SetDefaultValue(info.expression ? info.expression->Copy() : nullptr);
 
 	auto binder = Binder::CreateBinder(context);

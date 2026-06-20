@@ -4,6 +4,7 @@
 #include "duckdb/parser/peg/ast/create_table_column_element.hpp"
 #include "duckdb/parser/peg/ast/create_table_definition.hpp"
 #include "duckdb/parser/peg/ast/generated_column_definition.hpp"
+#include "duckdb/parser/peg/ast/sequence_option.hpp"
 #include "duckdb/parser/peg/ast/key_actions.hpp"
 #include "duckdb/parser/peg/ast/partition_sorted_options.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
@@ -225,11 +226,16 @@ vector<string> PEGTransformerFactory::TransformDottedIdentifier(PEGTransformer &
 
 ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(
     PEGTransformer &transformer, const vector<string> &dotted_identifier, const optional<LogicalType> &type,
-    optional<GeneratedColumnDefinition> generated_column, const bool &has_result,
-    optional<vector<ColumnConstraintEntry>> column_constraint) {
+    optional<GeneratedColumnDefinition> generated_column, optional<unique_ptr<CreateSequenceInfo>> identity_column,
+    const bool &has_result, optional<vector<ColumnConstraintEntry>> column_constraint) {
 	auto qualified_name = StringToQualifiedName(dotted_identifier);
 	bool has_type = type.has_value();
 	bool has_generated = generated_column && generated_column->expr != nullptr;
+	bool has_identity = identity_column.has_value();
+	if (has_generated && has_identity) {
+		throw ParserException("Column %s cannot be both a GENERATED column and an identity column.",
+		                      qualified_name.ToString());
+	}
 	if (!has_type && !has_generated) {
 		throw ParserException("Column %s must have a type or be defined as a GENERATED column.",
 		                      qualified_name.ToString());
@@ -313,13 +319,28 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(
 
 	ColumnDefinition col(qualified_name.name, column_type);
 
-	if (accumulated_constraints.default_value) {
+	if (has_identity) {
+		if (accumulated_constraints.default_value) {
+			throw ParserException("Column %s cannot have both a DEFAULT value and be an identity column.",
+			                      qualified_name.ToString());
+		}
+		col.SetIdentity(IdentityType::ALWAYS, std::move(*identity_column));
+	} else if (accumulated_constraints.default_value) {
 		col.SetDefaultValue(std::move(accumulated_constraints.default_value));
 	}
 	col.SetCompressionType(compression_type);
 	ConstraintColumnDefinition result = {std::move(col), accumulated_constraints.constraint_types,
 	                                     std::move(accumulated_constraints.constraints)};
 	return result;
+}
+
+unique_ptr<CreateSequenceInfo> PEGTransformerFactory::TransformIdentityColumn(
+    PEGTransformer &transformer, optional<optional<vector<pair<string, unique_ptr<SequenceOption>>>>> sequence_option) {
+	optional<vector<pair<string, unique_ptr<SequenceOption>>>> options;
+	if (sequence_option) {
+		options = std::move(*sequence_option);
+	}
+	return BuildSequenceInfoFromOptions(std::move(options));
 }
 
 GeneratedColumnDefinition PEGTransformerFactory::TransformGeneratedColumn(PEGTransformer &transformer,

@@ -22,6 +22,7 @@
 #include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/catalog/default/default_views.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
+#include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
@@ -151,6 +152,40 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntryInternal(CatalogTransaction 
 }
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreateTable(CatalogTransaction transaction, BoundCreateTableInfo &info) {
+	auto &base = info.Base();
+
+	// for IF NOT EXISTS: if the table already exists, do not create the implicit identity sequences
+	if (base.on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
+		auto &table_set = GetCatalogSet(CatalogType::TABLE_ENTRY);
+		if (table_set.GetEntry(transaction, base.table)) {
+			return nullptr;
+		}
+	}
+
+	// resolve the implicit sequences backing any identity columns. On a fresh CREATE we create them in the
+	// same transaction; when reconstructing an existing table (WAL replay / checkpoint load) they already
+	// exist (checkpoint writes sequences before tables, the WAL logs the sequence first), so we look them
+	// up. In both cases we (re-)establish ownership: ownership both blocks a standalone DROP SEQUENCE and
+	// makes DROP TABLE cascade. We deliberately do NOT add a regular dependency here - that would block the
+	// cascaded DROP SEQUENCE when the DROP TABLE is replayed from the WAL.
+	vector<reference<CatalogEntry>> identity_sequences;
+	for (auto &column : base.columns.Physical()) {
+		if (!column.IsIdentity()) {
+			continue;
+		}
+		auto seq_info = column.GetIdentitySequence();
+		D_ASSERT(seq_info);
+		optional_ptr<CatalogEntry> seq_entry;
+		if (info.create_identity_sequences) {
+			seq_entry = CreateSequence(transaction, *seq_info);
+		} else {
+			seq_entry = GetCatalogSet(CatalogType::SEQUENCE_ENTRY).GetEntry(transaction, seq_info->name);
+		}
+		if (seq_entry) {
+			identity_sequences.push_back(*seq_entry);
+		}
+	}
+
 	auto table = make_uniq<DuckTableEntry>(catalog, *this, info);
 
 	// add a foreign key constraint in main key table if there is a foreign key constraint
@@ -172,6 +207,12 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateTable(CatalogTransaction trans
 	auto entry = AddEntryInternal(transaction, std::move(table), info.Base().on_conflict, info.dependencies);
 	if (!entry) {
 		return nullptr;
+	}
+
+	// the implicit identity sequences are owned by the table: this makes DROP TABLE cascade to them
+	// and prevents the sequence from being dropped on its own
+	for (auto &seq : identity_sequences) {
+		catalog.GetDependencyManager()->AddOwnership(transaction, *entry, seq.get());
 	}
 
 	return entry;

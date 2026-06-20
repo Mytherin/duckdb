@@ -4,6 +4,7 @@
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/common/extra_type_info.hpp"
+#include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 
 namespace duckdb {
 
@@ -25,6 +26,7 @@ ColumnDefinition ColumnDefinition::Copy() const {
 	copy.category = category;
 	copy.comment = comment;
 	copy.tags = tags;
+	copy.identity_sequence = identity_sequence ? identity_sequence->Copy() : nullptr;
 	return copy;
 }
 
@@ -127,6 +129,27 @@ bool ColumnDefinition::Generated() const {
 	return category == TableColumnType::GENERATED;
 }
 
+bool ColumnDefinition::IsIdentity() const {
+	return identity_sequence != nullptr;
+}
+
+IdentityType ColumnDefinition::GetIdentityType() const {
+	// Only GENERATED ALWAYS identity columns are currently supported
+	return IsIdentity() ? IdentityType::ALWAYS : IdentityType::NONE;
+}
+
+optional_ptr<CreateSequenceInfo> ColumnDefinition::GetIdentitySequence() const {
+	if (!identity_sequence) {
+		return nullptr;
+	}
+	return &identity_sequence->Cast<CreateSequenceInfo>();
+}
+
+void ColumnDefinition::SetIdentity(IdentityType type, unique_ptr<CreateInfo> identity_sequence_p) {
+	D_ASSERT(type == IdentityType::ALWAYS);
+	identity_sequence = std::move(identity_sequence_p);
+}
+
 string ColumnDefinition::ToSQLString() const {
 	string result = SQLIdentifier(Name()) + " ";
 	auto &column_type = Type();
@@ -159,6 +182,16 @@ string ColumnDefinition::ToSQLString() const {
 			generated_expression = cast_expr.Child();
 		}
 		result += " GENERATED ALWAYS AS(" + generated_expression.get().ToString() + ")";
+	} else if (IsIdentity()) {
+		result += " GENERATED ALWAYS AS IDENTITY";
+		auto seq = GetIdentitySequence();
+		if (seq) {
+			result += " (INCREMENT BY " + to_string(seq->increment);
+			result += " MINVALUE " + to_string(seq->min_value);
+			result += " MAXVALUE " + to_string(seq->max_value);
+			result += " START " + to_string(seq->start_value);
+			result += string(" ") + (seq->cycle ? "CYCLE" : "NO CYCLE") + ")";
+		}
 	} else if (HasDefaultValue()) {
 		result += " DEFAULT(" + DefaultValue().ToString() + ")";
 	}
