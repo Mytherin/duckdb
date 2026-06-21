@@ -425,7 +425,7 @@ static void CreateTPCHTable(ClientContext &context, const Identifier &catalog_na
 	auto info = make_uniq<CreateTableInfo>();
 	info->SetCatalog(catalog_name);
 	info->SetSchema(schema);
-	info->table = Identifier(T::Name + suffix);
+	info->SetTableName(Identifier(T::Name + suffix));
 	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	info->temporary = false;
 	for (idx_t i = 0; i < T::ColumnCount; i++) {

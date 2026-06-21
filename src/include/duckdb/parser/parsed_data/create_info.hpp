@@ -11,6 +11,7 @@
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/enums/on_create_conflict.hpp"
 #include "duckdb/common/types/value.hpp"
@@ -33,29 +34,40 @@ public:
 	//! The to-be-created catalog type
 	CatalogType type;
 
-public:
-	//! The catalog is only set when the entry is fully qualified, i.e. schema_path holds [catalog, schema]
-	const Identifier &GetCatalog() const {
-		return schema_path.size() >= 2 ? schema_path[0] : Identifier::Empty();
-	}
-	//! The schema is the last element of the qualification path (empty if the path is empty)
-	const Identifier &GetSchema() const {
-		if (schema_path.size() == 1) {
-			return schema_path[0];
-		}
-		if (schema_path.size() >= 2) {
-			return schema_path[1];
-		}
-		return Identifier::Empty();
-	}
-	void SetCatalog(Identifier catalog_p);
-	void SetSchema(Identifier schema_p);
+	//! The (optionally qualified) name of the entry being created - the bare name plus its catalog/schema path.
+	//! The bare name part is owned/managed by the concrete subclass (via its semantic accessor).
+	QualifiedName name;
 
+public:
+	const Identifier &GetCatalog() const {
+		return name.GetCatalog();
+	}
+	const Identifier &GetSchema() const {
+		return name.GetSchema();
+	}
+	void SetCatalog(Identifier catalog_p) {
+		name.SetCatalog(std::move(catalog_p));
+	}
+	void SetSchema(Identifier schema_p) {
+		name.SetSchema(std::move(schema_p));
+	}
 	const vector<Identifier> &GetSchemaPath() const {
-		return schema_path;
+		return name.GetSchemaPath();
 	}
 	void SetSchemaPath(vector<Identifier> path) {
-		schema_path = std::move(path);
+		name.SetSchemaPath(std::move(path));
+	}
+	//! Assign the full qualified name (used for v2.0+ deserialization)
+	void SetName(QualifiedName name_p) {
+		name = std::move(name_p);
+	}
+	//! The bare entry name (without qualification)
+	const Identifier &GetEntryName() const {
+		return name.name;
+	}
+	//! Assign only the bare entry name
+	void SetEntryName(Identifier entry_name) {
+		name.name = std::move(entry_name);
 	}
 
 public:
@@ -92,11 +104,6 @@ public:
 		throw NotImplementedException("ToString not supported for this type of CreateInfo: '%s'",
 		                              EnumUtil::ToString(info_type));
 	}
-
-private:
-	//! Qualification path: element 0 is the catalog (when present), the remainder are schema levels.
-	//! Today this holds at most [catalog, schema]; (catalog, schema) is derived following the size rules above.
-	vector<Identifier> schema_path;
 };
 
 } // namespace duckdb

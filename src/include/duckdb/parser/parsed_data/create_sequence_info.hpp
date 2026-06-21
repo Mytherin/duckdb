@@ -32,8 +32,13 @@ enum class SequenceInfo : uint8_t {
 struct CreateSequenceInfo : public CreateInfo {
 	CreateSequenceInfo();
 
-	//! Sequence name to create
-	Identifier name;
+	//! Sequence name to create (stored in the base CreateInfo's qualified name)
+	const Identifier &GetSequenceName() const {
+		return CreateInfo::name.name;
+	}
+	void SetSequenceName(Identifier sequence_name) {
+		CreateInfo::name.name = std::move(sequence_name);
+	}
 	//! Usage count of the sequence
 	uint64_t usage_count;
 	//! The increment value

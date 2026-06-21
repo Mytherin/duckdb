@@ -85,11 +85,20 @@ unique_ptr<ParseInfo> ParseInfo::Deserialize(Deserializer &deserializer) {
 void AlterInfo::Serialize(Serializer &serializer) const {
 	ParseInfo::Serialize(serializer);
 	serializer.WriteProperty<AlterType>(200, "type", type);
-	serializer.WritePropertyWithDefault<Identifier>(201, "catalog", GetCatalog());
-	serializer.WritePropertyWithDefault<Identifier>(202, "schema", GetSchema());
-	serializer.WritePropertyWithDefault<Identifier>(203, "name", name);
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<Identifier>(201, "catalog", GetCatalog());
+	}
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<Identifier>(202, "schema", GetSchema());
+	}
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<Identifier>(203, "name", name.name);
+	}
 	serializer.WriteProperty<OnEntryNotFound>(204, "if_not_found", if_not_found);
 	serializer.WritePropertyWithDefault<bool>(205, "allow_internal", allow_internal);
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<QualifiedName>(206, "qualified_name", name);
+	}
 }
 
 unique_ptr<ParseInfo> AlterInfo::Deserialize(Deserializer &deserializer) {
@@ -99,6 +108,7 @@ unique_ptr<ParseInfo> AlterInfo::Deserialize(Deserializer &deserializer) {
 	auto name = deserializer.ReadPropertyWithDefault<Identifier>(203, "name");
 	auto if_not_found = deserializer.ReadProperty<OnEntryNotFound>(204, "if_not_found");
 	auto allow_internal = deserializer.ReadPropertyWithDefault<bool>(205, "allow_internal");
+	auto qualified_name = deserializer.ReadPropertyWithDefault<QualifiedName>(206, "qualified_name");
 	unique_ptr<AlterInfo> result;
 	switch (type) {
 	case AlterType::ALTER_DATABASE:
@@ -124,9 +134,12 @@ unique_ptr<ParseInfo> AlterInfo::Deserialize(Deserializer &deserializer) {
 	}
 	result->SetCatalog(std::move(catalog));
 	result->SetSchema(std::move(schema));
-	result->name = std::move(name);
+	result->SetEntryName(std::move(name));
 	result->if_not_found = if_not_found;
 	result->allow_internal = allow_internal;
+	if (!qualified_name.empty()) {
+		result->SetName(std::move(qualified_name));
+	}
 	return std::move(result);
 }
 
@@ -380,9 +393,15 @@ unique_ptr<ParseInfo> CopyDatabaseInfo::Deserialize(Deserializer &deserializer) 
 
 void CopyInfo::Serialize(Serializer &serializer) const {
 	ParseInfo::Serialize(serializer);
-	serializer.WritePropertyWithDefault<Identifier>(200, "catalog", GetCatalog());
-	serializer.WritePropertyWithDefault<Identifier>(201, "schema", GetSchema());
-	serializer.WritePropertyWithDefault<Identifier>(202, "table", table);
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<Identifier>(200, "catalog", GetCatalog());
+	}
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<Identifier>(201, "schema", GetSchema());
+	}
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<Identifier>(202, "table", table.name);
+	}
 	serializer.WritePropertyWithDefault<vector<Identifier>>(203, "select_list", select_list);
 	serializer.WritePropertyWithDefault<bool>(204, "is_from", is_from);
 	serializer.WritePropertyWithDefault<string>(205, "format", format);
@@ -390,6 +409,9 @@ void CopyInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<case_insensitive_map_t<vector<Value>>>(207, "options", options);
 	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(208, "select_statement", select_statement);
 	serializer.WritePropertyWithDefault<bool>(209, "is_format_auto_detected", is_format_auto_detected);
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<QualifiedName>(210, "qualified_table", table);
+	}
 }
 
 unique_ptr<ParseInfo> CopyInfo::Deserialize(Deserializer &deserializer) {
@@ -398,7 +420,8 @@ unique_ptr<ParseInfo> CopyInfo::Deserialize(Deserializer &deserializer) {
 	result->SetCatalog(std::move(catalog));
 	auto schema = deserializer.ReadPropertyWithDefault<Identifier>(201, "schema");
 	result->SetSchema(std::move(schema));
-	deserializer.ReadPropertyWithDefault<Identifier>(202, "table", result->table);
+	auto table = deserializer.ReadPropertyWithDefault<Identifier>(202, "table");
+	result->SetTableName(std::move(table));
 	deserializer.ReadPropertyWithDefault<vector<Identifier>>(203, "select_list", result->select_list);
 	deserializer.ReadPropertyWithDefault<bool>(204, "is_from", result->is_from);
 	deserializer.ReadPropertyWithDefault<string>(205, "format", result->format);
@@ -406,6 +429,10 @@ unique_ptr<ParseInfo> CopyInfo::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<vector<Value>>>(207, "options", result->options);
 	deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(208, "select_statement", result->select_statement);
 	deserializer.ReadPropertyWithDefault<bool>(209, "is_format_auto_detected", result->is_format_auto_detected);
+	auto qualified_table = deserializer.ReadPropertyWithDefault<QualifiedName>(210, "qualified_table");
+	if (!qualified_table.empty()) {
+		result->SetTable(std::move(qualified_table));
+	}
 	return std::move(result);
 }
 
@@ -434,13 +461,22 @@ unique_ptr<ParseInfo> DisconnectInfo::Deserialize(Deserializer &deserializer) {
 void DropInfo::Serialize(Serializer &serializer) const {
 	ParseInfo::Serialize(serializer);
 	serializer.WriteProperty<CatalogType>(200, "type", type);
-	serializer.WritePropertyWithDefault<Identifier>(201, "catalog", GetCatalog());
-	serializer.WritePropertyWithDefault<Identifier>(202, "schema", GetSchema());
-	serializer.WritePropertyWithDefault<Identifier>(203, "name", name);
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<Identifier>(201, "catalog", GetCatalog());
+	}
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<Identifier>(202, "schema", GetSchema());
+	}
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<Identifier>(203, "name", name.name);
+	}
 	serializer.WriteProperty<OnEntryNotFound>(204, "if_not_found", if_not_found);
 	serializer.WritePropertyWithDefault<bool>(205, "cascade", cascade);
 	serializer.WritePropertyWithDefault<bool>(206, "allow_drop_internal", allow_drop_internal);
 	serializer.WritePropertyWithDefault<unique_ptr<ExtraDropInfo>>(207, "extra_drop_info", extra_drop_info);
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<QualifiedName>(208, "qualified_name", name);
+	}
 }
 
 unique_ptr<ParseInfo> DropInfo::Deserialize(Deserializer &deserializer) {
@@ -450,11 +486,16 @@ unique_ptr<ParseInfo> DropInfo::Deserialize(Deserializer &deserializer) {
 	result->SetCatalog(std::move(catalog));
 	auto schema = deserializer.ReadPropertyWithDefault<Identifier>(202, "schema");
 	result->SetSchema(std::move(schema));
-	deserializer.ReadPropertyWithDefault<Identifier>(203, "name", result->name);
+	auto name = deserializer.ReadPropertyWithDefault<Identifier>(203, "name");
+	result->SetEntryName(std::move(name));
 	deserializer.ReadProperty<OnEntryNotFound>(204, "if_not_found", result->if_not_found);
 	deserializer.ReadPropertyWithDefault<bool>(205, "cascade", result->cascade);
 	deserializer.ReadPropertyWithDefault<bool>(206, "allow_drop_internal", result->allow_drop_internal);
 	deserializer.ReadPropertyWithDefault<unique_ptr<ExtraDropInfo>>(207, "extra_drop_info", result->extra_drop_info);
+	auto qualified_name = deserializer.ReadPropertyWithDefault<QualifiedName>(208, "qualified_name");
+	if (!qualified_name.empty()) {
+		result->SetName(std::move(qualified_name));
+	}
 	return std::move(result);
 }
 

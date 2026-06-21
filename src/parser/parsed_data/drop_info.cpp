@@ -10,29 +10,7 @@ DropInfo::DropInfo() : ParseInfo(TYPE), cascade(false) {
 DropInfo::DropInfo(const DropInfo &info)
     : ParseInfo(info.info_type), type(info.type), name(info.name), if_not_found(info.if_not_found),
       cascade(info.cascade), allow_drop_internal(info.allow_drop_internal),
-      extra_drop_info(info.extra_drop_info ? info.extra_drop_info->Copy() : nullptr), schema_path(info.schema_path) {
-}
-
-void DropInfo::SetCatalog(Identifier catalog_p) {
-	auto schema = GetSchema();
-	schema_path.clear();
-	if (!catalog_p.empty()) {
-		schema_path.push_back(std::move(catalog_p));
-		schema_path.push_back(std::move(schema));
-	} else if (!schema.empty()) {
-		schema_path.push_back(std::move(schema));
-	}
-}
-
-void DropInfo::SetSchema(Identifier schema_p) {
-	auto catalog = GetCatalog();
-	schema_path.clear();
-	if (!catalog.empty()) {
-		schema_path.push_back(std::move(catalog));
-		schema_path.push_back(std::move(schema_p));
-	} else if (!schema_p.empty()) {
-		schema_path.push_back(std::move(schema_p));
-	}
+      extra_drop_info(info.extra_drop_info ? info.extra_drop_info->Copy() : nullptr) {
 }
 
 unique_ptr<DropInfo> DropInfo::Copy() const {
@@ -43,7 +21,7 @@ string DropInfo::ToString() const {
 	string result = "";
 	if (type == CatalogType::PREPARED_STATEMENT) {
 		result += "DEALLOCATE PREPARE ";
-		result += SQLIdentifier(name);
+		result += SQLIdentifier(name.name);
 	} else {
 		result += "DROP";
 		result += " " + ParseInfo::TypeToString(type);
@@ -51,7 +29,7 @@ string DropInfo::ToString() const {
 			result += " IF EXISTS";
 		}
 		result += " ";
-		result += QualifierToString(GetSchemaPath(), name);
+		result += name.ToString();
 		if (type == CatalogType::TRIGGER_ENTRY && extra_drop_info) {
 			auto &trigger_info = extra_drop_info->Cast<ExtraDropTriggerInfo>();
 			if (trigger_info.base_table) {

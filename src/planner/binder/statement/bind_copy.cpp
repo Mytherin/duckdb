@@ -514,7 +514,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt, const CopyFunction &fun
 	// generate an insert statement for the to-be-inserted table
 	InsertStatement insert;
 	auto &insert_node = *insert.node;
-	insert_node.table = stmt.info->table;
+	insert_node.table.name = stmt.info->table.name;
 	insert_node.SetSchemaPath(stmt.info->GetSchemaPath());
 	insert_node.columns = stmt.info->select_list;
 
@@ -530,7 +530,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt, const CopyFunction &fun
 	BindSchemaOrCatalog(copy_catalog, copy_schema);
 	stmt.info->SetCatalog(copy_catalog);
 	stmt.info->SetSchema(copy_schema);
-	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, copy_catalog, copy_schema, stmt.info->table);
+	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, copy_catalog, copy_schema, stmt.info->table.name);
 	physical_index_vector_t<idx_t> column_index_map;
 	vector<LogicalIndex> named_column_map;
 	vector<LogicalType> expected_types;
@@ -659,7 +659,7 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 		auto ref = make_uniq<BaseTableRef>();
 		ref->catalog_name = stmt.info->GetCatalog();
 		ref->schema_name = stmt.info->GetSchema();
-		ref->table_name = stmt.info->table;
+		ref->table_name = stmt.info->table.name;
 
 		auto statement = make_uniq<SelectNode>();
 		statement->from_table = std::move(ref);

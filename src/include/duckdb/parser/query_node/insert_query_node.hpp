@@ -10,6 +10,7 @@
 
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/parser/query_node.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/tableref.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 
@@ -36,8 +37,8 @@ public:
 	//! Column names to insert into
 	vector<Identifier> columns;
 
-	//! Table name to insert to
-	Identifier table;
+	//! The (optionally qualified) table name to insert to - the bare name plus its catalog/schema path
+	QualifiedName table;
 
 	//! keep track of optional returningList if statement contains a RETURNING keyword
 	vector<unique_ptr<ParsedExpression>> returning_list;
@@ -52,28 +53,31 @@ public:
 	InsertColumnOrder column_order;
 
 public:
-	//! The catalog is only set when fully qualified, i.e. schema_path holds [catalog, schema]
 	const Identifier &GetCatalog() const {
-		return schema_path.size() >= 2 ? schema_path[0] : Identifier::Empty();
+		return table.GetCatalog();
 	}
-	//! The schema is the last element of the qualification path (empty if the path is empty)
 	const Identifier &GetSchema() const {
-		if (schema_path.size() == 1) {
-			return schema_path[0];
-		}
-		if (schema_path.size() >= 2) {
-			return schema_path[1];
-		}
-		return Identifier::Empty();
+		return table.GetSchema();
 	}
-	void SetCatalog(Identifier catalog_p);
-	void SetSchema(Identifier schema_p);
-
+	void SetCatalog(Identifier catalog_p) {
+		table.SetCatalog(std::move(catalog_p));
+	}
+	void SetSchema(Identifier schema_p) {
+		table.SetSchema(std::move(schema_p));
+	}
 	const vector<Identifier> &GetSchemaPath() const {
-		return schema_path;
+		return table.GetSchemaPath();
 	}
 	void SetSchemaPath(vector<Identifier> path) {
-		schema_path = std::move(path);
+		table.SetSchemaPath(std::move(path));
+	}
+	//! Assign the full qualified table name (used for v2.0+ deserialization)
+	void SetTable(QualifiedName table_p) {
+		table = std::move(table_p);
+	}
+	//! Assign only the bare table name (used for legacy deserialization)
+	void SetTableName(Identifier table_name) {
+		table.name = std::move(table_name);
 	}
 
 	string ToString() const override;
@@ -86,11 +90,6 @@ public:
 	//! If the INSERT statement is inserted DIRECTLY from a values list (i.e. INSERT INTO tbl VALUES (...)) this returns
 	//! the expression list Otherwise, this returns NULL
 	optional_ptr<ExpressionListRef> GetValuesList() const;
-
-private:
-	//! Qualification path: element 0 is the catalog (when present), the remainder are schema levels.
-	//! Today this holds at most [catalog, schema]; (catalog, schema) is derived following the size rules above.
-	vector<Identifier> schema_path;
 };
 
 } // namespace duckdb

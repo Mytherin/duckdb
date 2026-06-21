@@ -17,7 +17,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateMacroStmt(
 		info->SetCatalog(qualified_name.GetCatalog());
 		info->SetSchema(qualified_name.GetSchema());
 	}
-	info->name = qualified_name.name;
+	info->SetFunctionName(qualified_name.name);
 
 	info->on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	for (auto &macro_function : macro_definition) {

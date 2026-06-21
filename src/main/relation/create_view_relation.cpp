@@ -27,7 +27,7 @@ BoundStatement CreateViewRelation::Bind(Binder &binder) {
 	CreateStatement stmt;
 	auto info = make_uniq<CreateViewInfo>();
 	info->query = std::move(select);
-	info->view_name = view_name;
+	info->SetViewName(view_name);
 	info->temporary = temporary;
 	info->SetSchema(schema_name);
 	info->on_conflict = replace ? OnCreateConflict::REPLACE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;

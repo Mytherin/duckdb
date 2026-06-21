@@ -281,12 +281,18 @@
       {
         "id": 202,
         "name": "table",
-        "type": "Identifier"
+        "type": "Identifier",
+        "legacy": true,
+        "version": "v2.0.0",
+        "serialize_property": "table.name",
+        "deserialize_setter": "SetTableName"
       },
       {
         "id": 203,
         "name": "schema",
         "type": "Identifier",
+        "legacy": true,
+        "version": "v2.0.0",
         "serialize_property": "GetSchema()",
         "deserialize_setter": "SetSchema"
       },
@@ -294,6 +300,8 @@
         "id": 204,
         "name": "catalog",
         "type": "Identifier",
+        "legacy": true,
+        "version": "v2.0.0",
         "serialize_property": "GetCatalog()",
         "deserialize_setter": "SetCatalog"
       },
@@ -323,6 +331,15 @@
         "name": "column_order",
         "type": "InsertColumnOrder",
         "default": "InsertColumnOrder::INSERT_BY_POSITION"
+      },
+      {
+        "id": 210,
+        "name": "qualified_table",
+        "type": "QualifiedName",
+        "version": "v2.0.0",
+        "serialize_property": "table",
+        "deserialize_setter": "SetTable",
+        "deserialize_if_present": true
       }
     ]
   },

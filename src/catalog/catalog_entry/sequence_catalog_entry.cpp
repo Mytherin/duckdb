@@ -21,7 +21,7 @@ SequenceData::SequenceData(CreateSequenceInfo &info)
 }
 
 SequenceCatalogEntry::SequenceCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateSequenceInfo &info)
-    : StandardEntry(CatalogType::SEQUENCE_ENTRY, schema, catalog, info.name), data(info) {
+    : StandardEntry(CatalogType::SEQUENCE_ENTRY, schema, catalog, info.GetSequenceName()), data(info) {
 	this->temporary = info.temporary;
 	this->comment = info.comment;
 	this->tags = info.tags;
@@ -95,7 +95,7 @@ unique_ptr<CreateInfo> SequenceCatalogEntry::GetInfo() const {
 	auto result = make_uniq<CreateSequenceInfo>();
 	result->SetCatalog(catalog.GetName());
 	result->SetSchema(schema.name);
-	result->name = name;
+	result->SetSequenceName(name);
 	result->usage_count = seq_data.usage_count;
 	result->increment = seq_data.increment;
 	result->min_value = seq_data.min_value;

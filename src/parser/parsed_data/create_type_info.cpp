@@ -6,8 +6,8 @@ namespace duckdb {
 CreateTypeInfo::CreateTypeInfo() : CreateInfo(CatalogType::TYPE_ENTRY), bind_function(nullptr) {
 }
 CreateTypeInfo::CreateTypeInfo(string name_p, LogicalType type_p, bind_logical_type_function_t bind_function_p)
-    : CreateInfo(CatalogType::TYPE_ENTRY), name(std::move(name_p)), type(std::move(type_p)),
-      bind_function(bind_function_p) {
+    : CreateInfo(CatalogType::TYPE_ENTRY), type(std::move(type_p)), bind_function(bind_function_p) {
+	SetTypeName(Identifier(std::move(name_p)));
 }
 
 unique_ptr<CreateInfo> CreateTypeInfo::Copy() const {
@@ -24,7 +24,7 @@ unique_ptr<CreateInfo> CreateTypeInfo::Copy() const {
 
 string CreateTypeInfo::ToString() const {
 	string result = GetCreatePrefix("TYPE");
-	result += QualifierToString(temporary ? Identifier() : GetCatalog(), GetSchema(), name);
+	result += QualifierToString(temporary ? Identifier() : GetCatalog(), GetSchema(), GetTypeName());
 	if (type.id() == LogicalTypeId::ENUM) {
 		auto &values_insert_order = EnumType::GetValuesInsertOrder(type);
 		idx_t size = EnumType::GetSize(type);

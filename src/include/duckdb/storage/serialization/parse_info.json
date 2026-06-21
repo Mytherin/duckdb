@@ -31,6 +31,8 @@
         "id": 201,
         "name": "catalog",
         "type": "Identifier",
+        "legacy": true,
+        "version": "v2.0.0",
         "serialize_property": "GetCatalog()",
         "deserialize_setter": "SetCatalog"
       },
@@ -38,13 +40,19 @@
         "id": 202,
         "name": "schema",
         "type": "Identifier",
+        "legacy": true,
+        "version": "v2.0.0",
         "serialize_property": "GetSchema()",
         "deserialize_setter": "SetSchema"
       },
       {
         "id": 203,
         "name": "name",
-        "type": "Identifier"
+        "type": "Identifier",
+        "legacy": true,
+        "version": "v2.0.0",
+        "serialize_property": "name.name",
+        "deserialize_setter": "SetEntryName"
       },
       {
         "id": 204,
@@ -55,6 +63,15 @@
         "id": 205,
         "name": "allow_internal",
         "type": "bool"
+      },
+      {
+        "id": 206,
+        "name": "qualified_name",
+        "type": "QualifiedName",
+        "version": "v2.0.0",
+        "serialize_property": "name",
+        "deserialize_setter": "SetName",
+        "deserialize_if_present": true
       }
     ]
   },
@@ -490,6 +507,8 @@
         "id": 200,
         "name": "catalog",
         "type": "Identifier",
+        "legacy": true,
+        "version": "v2.0.0",
         "serialize_property": "GetCatalog()",
         "deserialize_setter": "SetCatalog"
       },
@@ -497,13 +516,19 @@
         "id": 201,
         "name": "schema",
         "type": "Identifier",
+        "legacy": true,
+        "version": "v2.0.0",
         "serialize_property": "GetSchema()",
         "deserialize_setter": "SetSchema"
       },
       {
         "id": 202,
         "name": "table",
-        "type": "Identifier"
+        "type": "Identifier",
+        "legacy": true,
+        "version": "v2.0.0",
+        "serialize_property": "table.name",
+        "deserialize_setter": "SetTableName"
       },
       {
         "id": 203,
@@ -539,6 +564,15 @@
         "id": 209,
         "name": "is_format_auto_detected",
         "type": "bool"
+      },
+      {
+        "id": 210,
+        "name": "qualified_table",
+        "type": "QualifiedName",
+        "version": "v2.0.0",
+        "serialize_property": "table",
+        "deserialize_setter": "SetTable",
+        "deserialize_if_present": true
       }
     ]
   },
@@ -613,6 +647,8 @@
         "id": 201,
         "name": "catalog",
         "type": "Identifier",
+        "legacy": true,
+        "version": "v2.0.0",
         "serialize_property": "GetCatalog()",
         "deserialize_setter": "SetCatalog"
       },
@@ -620,13 +656,19 @@
         "id": 202,
         "name": "schema",
         "type": "Identifier",
+        "legacy": true,
+        "version": "v2.0.0",
         "serialize_property": "GetSchema()",
         "deserialize_setter": "SetSchema"
       },
       {
         "id": 203,
         "name": "name",
-        "type": "Identifier"
+        "type": "Identifier",
+        "legacy": true,
+        "version": "v2.0.0",
+        "serialize_property": "name.name",
+        "deserialize_setter": "SetEntryName"
       },
       {
         "id": 204,
@@ -647,6 +689,15 @@
         "id": 207,
         "name": "extra_drop_info",
         "type": "unique_ptr<ExtraDropInfo>"
+      },
+      {
+        "id": 208,
+        "name": "qualified_name",
+        "type": "QualifiedName",
+        "version": "v2.0.0",
+        "serialize_property": "name",
+        "deserialize_setter": "SetName",
+        "deserialize_if_present": true
       }
     ]
   },

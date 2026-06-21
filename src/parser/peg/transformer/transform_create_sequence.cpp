@@ -10,7 +10,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSequenceStmt(
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateSequenceInfo>();
 	info->SetSchemaPath(qualified_name.GetSchemaPath());
-	info->name = qualified_name.name;
+	info->SetSequenceName(qualified_name.name);
 	info->on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	case_insensitive_map_t<unique_ptr<SequenceOption>> sequence_options;
 	if (sequence_option) {

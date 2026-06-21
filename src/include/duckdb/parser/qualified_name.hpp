@@ -9,14 +9,21 @@
 #pragma once
 
 #include "duckdb/common/string.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/planner/binding_alias.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 
 namespace duckdb {
+class Serializer;
+class Deserializer;
 
 struct QualifiedName {
 	QualifiedName() = default;
 	QualifiedName(Identifier catalog, Identifier schema, Identifier name);
+	QualifiedName(vector<Identifier> schema_path, Identifier name);
+	//! Construct an unqualified name (no catalog/schema). Explicit: assigning a bare Identifier to a QualifiedName
+	//! would silently drop any existing qualification, so the conversion must be deliberate at the call site.
+	explicit QualifiedName(Identifier name);
 
 public:
 	//! The entry name (not part of the catalog/schema qualification pair)
@@ -47,11 +54,25 @@ public:
 		schema_path = std::move(path);
 	}
 
+	//! Whether the qualified name is fully empty (no name and no qualification)
+	bool empty() const { // NOLINT: match std::string interface
+		return name.empty() && schema_path.empty();
+	}
+
+	bool operator==(const QualifiedName &rhs) const;
+	bool operator!=(const QualifiedName &rhs) const {
+		return !(*this == rhs);
+	}
+	hash_t Hash() const;
+
 	//! Parse the (optional) schema and a name from a string in the format of e.g. "schema"."table"; if there is no dot
 	//! the schema will be set to INVALID_SCHEMA
 	static QualifiedName Parse(const string &input);
 	static vector<Identifier> ParseComponents(const string &input);
 	string ToString() const;
+
+	void Serialize(Serializer &serializer) const;
+	static QualifiedName Deserialize(Deserializer &deserializer);
 
 private:
 	//! Qualification path: element 0 is the catalog (when present), the remainder are schema levels.

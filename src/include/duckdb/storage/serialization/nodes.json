@@ -1031,6 +1031,26 @@
     "pointer_type": "none"
   },
   {
+    "class": "QualifiedName",
+    "includes": [
+      "duckdb/parser/qualified_name.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "schema_path",
+        "type": "vector<Identifier>"
+      },
+      {
+        "id": 101,
+        "name": "name",
+        "type": "Identifier"
+      }
+    ],
+    "constructor": ["schema_path", "name"],
+    "pointer_type": "none"
+  },
+  {
     "class": "QualifiedColumnName",
     "includes": [
       "duckdb/parser/qualified_name.hpp"

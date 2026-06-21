@@ -24,8 +24,13 @@ struct CreateIndexInfo : public CreateInfo {
 
 	//! The table name of the underlying table
 	Identifier table;
-	//! The name of the index
-	Identifier index_name;
+	//! The name of the index (stored in the base CreateInfo's qualified name)
+	const Identifier &GetIndexName() const {
+		return name.name;
+	}
+	void SetIndexName(Identifier index_name_p) {
+		name.name = std::move(index_name_p);
+	}
 
 	//! Options values (WITH ...)
 	case_insensitive_map_t<Value> options;

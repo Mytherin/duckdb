@@ -274,7 +274,7 @@ PEGTransformerFactory::TransformQualifiedSimpleType(PEGTransformer &transformer,
 	if (type_modifiers) {
 		modifiers = std::move(*type_modifiers);
 	}
-	return make_uniq<TypeExpression>(result.GetCatalog(), result.GetSchema(), result.name, std::move(modifiers));
+	return make_uniq<TypeExpression>(result, std::move(modifiers));
 }
 
 QualifiedName PEGTransformerFactory::TransformTypeNameAsQualifiedName(PEGTransformer &transformer,

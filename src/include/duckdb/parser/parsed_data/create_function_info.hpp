@@ -29,8 +29,13 @@ struct FunctionDescription {
 struct CreateFunctionInfo : public CreateInfo {
 	explicit CreateFunctionInfo(CatalogType type, Identifier schema = Identifier::DefaultSchema());
 
-	//! Function name
-	Identifier name;
+	//! Function name (stored in the base CreateInfo's qualified name)
+	const Identifier &GetFunctionName() const {
+		return CreateInfo::name.name;
+	}
+	void SetFunctionName(Identifier function_name) {
+		CreateInfo::name.name = std::move(function_name);
+	}
 	//! The function name of which this function is an alias
 	Identifier alias_of;
 	//! Function description

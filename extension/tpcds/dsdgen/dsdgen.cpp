@@ -24,7 +24,7 @@ static void CreateTPCDSTable(ClientContext &context, const Identifier &catalog_n
 	auto info = make_uniq<CreateTableInfo>();
 	info->SetCatalog(catalog_name);
 	info->SetSchema(schema);
-	info->table = Identifier(T::Name + suffix);
+	info->SetTableName(Identifier(T::Name + suffix));
 	info->on_conflict = overwrite ? OnCreateConflict::REPLACE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	info->temporary = false;
 	for (idx_t i = 0; i < T::ColumnCount; i++) {

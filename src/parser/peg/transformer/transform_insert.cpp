@@ -19,7 +19,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformInsertStatement(
 	}
 	node.SetCatalog(insert_target->catalog_name);
 	node.SetSchema(insert_target->schema_name);
-	node.table = insert_target->table_name;
+	node.table.name = insert_target->table_name;
 	node.column_order = by_name_or_position ? *by_name_or_position : InsertColumnOrder::INSERT_BY_POSITION;
 	if (insert_column_list) {
 		node.columns = StringsToIdentifiers(*insert_column_list);

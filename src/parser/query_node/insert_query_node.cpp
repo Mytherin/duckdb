@@ -10,29 +10,7 @@ namespace duckdb {
 InsertQueryNode::InsertQueryNode()
     : QueryNode(QueryNodeType::INSERT_QUERY_NODE), column_order(InsertColumnOrder::INSERT_BY_POSITION) {
 	// default qualification: schema = "main", catalog unset
-	schema_path.push_back(Identifier::DefaultSchema());
-}
-
-void InsertQueryNode::SetCatalog(Identifier catalog_p) {
-	auto schema = GetSchema();
-	schema_path.clear();
-	if (!catalog_p.empty()) {
-		schema_path.push_back(std::move(catalog_p));
-		schema_path.push_back(std::move(schema));
-	} else if (!schema.empty()) {
-		schema_path.push_back(std::move(schema));
-	}
-}
-
-void InsertQueryNode::SetSchema(Identifier schema_p) {
-	auto catalog = GetCatalog();
-	schema_path.clear();
-	if (!catalog.empty()) {
-		schema_path.push_back(std::move(catalog));
-		schema_path.push_back(std::move(schema_p));
-	} else if (!schema_p.empty()) {
-		schema_path.push_back(std::move(schema_p));
-	}
+	table.SetSchema(Identifier::DefaultSchema());
 }
 
 string InsertQueryNode::ToString() const {
@@ -52,7 +30,7 @@ string InsertQueryNode::ToString() const {
 	if (!GetSchema().empty()) {
 		result += SQLIdentifier(GetSchema()) + ".";
 	}
-	result += SQLIdentifier(table);
+	result += SQLIdentifier(table.name);
 	// Write the (optional) alias of the insert target
 	if (table_ref && !table_ref->alias.empty()) {
 		result += StringUtil::Format(" AS %s", SQLIdentifier(table_ref->alias));

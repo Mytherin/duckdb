@@ -25,7 +25,7 @@ SetColumnCommentInfo::SetColumnCommentInfo(vector<Identifier> schema_path, Ident
 }
 
 unique_ptr<AlterInfo> SetColumnCommentInfo::Copy() const {
-	auto result = make_uniq<SetColumnCommentInfo>(GetSchemaPath(), name, column_name, comment_value, if_not_found);
+	auto result = make_uniq<SetColumnCommentInfo>(GetSchemaPath(), name.name, column_name, comment_value, if_not_found);
 	result->type = type;
 	return std::move(result);
 }
@@ -35,7 +35,7 @@ string SetColumnCommentInfo::ToString() const {
 
 	D_ASSERT(catalog_entry_type == CatalogType::INVALID);
 	result += "COMMENT ON COLUMN ";
-	result += QualifierToString(GetSchemaPath(), name);
+	result += name.ToString();
 	result += "." + SQLIdentifier(column_name);
 	result += " IS ";
 	result += comment_value.ToSQLString();
@@ -44,7 +44,7 @@ string SetColumnCommentInfo::ToString() const {
 }
 
 optional_ptr<CatalogEntry> SetColumnCommentInfo::TryResolveCatalogEntry(CatalogEntryRetriever &retriever) {
-	EntryLookupInfo lookup_info(CatalogType::TABLE_ENTRY, name);
+	EntryLookupInfo lookup_info(CatalogType::TABLE_ENTRY, name.name);
 	auto entry = retriever.GetEntry(GetCatalog(), GetSchema(), lookup_info, if_not_found);
 
 	if (entry) {

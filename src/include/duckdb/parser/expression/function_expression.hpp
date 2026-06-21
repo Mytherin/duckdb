@@ -11,6 +11,7 @@
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 
@@ -80,6 +81,16 @@ public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::FUNCTION;
 
 public:
+	//! Primary constructor: the (optionally qualified) function name as a single QualifiedName
+	DUCKDB_API FunctionExpression(QualifiedName name, vector<unique_ptr<ParsedExpression>> children,
+	                              unique_ptr<ParsedExpression> filter = nullptr,
+	                              unique_ptr<OrderModifier> order_bys = nullptr, bool distinct = false,
+	                              bool is_operator = false, bool export_state = false);
+	DUCKDB_API FunctionExpression(QualifiedName name, vector<FunctionArgument> children,
+	                              unique_ptr<ParsedExpression> filter = nullptr,
+	                              unique_ptr<OrderModifier> order_bys = nullptr, bool distinct = false,
+	                              bool is_operator = false, bool export_state = false);
+	//! Convenience overloads that build the QualifiedName from a separate catalog/schema/name or a bare name
 	DUCKDB_API FunctionExpression(Identifier catalog_name, Identifier schema_name, const Identifier &function_name,
 	                              vector<unique_ptr<ParsedExpression>> children,
 	                              unique_ptr<ParsedExpression> filter = nullptr,
@@ -99,36 +110,38 @@ public:
 	                              bool is_operator = false, bool export_state = false);
 
 public:
-	//! The catalog is only set when the function is fully qualified, i.e. schema_path holds [catalog, schema]
+	const QualifiedName &GetQualifiedName() const {
+		return name;
+	}
+	void SetQualifiedName(QualifiedName name_p) {
+		name = std::move(name_p);
+	}
 	const Identifier &Catalog() const {
-		return schema_path.size() >= 2 ? schema_path[0] : Identifier::Empty();
+		return name.GetCatalog();
 	}
-	//! The schema is the last element of the qualification path (empty if the path is empty)
 	const Identifier &Schema() const {
-		if (schema_path.size() == 1) {
-			return schema_path[0];
-		}
-		if (schema_path.size() >= 2) {
-			return schema_path[1];
-		}
-		return Identifier::Empty();
+		return name.GetSchema();
 	}
-	void SetCatalog(Identifier catalog_p);
-	void SetSchema(Identifier schema_p);
+	void SetCatalog(Identifier catalog_p) {
+		name.SetCatalog(std::move(catalog_p));
+	}
+	void SetSchema(Identifier schema_p) {
+		name.SetSchema(std::move(schema_p));
+	}
 	const vector<Identifier> &GetSchemaPath() const {
-		return schema_path;
+		return name.GetSchemaPath();
 	}
 	void SetSchemaPath(vector<Identifier> path) {
-		schema_path = std::move(path);
+		name.SetSchemaPath(std::move(path));
 	}
 	const Identifier &FunctionName() const {
-		return function_name;
+		return name.name;
 	}
 	Identifier &FunctionNameMutable() {
-		return function_name;
+		return name.name;
 	}
 	void SetFunctionName(string function_name_p) {
-		function_name = Identifier(std::move(function_name_p));
+		name.name = Identifier(std::move(function_name_p));
 	}
 	bool IsOperator() const {
 		return is_operator;
@@ -188,11 +201,8 @@ public:
 	}
 
 private:
-	//! Qualification path: element 0 is the catalog (when present), the remainder are schema levels.
-	//! Today this holds at most [catalog, schema]; (catalog, schema) is derived following the size rules above.
-	vector<Identifier> schema_path;
-	//! Function name
-	Identifier function_name;
+	//! The (optionally qualified) function name - the bare name plus its catalog/schema qualification path
+	QualifiedName name;
 	//! Whether or not the function is an operator, only used for rendering
 	bool is_operator;
 	//! List of arguments to the function

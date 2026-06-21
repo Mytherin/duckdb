@@ -325,10 +325,9 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 			throw ParserException("Unknown ordered aggregate \"%s\".", qualified_function.name);
 		}
 	}
-	auto result =
-	    make_uniq<FunctionExpression>(qualified_function.GetCatalog(), qualified_function.GetSchema(),
-	                                  Identifier(lowercase_name), std::move(function_children), std::move(filter_expr),
-	                                  std::move(order_modifier), distinct, false, export_clause);
+	auto result = make_uniq<FunctionExpression>(
+	    QualifiedName(qualified_function.GetSchemaPath(), Identifier(lowercase_name)), std::move(function_children),
+	    std::move(filter_expr), std::move(order_modifier), distinct, false, export_clause);
 
 	return std::move(result);
 }

@@ -18,6 +18,8 @@
         "id": 101,
         "name": "catalog",
         "type": "Identifier",
+        "legacy": true,
+        "version": "v2.0.0",
         "serialize_property": "GetCatalog()",
         "deserialize_setter": "SetCatalog"
       },
@@ -25,6 +27,8 @@
         "id": 102,
         "name": "schema",
         "type": "Identifier",
+        "legacy": true,
+        "version": "v2.0.0",
         "serialize_property": "GetSchema()",
         "deserialize_setter": "SetSchema"
       },
@@ -71,6 +75,15 @@
         "id": 110,
         "name": "extension_name",
         "type": "Identifier"
+      },
+      {
+        "id": 111,
+        "name": "qualified_name",
+        "type": "QualifiedName",
+        "version": "v2.0.0",
+        "serialize_property": "name",
+        "deserialize_setter": "SetName",
+        "deserialize_if_present": true
       }
     ]
   },
@@ -86,7 +99,11 @@
         "id": 200,
         "name": "name",
         "type": "Identifier",
-        "property": "index_name"
+        "property": "index_name",
+        "legacy": true,
+        "version": "v2.0.0",
+        "serialize_property": "GetIndexName()",
+        "deserialize_setter": "SetIndexName"
       },
       {
         "id": 201,
@@ -148,7 +165,11 @@
       {
         "id": 200,
         "name": "table",
-        "type": "Identifier"
+        "type": "Identifier",
+        "legacy": true,
+        "version": "v2.0.0",
+        "serialize_property": "GetTableName()",
+        "deserialize_setter": "SetTableName"
       },
       {
         "id": 201,
@@ -203,7 +224,11 @@
       {
         "id": 200,
         "name": "view_name",
-        "type": "Identifier"
+        "type": "Identifier",
+        "legacy": true,
+        "version": "v2.0.0",
+        "serialize_property": "GetViewName()",
+        "deserialize_setter": "SetViewName"
       },
       {
         "id": 201,
@@ -254,7 +279,11 @@
       {
         "id": 200,
         "name": "name",
-        "type": "Identifier"
+        "type": "Identifier",
+        "legacy": true,
+        "version": "v2.0.0",
+        "serialize_property": "GetTypeName()",
+        "deserialize_setter": "SetTypeName"
       },
       {
         "id": 201,
@@ -275,7 +304,11 @@
       {
         "id": 200,
         "name": "name",
-        "type": "Identifier"
+        "type": "Identifier",
+        "legacy": true,
+        "version": "v2.0.0",
+        "serialize_property": "GetFunctionName()",
+        "deserialize_setter": "SetFunctionName"
       },
       {
         "id": 201,
@@ -303,7 +336,11 @@
       {
         "id": 200,
         "name": "name",
-        "type": "Identifier"
+        "type": "Identifier",
+        "legacy": true,
+        "version": "v2.0.0",
+        "serialize_property": "GetSequenceName()",
+        "deserialize_setter": "SetSequenceName"
       },
       {
         "id": 201,
@@ -354,7 +391,11 @@
       {
         "id": 200,
         "name": "trigger_name",
-        "type": "Identifier"
+        "type": "Identifier",
+        "legacy": true,
+        "version": "v2.0.0",
+        "serialize_property": "GetTriggerName()",
+        "deserialize_setter": "SetTriggerName"
       },
       {
         "id": 201,

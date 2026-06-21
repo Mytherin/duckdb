@@ -1,39 +1,39 @@
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
+#include "duckdb/common/types/hash.hpp"
 
 namespace duckdb {
 
-QualifiedName::QualifiedName(Identifier catalog, Identifier schema, Identifier name) : name(std::move(name)) {
-	if (!catalog.empty()) {
-		// fully qualified - the path holds [catalog, schema]
-		schema_path.push_back(std::move(catalog));
-		schema_path.push_back(std::move(schema));
-	} else if (!schema.empty()) {
-		schema_path.push_back(std::move(schema));
-	}
+QualifiedName::QualifiedName(Identifier catalog, Identifier schema, Identifier name)
+    : name(std::move(name)), schema_path(SchemaPathFromCatalogSchema(std::move(catalog), std::move(schema))) {
+}
+
+QualifiedName::QualifiedName(vector<Identifier> schema_path_p, Identifier name)
+    : name(std::move(name)), schema_path(std::move(schema_path_p)) {
+}
+
+QualifiedName::QualifiedName(Identifier name) : name(std::move(name)) {
 }
 
 void QualifiedName::SetCatalog(Identifier catalog_p) {
-	auto schema = GetSchema();
-	schema_path.clear();
-	if (!catalog_p.empty()) {
-		schema_path.push_back(std::move(catalog_p));
-		schema_path.push_back(std::move(schema));
-	} else if (!schema.empty()) {
-		schema_path.push_back(std::move(schema));
-	}
+	schema_path = SchemaPathFromCatalogSchema(std::move(catalog_p), GetSchema());
 }
 
 void QualifiedName::SetSchema(Identifier schema_p) {
-	auto catalog = GetCatalog();
-	schema_path.clear();
-	if (!catalog.empty()) {
-		schema_path.push_back(std::move(catalog));
-		schema_path.push_back(std::move(schema_p));
-	} else if (!schema_p.empty()) {
-		schema_path.push_back(std::move(schema_p));
+	schema_path = SchemaPathFromCatalogSchema(GetCatalog(), std::move(schema_p));
+}
+
+bool QualifiedName::operator==(const QualifiedName &rhs) const {
+	return name == rhs.name && schema_path == rhs.schema_path;
+}
+
+hash_t QualifiedName::Hash() const {
+	hash_t result = name.Hash();
+	for (auto &part : schema_path) {
+		result = CombineHash(result, part.Hash());
 	}
+	return result;
 }
 
 string QualifiedName::ToString() const {

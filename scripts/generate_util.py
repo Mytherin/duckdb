@@ -422,7 +422,7 @@ def generate_member_hash(member, indent='\t'):
     if 'qualified_column_map_t' in type_str or 'qualified_column_set_t' in type_str:
         return []
 
-    if type_str in ('Identifier', 'duckdb::Identifier'):
+    if type_str in ('Identifier', 'duckdb::Identifier', 'QualifiedName'):
         return [f'{indent}hash = CombineHash(hash, {field_name}.Hash());']
     if type_str == 'vector<Identifier>':
         return [

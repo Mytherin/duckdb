@@ -318,10 +318,12 @@ void TypeExpression::Serialize(Serializer &serializer) const {
 	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WritePropertyWithDefault<Identifier>(201, "schema", GetSchema());
 	}
-	serializer.WritePropertyWithDefault<Identifier>(202, "type_name", type_name);
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<Identifier>(202, "type_name", GetTypeName());
+	}
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(203, "children", children);
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
-		serializer.WritePropertyWithDefault<vector<Identifier>>(204, "schema_path", schema_path);
+		serializer.WritePropertyWithDefault<QualifiedName>(204, "name", name);
 	}
 }
 
@@ -331,11 +333,12 @@ unique_ptr<ParsedExpression> TypeExpression::Deserialize(Deserializer &deseriali
 	result->SetCatalog(std::move(catalog));
 	auto schema = deserializer.ReadPropertyWithDefault<Identifier>(201, "schema");
 	result->SetSchema(std::move(schema));
-	deserializer.ReadPropertyWithDefault<Identifier>(202, "type_name", result->type_name);
+	auto type_name = deserializer.ReadPropertyWithDefault<Identifier>(202, "type_name");
+	result->SetTypeName(std::move(type_name));
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(203, "children", result->children);
-	auto schema_path = deserializer.ReadPropertyWithDefault<vector<Identifier>>(204, "schema_path");
-	if (!schema_path.empty()) {
-		result->SetSchemaPath(std::move(schema_path));
+	auto name = deserializer.ReadPropertyWithDefault<QualifiedName>(204, "name");
+	if (!name.empty()) {
+		result->SetQualifiedName(std::move(name));
 	}
 	return std::move(result);
 }

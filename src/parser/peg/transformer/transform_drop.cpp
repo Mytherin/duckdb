@@ -25,7 +25,7 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropTable(PEGTransform
 	auto base_table = std::move(base_table_name[0]);
 	info->SetCatalog(base_table->catalog_name);
 	info->SetSchema(base_table->schema_name);
-	info->name = base_table->table_name;
+	info->name.name = base_table->table_name;
 	info->type = table_or_view;
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	result->info = std::move(info);
@@ -53,7 +53,7 @@ PEGTransformerFactory::TransformDropTableFunction(PEGTransformer &transformer, c
 	if (table_function_name.size() > 1) {
 		throw NotImplementedException("Can only drop one object at a time");
 	}
-	info->name = table_function_name[0];
+	info->name.name = table_function_name[0];
 	info->SetCatalog(INVALID_CATALOG);
 	info->SetSchema(INVALID_SCHEMA);
 	info->type = comment_macro_table;
@@ -75,7 +75,7 @@ PEGTransformerFactory::TransformDropFunction(PEGTransformer &transformer, const 
 	const auto &function = function_identifier[0];
 	info->SetCatalog(function.GetCatalog().empty() ? INVALID_CATALOG : function.GetCatalog());
 	info->SetSchema(function.GetSchema());
-	info->name = function.name;
+	info->name.name = function.name;
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	info->type = catalog_type;
 	result->info = std::move(info);
@@ -92,7 +92,7 @@ PEGTransformerFactory::TransformDropSchema(PEGTransformer &transformer, const op
 	}
 	const auto &schema = qualified_schema_name[0];
 	info->SetCatalog(schema.GetCatalog());
-	info->name = schema.GetSchema();
+	info->name.name = schema.GetSchema();
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	info->type = CatalogType::SCHEMA_ENTRY;
 	result->info = std::move(info);
@@ -120,7 +120,7 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropIndex(PEGTransform
 	}
 	const auto &index = qualified_index_name[0];
 	info->SetSchemaPath(index.GetSchemaPath());
-	info->name = index.name;
+	info->name.name = index.name;
 	info->type = CatalogType::INDEX_ENTRY;
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	result->info = std::move(info);
@@ -159,7 +159,7 @@ PEGTransformerFactory::TransformDropSequence(PEGTransformer &transformer, const 
 		info->SetCatalog(sequence.GetCatalog());
 		info->SetSchema(sequence.GetSchema());
 	}
-	info->name = sequence.name;
+	info->name.name = sequence.name;
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	info->type = CatalogType::SEQUENCE_ENTRY;
 	result->info = std::move(info);
@@ -183,7 +183,7 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropCollation(PEGTrans
 	auto collation = collation_name[0];
 	info->catalog = INVALID_CATALOG;
 	info->schema = INVALID_SCHEMA;
-	info->name = collation;
+	info->name.name = collation;
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	info->type = CatalogType::COLLATION_ENTRY;
 	result->info = std::move(info);
@@ -206,7 +206,7 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropType(PEGTransforme
 		info->SetCatalog(type.GetCatalog());
 		info->SetSchema(type.GetSchema());
 	}
-	info->name = type.name;
+	info->name.name = type.name;
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	info->type = CatalogType::TYPE_ENTRY;
 	result->info = std::move(info);
@@ -239,7 +239,7 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropSecret(PEGTransfor
 	}
 
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
-	info->name = secret_name;
+	info->name.name = secret_name;
 	if (drop_secret_storage) {
 		extra_drop_info->secret_storage = drop_secret_storage->GetIdentifierName();
 	}
@@ -262,7 +262,7 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropTrigger(PEGTransfo
 	info->type = CatalogType::TRIGGER_ENTRY;
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 
-	info->name = trigger_name;
+	info->name.name = trigger_name;
 
 	auto extra_info = make_uniq<ExtraDropTriggerInfo>();
 	extra_info->base_table = std::move(base_table_name);

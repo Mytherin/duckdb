@@ -475,6 +475,18 @@ QualifiedColumnName QualifiedColumnName::Deserialize(Deserializer &deserializer)
 	return result;
 }
 
+void QualifiedName::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<vector<Identifier>>(100, "schema_path", schema_path);
+	serializer.WritePropertyWithDefault<Identifier>(101, "name", name);
+}
+
+QualifiedName QualifiedName::Deserialize(Deserializer &deserializer) {
+	auto schema_path = deserializer.ReadPropertyWithDefault<vector<Identifier>>(100, "schema_path");
+	auto name = deserializer.ReadPropertyWithDefault<Identifier>(101, "name");
+	QualifiedName result(std::move(schema_path), std::move(name));
+	return result;
+}
+
 void ReservoirSample::Serialize(Serializer &serializer) const {
 	BlockingSample::Serialize(serializer);
 	serializer.WritePropertyWithDefault<idx_t>(200, "sample_count", sample_count);

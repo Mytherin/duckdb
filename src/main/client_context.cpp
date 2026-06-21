@@ -1298,8 +1298,9 @@ void ClientContext::DisableProfiling() {
 
 void ClientContext::RegisterFunction(CreateFunctionInfo &info) {
 	RunFunctionInTransaction([&]() {
-		auto existing_function = Catalog::GetEntry<ScalarFunctionCatalogEntry>(
-		    *this, Identifier::InvalidCatalog(), info.GetSchema(), info.name, OnEntryNotFound::RETURN_NULL);
+		auto existing_function =
+		    Catalog::GetEntry<ScalarFunctionCatalogEntry>(*this, Identifier::InvalidCatalog(), info.GetSchema(),
+		                                                  info.GetFunctionName(), OnEntryNotFound::RETURN_NULL);
 		if (existing_function) {
 			auto &new_info = info.Cast<CreateScalarFunctionInfo>();
 			if (new_info.functions.MergeFunctionSet(existing_function->functions)) {

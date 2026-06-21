@@ -41,6 +41,9 @@ public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::WINDOW;
 
 public:
+	//! Primary constructor: the (optionally qualified) function name as a single QualifiedName
+	explicit WindowExpression(QualifiedName name);
+	//! Convenience overload that builds the QualifiedName from a separate catalog/schema/name
 	WindowExpression(const string &catalog_name, const string &schema, const string &function_name);
 
 public:
@@ -67,37 +70,35 @@ public:
 	static ExpressionType WindowToExpressionType(const string &fun_name);
 
 public:
-	//! The catalog is only set when the function is fully qualified, i.e. schema_path holds [catalog, schema]
-	const Identifier &Catalog() const {
-		return schema_path.size() >= 2 ? schema_path[0] : Identifier::Empty();
+	const QualifiedName &GetQualifiedName() const {
+		return name;
 	}
-	//! The schema is the last element of the qualification path (empty if the path is empty)
+	void SetQualifiedName(QualifiedName name_p) {
+		name = std::move(name_p);
+	}
+	const Identifier &Catalog() const {
+		return name.GetCatalog();
+	}
 	const Identifier &Schema() const {
-		if (schema_path.size() == 1) {
-			return schema_path[0];
-		}
-		if (schema_path.size() >= 2) {
-			return schema_path[1];
-		}
-		return Identifier::Empty();
+		return name.GetSchema();
 	}
 	void SetCatalog(Identifier catalog_p) {
-		schema_path = SchemaPathFromCatalogSchema(std::move(catalog_p), Schema());
+		name.SetCatalog(std::move(catalog_p));
 	}
 	void SetSchema(Identifier schema_p) {
-		schema_path = SchemaPathFromCatalogSchema(Catalog(), std::move(schema_p));
+		name.SetSchema(std::move(schema_p));
 	}
 	const vector<Identifier> &GetSchemaPath() const {
-		return schema_path;
+		return name.GetSchemaPath();
 	}
 	void SetSchemaPath(vector<Identifier> path) {
-		schema_path = std::move(path);
+		name.SetSchemaPath(std::move(path));
 	}
 	const Identifier &FunctionName() const {
-		return function_name;
+		return name.name;
 	}
 	Identifier &FunctionNameMutable() {
-		return function_name;
+		return name.name;
 	}
 	const vector<unique_ptr<ParsedExpression>> &Partitions() const {
 		return partitions;
@@ -388,11 +389,8 @@ public:
 	}
 
 private:
-	//! Qualification path: element 0 is the catalog (when present), the remainder are schema levels.
-	//! Today this holds at most [catalog, schema]; (catalog, schema) is derived following the size rules above.
-	vector<Identifier> schema_path;
-	//! Name of the aggregate function
-	Identifier function_name;
+	//! The (optionally qualified) function name - the bare name plus its catalog/schema qualification path
+	QualifiedName name;
 	//! The child expression of the main window function
 	vector<FunctionArgument> arguments;
 	//! The set of expressions to partition by

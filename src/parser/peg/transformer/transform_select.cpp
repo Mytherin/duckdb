@@ -551,9 +551,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableFunctionLateralOpt(
 
 	result->with_ordinality =
 	    with_ordinality.value_or(false) ? OrdinalityType::WITH_ORDINALITY : OrdinalityType::WITHOUT_ORDINALITY;
-	result->function =
-	    make_uniq<FunctionExpression>(qualified_table_function.GetCatalog(), qualified_table_function.GetSchema(),
-	                                  qualified_table_function.name, std::move(table_function_arguments));
+	result->function = make_uniq<FunctionExpression>(qualified_table_function, std::move(table_function_arguments));
 	if (table_alias) {
 		result->alias = table_alias->name;
 		result->column_name_alias = table_alias->column_name_alias;
@@ -568,9 +566,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableFunctionAliasColon(
 	auto result = make_uniq<TableFunctionRef>();
 	result->with_ordinality =
 	    with_ordinality.value_or(false) ? OrdinalityType::WITH_ORDINALITY : OrdinalityType::WITHOUT_ORDINALITY;
-	result->function =
-	    make_uniq<FunctionExpression>(qualified_table_function.GetCatalog(), qualified_table_function.GetSchema(),
-	                                  qualified_table_function.name, std::move(table_function_arguments));
+	result->function = make_uniq<FunctionExpression>(qualified_table_function, std::move(table_function_arguments));
 	result->alias = table_alias_colon;
 	if (sample_clause) {
 		result->sample = std::move(*sample_clause);

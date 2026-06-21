@@ -21,7 +21,7 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 	case CatalogType::PREPARED_STATEMENT: {
 		// DEALLOCATE silently ignores errors
 		auto &statements = ClientData::Get(context.client).prepared_statements;
-		auto stmt_iter = statements.find(info->name);
+		auto stmt_iter = statements.find(info->name.name);
 		if (stmt_iter != statements.end()) {
 			statements.erase(stmt_iter);
 		}
@@ -36,9 +36,9 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 		auto &default_entry = client_data.catalog_search_path->GetDefault();
 		auto &current_catalog = default_entry.GetCatalog();
 		auto &current_schema = default_entry.GetSchema();
-		D_ASSERT(info->name != DEFAULT_SCHEMA);
+		D_ASSERT(info->name.name != DEFAULT_SCHEMA);
 
-		if (info->GetCatalog() == current_catalog && current_schema == info->name) {
+		if (info->GetCatalog() == current_catalog && current_schema == info->name.name) {
 			// Reset the schema to default
 			SchemaSetting::SetLocal(context.client, DEFAULT_SCHEMA);
 		}
@@ -49,7 +49,7 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 		D_ASSERT(info->extra_drop_info);
 		auto &extra_info = info->extra_drop_info->Cast<ExtraDropSecretInfo>();
 		SecretManager::Get(context.client)
-		    .DropSecretByName(context.client, info->name, info->if_not_found, extra_info.persist_mode,
+		    .DropSecretByName(context.client, info->name.name, info->if_not_found, extra_info.persist_mode,
 		                      Identifier(extra_info.secret_storage));
 		break;
 	}
@@ -67,9 +67,9 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 		                                                         base_table_ref.table_name);
 		auto &duck_table = table_entry.Cast<DuckTableEntry>();
 		auto transaction = duck_table.catalog.GetCatalogTransaction(context.client);
-		if (!duck_table.DropTrigger(transaction, info->name, info->cascade)) {
+		if (!duck_table.DropTrigger(transaction, info->name.name, info->cascade)) {
 			if (info->if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-				throw CatalogException("Trigger with name \"%s\" does not exist on table \"%s\"", info->name,
+				throw CatalogException("Trigger with name \"%s\" does not exist on table \"%s\"", info->name.name,
 				                       base_table_ref.table_name);
 			}
 		}

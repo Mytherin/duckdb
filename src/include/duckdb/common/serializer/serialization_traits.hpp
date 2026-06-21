@@ -22,8 +22,9 @@
 
 namespace duckdb {
 
-class Serializer;   // Forward declare
-class Deserializer; // Forward declare
+class Serializer;     // Forward declare
+class Deserializer;   // Forward declare
+struct QualifiedName; // Forward declare
 
 typedef uint16_t field_id_t;
 const field_id_t MESSAGE_TERMINATOR_FIELD_ID = 0xFFFF;
@@ -348,6 +349,16 @@ struct SerializationDefaultValue {
 
 	template <typename T = void>
 	static inline bool IsDefault(const typename std::enable_if<std::is_same<T, Identifier>::value, T>::type &value) {
+		return value.empty();
+	}
+
+	template <typename T = void>
+	static inline typename std::enable_if<std::is_same<T, QualifiedName>::value, T>::type GetDefault() {
+		return T();
+	}
+
+	template <typename T = void>
+	static inline bool IsDefault(const typename std::enable_if<std::is_same<T, QualifiedName>::value, T>::type &value) {
 		return value.empty();
 	}
 

@@ -11,12 +11,13 @@ namespace duckdb {
 CreateViewInfo::CreateViewInfo() : CreateInfo(CatalogType::VIEW_ENTRY, Identifier::InvalidSchema()) {
 }
 CreateViewInfo::CreateViewInfo(Identifier catalog_p, Identifier schema_p, Identifier view_name_p)
-    : CreateInfo(CatalogType::VIEW_ENTRY, std::move(schema_p), std::move(catalog_p)),
-      view_name(std::move(view_name_p)) {
+    : CreateInfo(CatalogType::VIEW_ENTRY, std::move(schema_p), std::move(catalog_p)) {
+	SetViewName(std::move(view_name_p));
 }
 
 CreateViewInfo::CreateViewInfo(vector<Identifier> schema_path, Identifier view_name_p)
-    : CreateInfo(CatalogType::VIEW_ENTRY, std::move(schema_path)), view_name(std::move(view_name_p)) {
+    : CreateInfo(CatalogType::VIEW_ENTRY, std::move(schema_path)) {
+	SetViewName(std::move(view_name_p));
 }
 
 CreateViewInfo::CreateViewInfo(SchemaCatalogEntry &schema, Identifier view_name)
@@ -25,7 +26,7 @@ CreateViewInfo::CreateViewInfo(SchemaCatalogEntry &schema, Identifier view_name)
 
 string CreateViewInfo::ToString() const {
 	string result = GetCreatePrefix("VIEW");
-	result += QualifierToString(temporary ? Identifier() : GetCatalog(), GetSchema(), view_name);
+	result += QualifierToString(temporary ? Identifier() : GetCatalog(), GetSchema(), GetViewName());
 	if (!aliases.empty()) {
 		result += " (";
 		result +=
@@ -42,7 +43,7 @@ string CreateViewInfo::ToString() const {
 }
 
 unique_ptr<CreateInfo> CreateViewInfo::Copy() const {
-	auto result = make_uniq<CreateViewInfo>(GetSchemaPath(), view_name);
+	auto result = make_uniq<CreateViewInfo>(GetSchemaPath(), GetViewName());
 	CopyProperties(*result);
 	result->aliases = aliases;
 	result->types = types;
@@ -67,7 +68,7 @@ unique_ptr<SelectStatement> CreateViewInfo::ParseSelect(const string &sql) {
 
 unique_ptr<CreateViewInfo> CreateViewInfo::FromSelect(ClientContext &context, unique_ptr<CreateViewInfo> info) {
 	D_ASSERT(info);
-	D_ASSERT(!info->view_name.empty());
+	D_ASSERT(!info->GetViewName().empty());
 	D_ASSERT(!info->sql.empty());
 	D_ASSERT(!info->query);
 
@@ -118,8 +119,8 @@ vector<Value> CreateViewInfo::GetColumnCommentsList() const {
 		auto it = std::find_if(names.begin(), names.end(), [&](const Identifier &n) { return entry.first == n; });
 		if (it == names.end()) {
 			throw InternalException(
-			    "While serializing comments for view \"%s\" - did not find column \"%s\" in list of names", view_name,
-			    entry.first.GetIdentifierName());
+			    "While serializing comments for view \"%s\" - did not find column \"%s\" in list of names",
+			    GetViewName(), entry.first.GetIdentifierName());
 		}
 		result[NumericCast<idx_t>(it - names.begin())] = entry.second;
 	}

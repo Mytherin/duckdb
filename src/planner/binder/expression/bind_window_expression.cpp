@@ -102,8 +102,7 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 	auto entry = GetCatalogEntry(window.Catalog(), window.Schema(), function_lookup, OnEntryNotFound::RETURN_NULL);
 	if (entry && entry->type == CatalogType::MACRO_ENTRY) {
 		auto macro_expr = window.Copy();
-		auto macro = make_uniq<FunctionExpression>(window.Catalog(), window.Schema(), window.FunctionName(),
-		                                           std::move(window.GetArgumentsMutable()),
+		auto macro = make_uniq<FunctionExpression>(window.GetQualifiedName(), std::move(window.GetArgumentsMutable()),
 		                                           std::move(window.FilterMutable()), nullptr, window.Distinct());
 		return BindMacro(*macro, entry->Cast<ScalarMacroCatalogEntry>(), depth, macro_expr);
 	}

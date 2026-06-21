@@ -30,7 +30,7 @@ BoundStatement CreateTableRelation::Bind(Binder &binder) {
 	auto info = make_uniq<CreateTableInfo>();
 	info->SetCatalog(catalog_name);
 	info->SetSchema(schema_name);
-	info->table = table_name;
+	info->SetTableName(table_name);
 	info->query = std::move(select);
 	info->on_conflict = on_conflict;
 	info->temporary = temporary;
