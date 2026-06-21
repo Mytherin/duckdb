@@ -12,60 +12,65 @@ namespace duckdb {
 FunctionExpression::FunctionExpression() : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION) {
 }
 
-FunctionExpression::FunctionExpression(Identifier catalog, Identifier schema, const Identifier &function_name,
-                                       vector<unique_ptr<ParsedExpression>> children_p,
+FunctionExpression::FunctionExpression(QualifiedName name_p, vector<unique_ptr<ParsedExpression>> children_p,
                                        unique_ptr<ParsedExpression> filter, unique_ptr<OrderModifier> order_bys_p,
                                        bool distinct, bool is_operator, bool export_state_p)
-    : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION),
-      schema_path(SchemaPathFromCatalogSchema(std::move(catalog), std::move(schema))),
-      function_name(StringUtil::Lower(function_name.GetIdentifierName())), is_operator(is_operator), distinct(distinct),
-      filter(std::move(filter)), order_bys(std::move(order_bys_p)), export_state(export_state_p) {
+    : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION), name(std::move(name_p)),
+      is_operator(is_operator), distinct(distinct), filter(std::move(filter)), order_bys(std::move(order_bys_p)),
+      export_state(export_state_p) {
+	name.name = Identifier(StringUtil::Lower(name.name.GetIdentifierName()));
 	arguments.reserve(children_p.size());
 	for (auto &child : children_p) {
 		arguments.emplace_back(std::move(child));
 	}
-	D_ASSERT(!function_name.empty());
+	D_ASSERT(!name.name.empty());
 	if (!order_bys) {
 		order_bys = make_uniq<OrderModifier>();
 	}
 }
 
+FunctionExpression::FunctionExpression(QualifiedName name_p, vector<FunctionArgument> children,
+                                       unique_ptr<ParsedExpression> filter, unique_ptr<OrderModifier> order_bys_p,
+                                       bool distinct, bool is_operator, bool export_state)
+    : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION), name(std::move(name_p)),
+      is_operator(is_operator), arguments(std::move(children)), distinct(distinct), filter(std::move(filter)),
+      order_bys(std::move(order_bys_p)), export_state(export_state) {
+	name.name = Identifier(StringUtil::Lower(name.name.GetIdentifierName()));
+	D_ASSERT(!name.name.empty());
+	if (!order_bys) {
+		this->order_bys = make_uniq<OrderModifier>();
+	}
+}
+
+FunctionExpression::FunctionExpression(Identifier catalog, Identifier schema, const Identifier &function_name,
+                                       vector<unique_ptr<ParsedExpression>> children_p,
+                                       unique_ptr<ParsedExpression> filter, unique_ptr<OrderModifier> order_bys,
+                                       bool distinct, bool is_operator, bool export_state_p)
+    : FunctionExpression(QualifiedName(std::move(catalog), std::move(schema), function_name), std::move(children_p),
+                         std::move(filter), std::move(order_bys), distinct, is_operator, export_state_p) {
+}
+
 FunctionExpression::FunctionExpression(const Identifier &function_name, vector<unique_ptr<ParsedExpression>> children_p,
                                        unique_ptr<ParsedExpression> filter, unique_ptr<OrderModifier> order_bys,
                                        bool distinct, bool is_operator, bool export_state_p)
-    : FunctionExpression(Identifier::InvalidCatalog(), Identifier::InvalidSchema(), function_name,
-                         std::move(children_p), std::move(filter), std::move(order_bys), distinct, is_operator,
-                         export_state_p) {
+    : FunctionExpression(QualifiedName(function_name), std::move(children_p), std::move(filter), std::move(order_bys),
+                         distinct, is_operator, export_state_p) {
 }
 
 FunctionExpression::FunctionExpression(Identifier catalog_name, Identifier schema_name, const Identifier &function_name,
                                        vector<FunctionArgument> children, unique_ptr<ParsedExpression> filter,
                                        unique_ptr<OrderModifier> order_bys_p, bool distinct, bool is_operator,
                                        bool export_state)
-    : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION),
-      schema_path(SchemaPathFromCatalogSchema(std::move(catalog_name), std::move(schema_name))),
-      function_name(StringUtil::Lower(function_name.GetIdentifierName())), is_operator(is_operator),
-      arguments(std::move(children)), distinct(distinct), filter(std::move(filter)), order_bys(std::move(order_bys_p)),
-      export_state(export_state) {
-	D_ASSERT(!function_name.empty());
-	if (!order_bys) {
-		this->order_bys = make_uniq<OrderModifier>();
-	}
+    : FunctionExpression(QualifiedName(std::move(catalog_name), std::move(schema_name), function_name),
+                         std::move(children), std::move(filter), std::move(order_bys_p), distinct, is_operator,
+                         export_state) {
 }
 
 FunctionExpression::FunctionExpression(const Identifier &function_name, vector<FunctionArgument> children,
                                        unique_ptr<ParsedExpression> filter, unique_ptr<OrderModifier> order_bys,
                                        bool distinct, bool is_operator, bool export_state)
-    : FunctionExpression(Identifier::InvalidCatalog(), Identifier::InvalidSchema(), function_name, std::move(children),
-                         std::move(filter), std::move(order_bys), distinct, is_operator, export_state) {
-}
-
-void FunctionExpression::SetCatalog(Identifier catalog_p) {
-	schema_path = SchemaPathFromCatalogSchema(std::move(catalog_p), Schema());
-}
-
-void FunctionExpression::SetSchema(Identifier schema_p) {
-	schema_path = SchemaPathFromCatalogSchema(Catalog(), std::move(schema_p));
+    : FunctionExpression(QualifiedName(function_name), std::move(children), std::move(filter), std::move(order_bys),
+                         distinct, is_operator, export_state) {
 }
 
 string FunctionExpression::ToString() const {
@@ -73,14 +78,14 @@ string FunctionExpression::ToString() const {
 		// built-in operator
 		D_ASSERT(!distinct);
 		if (arguments.size() == 1) {
-			if (StringUtil::Contains(function_name.GetIdentifierName(), "__postfix")) {
+			if (StringUtil::Contains(FunctionName().GetIdentifierName(), "__postfix")) {
 				return "((" + arguments[0].ToString() + ")" +
-				       StringUtil::Replace(function_name.GetIdentifierName(), "__postfix", "") + ")";
+				       StringUtil::Replace(FunctionName().GetIdentifierName(), "__postfix", "") + ")";
 			}
-			return function_name.GetIdentifierName() + "(" + arguments[0].ToString() + ")";
+			return FunctionName().GetIdentifierName() + "(" + arguments[0].ToString() + ")";
 		}
 		if (arguments.size() == 2) {
-			return StringUtil::Format("(%s %s %s)", arguments[0].ToString(), function_name.GetIdentifierName(),
+			return StringUtil::Format("(%s %s %s)", arguments[0].ToString(), FunctionName().GetIdentifierName(),
 			                          arguments[1].ToString());
 		}
 	}
@@ -92,7 +97,7 @@ string FunctionExpression::ToString() const {
 	if (!Schema().empty()) {
 		result += SQLIdentifier(Schema()) + ".";
 	}
-	result += SQLIdentifier(function_name);
+	result += SQLIdentifier(FunctionName());
 	result += "(";
 	if (distinct) {
 		result += "DISTINCT ";
@@ -127,12 +132,12 @@ string FunctionExpression::ToString() const {
 }
 
 void FunctionExpression::Verify() const {
-	D_ASSERT(!function_name.empty());
+	D_ASSERT(!FunctionName().empty());
 }
 
 optional_ptr<ParsedExpression> FunctionExpression::IsLambdaFunction() {
 	// Ignore the ->> operator (JSON extension).
-	if (function_name == "->>") {
+	if (FunctionName() == "->>") {
 		return nullptr;
 	}
 	// Check the children for lambda expressions.
@@ -146,14 +151,13 @@ optional_ptr<ParsedExpression> FunctionExpression::IsLambdaFunction() {
 
 void FunctionExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
-	serializer.WritePropertyWithDefault<Identifier>(200, "function_name", function_name);
 	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
-		// Legacy serialization: the catalog/schema are written as a separate pair (replaced by schema_path in v2.0).
+		// Legacy serialization: the function name + catalog/schema are written separately (folded into a single
+		// QualifiedName from v2.0 onwards).
+		serializer.WritePropertyWithDefault<Identifier>(200, "function_name", FunctionName());
 		serializer.WritePropertyWithDefault<Identifier>(201, "schema", Schema());
-	}
 
-	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
-		// Legacy serialization.
+		// Legacy children serialization.
 		vector<unique_ptr<ParsedExpression>> children;
 		for (auto &arg : arguments) {
 			auto copy = arg.GetExpression().Copy();
@@ -169,19 +173,18 @@ void FunctionExpression::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(206, "is_operator", is_operator);
 	serializer.WritePropertyWithDefault<bool>(207, "export_state", export_state);
 	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
-		// Legacy serialization: the catalog/schema are written as a separate pair (replaced by schema_path in v2.0).
 		serializer.WritePropertyWithDefault<Identifier>(208, "catalog", Catalog());
 	}
 
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WritePropertyWithDefault<vector<FunctionArgument>>(209, "arguments", arguments);
-		serializer.WritePropertyWithDefault<vector<Identifier>>(210, "schema_path", GetSchemaPath());
+		serializer.WritePropertyWithDefault<QualifiedName>(210, "name", name);
 	}
 }
 
 unique_ptr<ParsedExpression> FunctionExpression::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<FunctionExpression>(new FunctionExpression());
-	deserializer.ReadPropertyWithDefault<Identifier>(200, "function_name", result->function_name);
+	auto function_name = deserializer.ReadPropertyWithDefault<Identifier>(200, "function_name");
 	auto schema = deserializer.ReadPropertyWithDefault<Identifier>(201, "schema");
 
 	// Legacy children deserialization
@@ -205,16 +208,16 @@ unique_ptr<ParsedExpression> FunctionExpression::Deserialize(Deserializer &deser
 	deserializer.ReadPropertyWithDefault<bool>(206, "is_operator", result->is_operator);
 	deserializer.ReadPropertyWithDefault<bool>(207, "export_state", result->export_state);
 	auto catalog = deserializer.ReadPropertyWithDefault<Identifier>(208, "catalog");
-	// Legacy files store the qualification as a separate catalog/schema pair; v2.0+ stores it as schema_path.
-	result->SetSchemaPath(SchemaPathFromCatalogSchema(std::move(catalog), std::move(schema)));
+	// Legacy files store the name as a separate catalog/schema/name triple; v2.0+ stores a single QualifiedName.
+	result->SetQualifiedName(QualifiedName(std::move(catalog), std::move(schema), std::move(function_name)));
 
 	// New children deserialization
 	if (children.empty()) {
 		deserializer.ReadPropertyWithDefault<vector<FunctionArgument>>(209, "arguments", result->arguments);
 	}
-	auto schema_path = deserializer.ReadPropertyWithDefault<vector<Identifier>>(210, "schema_path");
-	if (!schema_path.empty()) {
-		result->SetSchemaPath(std::move(schema_path));
+	auto name = deserializer.ReadPropertyWithDefault<QualifiedName>(210, "name");
+	if (!name.empty()) {
+		result->SetQualifiedName(std::move(name));
 	}
 
 	return std::move(result);

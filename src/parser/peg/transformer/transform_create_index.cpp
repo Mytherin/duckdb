@@ -18,7 +18,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateIndexStmt(
 	if (!index_name) {
 		throw NotImplementedException("Please provide an index name, e.g., CREATE INDEX my_name ...");
 	}
-	index_info->index_name = *index_name;
+	index_info->SetIndexName(*index_name);
 	index_info->table = base_table_name->table_name;
 	index_info->SetCatalog(base_table_name->catalog_name);
 	index_info->SetSchema(base_table_name->schema_name);

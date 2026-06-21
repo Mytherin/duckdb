@@ -5,34 +5,11 @@ namespace duckdb {
 
 CopyInfo::CopyInfo() : ParseInfo(TYPE), is_from(false), is_format_auto_detected(true) {
 	// default qualification: schema = "main", catalog unset
-	schema_path.push_back(Identifier::DefaultSchema());
-}
-
-void CopyInfo::SetCatalog(Identifier catalog_p) {
-	auto schema = GetSchema();
-	schema_path.clear();
-	if (!catalog_p.empty()) {
-		schema_path.push_back(std::move(catalog_p));
-		schema_path.push_back(std::move(schema));
-	} else if (!schema.empty()) {
-		schema_path.push_back(std::move(schema));
-	}
-}
-
-void CopyInfo::SetSchema(Identifier schema_p) {
-	auto catalog = GetCatalog();
-	schema_path.clear();
-	if (!catalog.empty()) {
-		schema_path.push_back(std::move(catalog));
-		schema_path.push_back(std::move(schema_p));
-	} else if (!schema_p.empty()) {
-		schema_path.push_back(std::move(schema_p));
-	}
+	table.SetSchema(Identifier::DefaultSchema());
 }
 
 unique_ptr<CopyInfo> CopyInfo::Copy() const {
 	auto result = make_uniq<CopyInfo>();
-	result->SetSchemaPath(GetSchemaPath());
 	result->table = table;
 	result->select_list = select_list;
 	result->file_path_expression = file_path_expression ? file_path_expression->Copy() : nullptr;
@@ -99,8 +76,8 @@ string CopyInfo::CopyOptionsToString() const {
 string CopyInfo::TablePartToString() const {
 	string result;
 
-	D_ASSERT(!table.empty());
-	result += QualifierToString(GetSchemaPath(), table);
+	D_ASSERT(!table.name.empty());
+	result += table.ToString();
 
 	// (c1, c2, ..)
 	if (!select_list.empty()) {

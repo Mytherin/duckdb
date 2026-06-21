@@ -121,7 +121,7 @@ static unique_ptr<QueryNode> CreateSelectStatement(CopyStatement &stmt, child_li
 	auto ref = make_uniq<BaseTableRef>();
 	ref->catalog_name = stmt.info->GetCatalog();
 	ref->schema_name = stmt.info->GetSchema();
-	ref->table_name = stmt.info->table;
+	ref->table_name = stmt.info->table.name;
 
 	auto statement = make_uniq<SelectNode>();
 	statement->from_table = std::move(ref);
@@ -227,7 +227,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		info->is_from = false;
 		info->SetCatalog(Identifier(catalog));
 		info->SetSchema(table.schema.name);
-		info->table = table.name;
+		info->table.name = table.name;
 
 		// We can not export generated columns
 		child_list_t<LogicalType> select_list;
@@ -245,7 +245,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 
 		ExportedTableData exported_data;
 		exported_data.database_name = Identifier(catalog);
-		exported_data.table_name = info->table;
+		exported_data.table_name = info->table.name;
 		exported_data.schema_name = info->GetSchema();
 
 		exported_data.file_path = info->file_path;

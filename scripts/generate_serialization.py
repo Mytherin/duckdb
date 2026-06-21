@@ -180,6 +180,7 @@ DESERIALIZE_ELEMENT_CLASS_BASE_FORMAT = '\tauto {property_name} = deserializer.R
 MOVE_LIST = [
     'string',
     'Identifier',
+    'QualifiedName',
     'ParsedExpression*',
     'CommonTableExpressionMap',
     'LogicalType',
@@ -350,6 +351,9 @@ def has_default_by_default(type):
         return True
     if type in ('Identifier', 'duckdb::Identifier'):
         # Identifier behaves like string: the empty identifier is its default
+        return True
+    if type == 'QualifiedName':
+        # an empty (default-constructed) QualifiedName is its default
         return True
     if is_zeroable(type):
         return True
@@ -701,9 +705,17 @@ def generate_base_class_code(base_class: SerializableClass):
         if entry.type in MOVE_LIST or is_container(entry.type) or is_pointer(entry.type):
             move = True
         if entry.deserialize_setter is not None:
-            base_class_deserialize += (
-                f'\tresult->{entry.deserialize_setter}(std::move({entry.deserialize_property}));\n'
-            )
+            if entry.deserialize_if_present:
+                # only apply when non-empty, so an absent field does not clobber a value read from a sibling
+                base_class_deserialize += f'\tif (!{entry.deserialize_property}.empty()) {{\n'
+                base_class_deserialize += (
+                    f'\t\tresult->{entry.deserialize_setter}(std::move({entry.deserialize_property}));\n'
+                )
+                base_class_deserialize += '\t}\n'
+            else:
+                base_class_deserialize += (
+                    f'\tresult->{entry.deserialize_setter}(std::move({entry.deserialize_property}));\n'
+                )
         elif move:
             base_class_deserialize += (
                 f'\tresult->{entry.deserialize_property} = std::move({entry.deserialize_property});\n'
@@ -838,17 +850,20 @@ def generate_class_code(class_entry: SerializableClass):
         if entry.deserialize_setter is not None and entry.status == MemberVariableStatus.EXISTING:
             # read into a local and assign via the setter method (instead of `result->member = value`)
             local = entry.deserialize_property.replace('.', '_')
-            class_deserialize += get_deserialize_element_template(
-                DESERIALIZE_ELEMENT_FORMAT,
-                local,
-                entry.name,
-                entry.id,
-                type_name,
-                entry.has_default,
-                entry.default,
-                entry.status,
-                class_entry.pointer_type,
-            )
+            # members up to the constructor index were already read above (in order) - reuse that local
+            # instead of re-reading (which would both redefine the local and read the property twice)
+            if entry_idx > last_constructor_index:
+                class_deserialize += get_deserialize_element_template(
+                    DESERIALIZE_ELEMENT_FORMAT,
+                    local,
+                    entry.name,
+                    entry.id,
+                    type_name,
+                    entry.has_default,
+                    entry.default,
+                    entry.status,
+                    class_entry.pointer_type,
+                )
             move = entry.type in MOVE_LIST or is_container(entry.type) or is_pointer(entry.type)
             arg = f'std::move({local})' if move else local
             if entry.deserialize_if_present:

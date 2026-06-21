@@ -12,6 +12,7 @@
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/parser/parsed_data/extra_drop_info.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
 
 namespace duckdb {
@@ -27,8 +28,8 @@ public:
 
 	//! The catalog type to drop
 	CatalogType type;
-	//! Element name to drop
-	Identifier name;
+	//! Element name to drop (the bare name plus its catalog/schema qualification path)
+	QualifiedName name;
 	//! Ignore if the entry does not exist instead of failing
 	OnEntryNotFound if_not_found = OnEntryNotFound::THROW_EXCEPTION;
 	//! Cascade drop (drop all dependents instead of throwing an error if there
@@ -40,28 +41,31 @@ public:
 	unique_ptr<ExtraDropInfo> extra_drop_info;
 
 public:
-	//! The catalog is only set when fully qualified, i.e. schema_path holds [catalog, schema]
 	const Identifier &GetCatalog() const {
-		return schema_path.size() >= 2 ? schema_path[0] : Identifier::Empty();
+		return name.GetCatalog();
 	}
-	//! The schema is the last element of the qualification path (empty if the path is empty)
 	const Identifier &GetSchema() const {
-		if (schema_path.size() == 1) {
-			return schema_path[0];
-		}
-		if (schema_path.size() >= 2) {
-			return schema_path[1];
-		}
-		return Identifier::Empty();
+		return name.GetSchema();
 	}
-	void SetCatalog(Identifier catalog_p);
-	void SetSchema(Identifier schema_p);
-
+	void SetCatalog(Identifier catalog_p) {
+		name.SetCatalog(std::move(catalog_p));
+	}
+	void SetSchema(Identifier schema_p) {
+		name.SetSchema(std::move(schema_p));
+	}
 	const vector<Identifier> &GetSchemaPath() const {
-		return schema_path;
+		return name.GetSchemaPath();
 	}
 	void SetSchemaPath(vector<Identifier> path) {
-		schema_path = std::move(path);
+		name.SetSchemaPath(std::move(path));
+	}
+	//! Assign the full qualified name (used for v2.0+ deserialization)
+	void SetName(QualifiedName name_p) {
+		name = std::move(name_p);
+	}
+	//! Assign only the bare entry name (used for legacy deserialization)
+	void SetEntryName(Identifier entry_name) {
+		name.name = std::move(entry_name);
 	}
 
 	virtual unique_ptr<DropInfo> Copy() const;
@@ -69,11 +73,6 @@ public:
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer);
-
-private:
-	//! Qualification path: element 0 is the catalog (when present), the remainder are schema levels.
-	//! Today this holds at most [catalog, schema]; (catalog, schema) is derived following the size rules above.
-	vector<Identifier> schema_path;
 };
 
 } // namespace duckdb

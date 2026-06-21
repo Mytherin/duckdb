@@ -232,25 +232,9 @@
     "members": [
       {
         "id": 200,
-        "name": "function_name",
-        "type": "Identifier",
-        "accessor_mut": "FunctionNameMutable()",
-        "accessor": "FunctionName()"
-      },
-      {
-        "id": 201,
-        "name": "schema",
-        "type": "Identifier",
-        "serialize_property": "Schema()",
-        "equals_skip": true,
-        "hash_skip": true
-      },
-      {
-        "id": 202,
-        "name": "children",
-        "type": "vector<unique_ptr<ParsedExpression>>",
-        "version": "2.0.0",
-        "status": "deleted"
+        "name": "name",
+        "type": "QualifiedName",
+        "accessor": "GetQualifiedName()"
       },
       {
         "id": 203,
@@ -292,25 +276,11 @@
         "accessor": "ExportState()"
       },
       {
-        "id": 208,
-        "name": "catalog",
-        "type": "Identifier",
-        "serialize_property": "Catalog()",
-        "equals_skip": true,
-        "hash_skip": true
-      },
-      {
         "id": 209,
         "name": "arguments",
         "type": "vector<FunctionArgument>",
         "accessor_mut": "GetArgumentsMutable()",
         "accessor": "GetArguments()"
-      },
-      {
-        "id": 210,
-        "name": "schema_path",
-        "type": "vector<Identifier>",
-        "accessor": "GetSchemaPath()"
       }
     ],
     "custom_implementation": true
@@ -486,31 +456,9 @@
     "members": [
       {
         "id": 200,
-        "name": "function_name",
-        "type": "Identifier"
-      },
-      {
-        "id": 201,
-        "name": "schema",
-        "type": "Identifier",
-        "serialize_property": "Schema()",
-        "equals_skip": true,
-        "hash_skip": true
-      },
-      {
-        "id": 202,
-        "name": "catalog",
-        "type": "Identifier",
-        "serialize_property": "Catalog()",
-        "equals_skip": true,
-        "hash_skip": true
-      },
-      {
-        "id": 203,
-        "name": "children",
-        "type": "vector<unique_ptr<ParsedExpression>>",
-        "version": "2.0.0",
-        "status": "deleted"
+        "name": "name",
+        "type": "QualifiedName",
+        "accessor": "GetQualifiedName()"
       },
       {
         "id": 204,
@@ -609,12 +557,6 @@
         "type": "vector<FunctionArgument>",
         "accessor_mut": "GetArgumentsMutable()",
         "accessor": "GetArguments()"
-      },
-      {
-        "id": 219,
-        "name": "schema_path",
-        "type": "vector<Identifier>",
-        "accessor": "GetSchemaPath()"
       }
     ],
     "custom_implementation": true
@@ -649,7 +591,13 @@
       {
         "id": 202,
         "name": "type_name",
-        "type": "Identifier"
+        "type": "Identifier",
+        "legacy": true,
+        "version": "v2.0.0",
+        "serialize_property": "GetTypeName()",
+        "deserialize_setter": "SetTypeName",
+        "equals_skip": true,
+        "hash_skip": true
       },
       {
         "id": 203,
@@ -659,12 +607,12 @@
       },
       {
         "id": 204,
-        "name": "schema_path",
-        "type": "vector<Identifier>",
+        "name": "name",
+        "type": "QualifiedName",
         "version": "v2.0.0",
-        "deserialize_setter": "SetSchemaPath",
+        "deserialize_setter": "SetQualifiedName",
         "deserialize_if_present": true,
-        "accessor": "GetSchemaPath()"
+        "accessor": "GetQualifiedName()"
       }
     ]
   }

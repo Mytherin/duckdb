@@ -85,7 +85,7 @@ optional_ptr<CatalogEntry> DuckCatalog::CreateSchema(CatalogTransaction transact
 			DropInfo drop_info;
 			drop_info.type = CatalogType::SCHEMA_ENTRY;
 			drop_info.SetCatalog(info.GetCatalog());
-			drop_info.name = info.GetSchema();
+			drop_info.name.name = info.GetSchema();
 			DropSchema(transaction, drop_info);
 			result = CreateSchemaInternal(transaction, info);
 			if (!result) {
@@ -105,9 +105,9 @@ optional_ptr<CatalogEntry> DuckCatalog::CreateSchema(CatalogTransaction transact
 
 void DuckCatalog::DropSchema(CatalogTransaction transaction, DropInfo &info) {
 	D_ASSERT(!info.name.empty());
-	if (!schemas->DropEntry(transaction, info.name, info.cascade)) {
+	if (!schemas->DropEntry(transaction, info.name.name, info.cascade)) {
 		if (info.if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-			throw CatalogException::MissingEntry(CatalogType::SCHEMA_ENTRY, info.name, string());
+			throw CatalogException::MissingEntry(CatalogType::SCHEMA_ENTRY, info.name.name, string());
 		}
 	}
 }

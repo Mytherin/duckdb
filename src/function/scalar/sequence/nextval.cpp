@@ -128,7 +128,7 @@ unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, BoundScalarFunc
 	auto &context = deserializer.Get<ClientContext &>();
 	auto catalog = seq_info.GetCatalog();
 	auto schema = seq_info.GetSchema();
-	auto &sequence = BindSequenceFromContext(context, catalog, schema, seq_info.name);
+	auto &sequence = BindSequenceFromContext(context, catalog, schema, seq_info.GetSequenceName());
 	return make_uniq<NextvalBindData>(sequence);
 }
 

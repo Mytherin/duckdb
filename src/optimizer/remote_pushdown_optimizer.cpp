@@ -361,7 +361,7 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteNode(InsertQueryNode &node
 	BaseTableRef target_ref;
 	target_ref.catalog_name = node.GetCatalog();
 	target_ref.schema_name = node.GetSchema();
-	target_ref.table_name = node.table;
+	target_ref.table_name = node.table.name;
 
 	RemotePushdownOptimizer target_optimizer(this);
 	auto result = target_optimizer.Rewrite(target_ref);

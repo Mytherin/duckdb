@@ -581,7 +581,7 @@ bool FunctionExpression::Equals(const ParsedExpression &other) const {
 		return false;
 	}
 	auto &other_p = other.Cast<FunctionExpression>();
-	if (function_name != other_p.function_name) {
+	if (name != other_p.name) {
 		return false;
 	}
 	if (!ParsedExpression::Equals(filter, other_p.filter)) {
@@ -604,32 +604,21 @@ bool FunctionExpression::Equals(const ParsedExpression &other) const {
 			return false;
 		}
 	}
-	if (schema_path.size() != other_p.schema_path.size()) {
-		return false;
-	}
-	for (idx_t i = 0; i < schema_path.size(); i++) {
-		if (schema_path[i] != other_p.schema_path[i]) {
-			return false;
-		}
-	}
 	return true;
 }
 
 hash_t FunctionExpression::Hash() const {
 	hash_t hash = ParsedExpression::Hash();
-	hash = CombineHash(hash, function_name.Hash());
+	hash = CombineHash(hash, name.Hash());
 	hash = CombineHash(hash, duckdb::Hash<bool>(distinct));
 	hash = CombineHash(hash, duckdb::Hash<bool>(export_state));
-	for (auto &s : schema_path) {
-		hash = CombineHash(hash, s.Hash());
-	}
 	return hash;
 }
 
 unique_ptr<ParsedExpression> FunctionExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<FunctionExpression>(new FunctionExpression());
 	copy->is_legacy_function_call = is_legacy_function_call;
-	copy->function_name = function_name;
+	copy->name = name;
 	copy->filter = filter ? filter->Copy() : nullptr;
 	copy->order_bys = order_bys ? unique_ptr_cast<ResultModifier, OrderModifier>(order_bys->Copy()) : nullptr;
 	copy->distinct = distinct;
@@ -638,7 +627,6 @@ unique_ptr<ParsedExpression> FunctionExpression::Copy() const {
 	for (auto &arg : arguments) {
 		copy->arguments.emplace_back(arg.Copy());
 	}
-	copy->schema_path = schema_path;
 	copy->CopyBase(*this);
 	return std::move(copy);
 }
@@ -834,7 +822,7 @@ bool WindowExpression::Equals(const ParsedExpression &other) const {
 		return false;
 	}
 	auto &other_p = other.Cast<WindowExpression>();
-	if (function_name != other_p.function_name) {
+	if (name != other_p.name) {
 		return false;
 	}
 	if (!ParsedExpression::ListEquals(partitions, other_p.partitions)) {
@@ -903,20 +891,12 @@ bool WindowExpression::Equals(const ParsedExpression &other) const {
 			return false;
 		}
 	}
-	if (schema_path.size() != other_p.schema_path.size()) {
-		return false;
-	}
-	for (idx_t i = 0; i < schema_path.size(); i++) {
-		if (schema_path[i] != other_p.schema_path[i]) {
-			return false;
-		}
-	}
 	return true;
 }
 
 hash_t WindowExpression::Hash() const {
 	hash_t hash = ParsedExpression::Hash();
-	hash = CombineHash(hash, function_name.Hash());
+	hash = CombineHash(hash, name.Hash());
 	for (idx_t i = 0; i < orders.size(); i++) {
 		hash = CombineHash(hash, duckdb::Hash<uint32_t>(static_cast<uint32_t>(orders[i].type)));
 		hash = CombineHash(hash, duckdb::Hash<uint32_t>(static_cast<uint32_t>(orders[i].null_order)));
@@ -931,16 +911,13 @@ hash_t WindowExpression::Hash() const {
 		hash = CombineHash(hash, duckdb::Hash<uint32_t>(static_cast<uint32_t>(arg_orders[i].null_order)));
 	}
 	hash = CombineHash(hash, duckdb::Hash<bool>(has_ignore_nulls));
-	for (auto &s : schema_path) {
-		hash = CombineHash(hash, s.Hash());
-	}
 	return hash;
 }
 
 unique_ptr<ParsedExpression> WindowExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<WindowExpression>(new WindowExpression());
 	copy->is_legacy_function_call = is_legacy_function_call;
-	copy->function_name = function_name;
+	copy->name = name;
 	for (auto &child : partitions) {
 		copy->partitions.push_back(child->Copy());
 	}
@@ -962,7 +939,6 @@ unique_ptr<ParsedExpression> WindowExpression::Copy() const {
 	for (auto &arg : arguments) {
 		copy->arguments.emplace_back(arg.Copy());
 	}
-	copy->schema_path = schema_path;
 	copy->CopyBase(*this);
 	return std::move(copy);
 }
@@ -972,39 +948,27 @@ bool TypeExpression::Equals(const ParsedExpression &other) const {
 		return false;
 	}
 	auto &other_p = other.Cast<TypeExpression>();
-	if (type_name != other_p.type_name) {
-		return false;
-	}
 	if (!ParsedExpression::ListEquals(children, other_p.children)) {
 		return false;
 	}
-	if (schema_path.size() != other_p.schema_path.size()) {
+	if (name != other_p.name) {
 		return false;
-	}
-	for (idx_t i = 0; i < schema_path.size(); i++) {
-		if (schema_path[i] != other_p.schema_path[i]) {
-			return false;
-		}
 	}
 	return true;
 }
 
 hash_t TypeExpression::Hash() const {
 	hash_t hash = ParsedExpression::Hash();
-	hash = CombineHash(hash, type_name.Hash());
-	for (auto &s : schema_path) {
-		hash = CombineHash(hash, s.Hash());
-	}
+	hash = CombineHash(hash, name.Hash());
 	return hash;
 }
 
 unique_ptr<ParsedExpression> TypeExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<TypeExpression>(new TypeExpression());
-	copy->type_name = type_name;
 	for (auto &child : children) {
 		copy->children.push_back(child->Copy());
 	}
-	copy->schema_path = schema_path;
+	copy->name = name;
 	copy->CopyBase(*this);
 	return std::move(copy);
 }

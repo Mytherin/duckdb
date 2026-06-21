@@ -19,8 +19,13 @@ namespace duckdb {
 struct CreateTriggerInfo : public CreateInfo {
 	CreateTriggerInfo();
 
-	//! Trigger name
-	Identifier trigger_name;
+	//! Trigger name (stored in the base CreateInfo's qualified name)
+	const Identifier &GetTriggerName() const {
+		return name.name;
+	}
+	void SetTriggerName(Identifier trigger_name_p) {
+		name.name = std::move(trigger_name_p);
+	}
 	//! The table the trigger is on
 	unique_ptr<BaseTableRef> base_table;
 	//! When the trigger fires (BEFORE/AFTER/INSTEAD OF)

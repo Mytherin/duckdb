@@ -103,21 +103,31 @@ void InsertQueryNode::Serialize(Serializer &serializer) const {
 	QueryNode::Serialize(serializer);
 	serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(200, "select_statement", select_statement);
 	serializer.WritePropertyWithDefault<vector<Identifier>>(201, "columns", columns);
-	serializer.WritePropertyWithDefault<Identifier>(202, "table", table);
-	serializer.WritePropertyWithDefault<Identifier>(203, "schema", GetSchema());
-	serializer.WritePropertyWithDefault<Identifier>(204, "catalog", GetCatalog());
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<Identifier>(202, "table", table.name);
+	}
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<Identifier>(203, "schema", GetSchema());
+	}
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<Identifier>(204, "catalog", GetCatalog());
+	}
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(205, "returning_list", returning_list);
 	serializer.WritePropertyWithDefault<unique_ptr<OnConflictInfo>>(206, "on_conflict_info", on_conflict_info);
 	serializer.WritePropertyWithDefault<unique_ptr<TableRef>>(207, "table_ref", table_ref);
 	serializer.WritePropertyWithDefault<bool>(208, "default_values", default_values, false);
 	serializer.WritePropertyWithDefault<InsertColumnOrder>(209, "column_order", column_order, InsertColumnOrder::INSERT_BY_POSITION);
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<QualifiedName>(210, "qualified_table", table);
+	}
 }
 
 unique_ptr<QueryNode> InsertQueryNode::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<InsertQueryNode>(new InsertQueryNode());
 	deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(200, "select_statement", result->select_statement);
 	deserializer.ReadPropertyWithDefault<vector<Identifier>>(201, "columns", result->columns);
-	deserializer.ReadPropertyWithDefault<Identifier>(202, "table", result->table);
+	auto table = deserializer.ReadPropertyWithDefault<Identifier>(202, "table");
+	result->SetTableName(std::move(table));
 	auto schema = deserializer.ReadPropertyWithDefault<Identifier>(203, "schema");
 	result->SetSchema(std::move(schema));
 	auto catalog = deserializer.ReadPropertyWithDefault<Identifier>(204, "catalog");
@@ -127,6 +137,10 @@ unique_ptr<QueryNode> InsertQueryNode::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<unique_ptr<TableRef>>(207, "table_ref", result->table_ref);
 	deserializer.ReadPropertyWithExplicitDefault<bool>(208, "default_values", result->default_values, false);
 	deserializer.ReadPropertyWithExplicitDefault<InsertColumnOrder>(209, "column_order", result->column_order, InsertColumnOrder::INSERT_BY_POSITION);
+	auto qualified_table = deserializer.ReadPropertyWithDefault<QualifiedName>(210, "qualified_table");
+	if (!qualified_table.empty()) {
+		result->SetTable(std::move(qualified_table));
+	}
 	return std::move(result);
 }
 

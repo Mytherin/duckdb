@@ -7,17 +7,19 @@
 #include "duckdb/common/types/hash.hpp"
 namespace duckdb {
 
-TypeExpression::TypeExpression(Identifier catalog, Identifier schema, Identifier type_name,
-                               vector<unique_ptr<ParsedExpression>> children_p)
-    : ParsedExpression(ExpressionType::TYPE, ExpressionClass::TYPE),
-      schema_path(SchemaPathFromCatalogSchema(std::move(catalog), std::move(schema))), type_name(std::move(type_name)),
+TypeExpression::TypeExpression(QualifiedName name_p, vector<unique_ptr<ParsedExpression>> children_p)
+    : ParsedExpression(ExpressionType::TYPE, ExpressionClass::TYPE), name(std::move(name_p)),
       children(std::move(children_p)) {
-	D_ASSERT(!this->type_name.empty());
+	D_ASSERT(!name.name.empty());
+}
+
+TypeExpression::TypeExpression(Identifier catalog, Identifier schema, Identifier type_name,
+                               vector<unique_ptr<ParsedExpression>> children)
+    : TypeExpression(QualifiedName(std::move(catalog), std::move(schema), std::move(type_name)), std::move(children)) {
 }
 
 TypeExpression::TypeExpression(Identifier type_name, vector<unique_ptr<ParsedExpression>> children)
-    : TypeExpression(Identifier::InvalidCatalog(), Identifier::InvalidSchema(), std::move(type_name),
-                     std::move(children)) {
+    : TypeExpression(QualifiedName(std::move(type_name)), std::move(children)) {
 }
 
 TypeExpression::TypeExpression(const string &type_name, vector<unique_ptr<ParsedExpression>> children)
@@ -28,6 +30,7 @@ TypeExpression::TypeExpression() : ParsedExpression(ExpressionType::TYPE, Expres
 }
 
 string TypeExpression::ToString() const {
+	auto &type_name = GetTypeName();
 	string result;
 	if (!GetCatalog().empty()) {
 		result += SQLIdentifier(GetCatalog()) + ".";
@@ -116,7 +119,7 @@ string TypeExpression::ToString() const {
 }
 
 void TypeExpression::Verify() const {
-	D_ASSERT(!type_name.empty());
+	D_ASSERT(!GetTypeName().empty());
 }
 
 } // namespace duckdb
