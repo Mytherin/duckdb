@@ -28,9 +28,6 @@ struct CreateIndexInfo : public CreateInfo {
 	const Identifier &GetIndexName() const {
 		return name.name;
 	}
-	void SetIndexName(Identifier index_name_p) {
-		name.name = std::move(index_name_p);
-	}
 
 	//! Options values (WITH ...)
 	case_insensitive_map_t<Value> options;

@@ -7,7 +7,7 @@ CreateTypeInfo::CreateTypeInfo() : CreateInfo(CatalogType::TYPE_ENTRY), bind_fun
 }
 CreateTypeInfo::CreateTypeInfo(string name_p, LogicalType type_p, bind_logical_type_function_t bind_function_p)
     : CreateInfo(CatalogType::TYPE_ENTRY), type(std::move(type_p)), bind_function(bind_function_p) {
-	SetTypeName(Identifier(std::move(name_p)));
+	name.name = Identifier(std::move(name_p));
 }
 
 unique_ptr<CreateInfo> CreateTypeInfo::Copy() const {

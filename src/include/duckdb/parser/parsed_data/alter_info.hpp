@@ -35,14 +35,12 @@ enum class AlterBindMode { BIND_ON_ALTER, SKIP_BINDING };
 struct AlterEntryData {
 	AlterEntryData() {
 	}
-	AlterEntryData(Identifier catalog_p, Identifier schema_p, Identifier name_p, OnEntryNotFound if_not_found)
-	    : catalog(std::move(catalog_p)), schema(std::move(schema_p)), name(std::move(name_p)),
-	      if_not_found(if_not_found) {
+	AlterEntryData(QualifiedName name_p, OnEntryNotFound if_not_found)
+	    : name(std::move(name_p)), if_not_found(if_not_found) {
 	}
 
-	Identifier catalog;
-	Identifier schema;
-	Identifier name;
+	//! The (optionally qualified) name of the entry to alter
+	QualifiedName name;
 	OnEntryNotFound if_not_found;
 };
 
@@ -51,6 +49,7 @@ public:
 	static constexpr const ParseInfoType TYPE = ParseInfoType::ALTER_INFO;
 
 public:
+	AlterInfo(AlterType type, QualifiedName name, OnEntryNotFound if_not_found);
 	AlterInfo(AlterType type, Identifier catalog, Identifier schema, Identifier name, OnEntryNotFound if_not_found);
 	AlterInfo(AlterType type, vector<Identifier> schema_path, Identifier name, OnEntryNotFound if_not_found);
 	~AlterInfo() override;
@@ -74,25 +73,12 @@ public:
 	const Identifier &GetSchema() const {
 		return name.GetSchema();
 	}
-	void SetCatalog(Identifier catalog_p) {
-		name.SetCatalog(std::move(catalog_p));
-	}
-	void SetSchema(Identifier schema_p) {
-		name.SetSchema(std::move(schema_p));
-	}
 	const vector<Identifier> &GetSchemaPath() const {
 		return name.GetSchemaPath();
 	}
-	void SetSchemaPath(vector<Identifier> path) {
-		name.SetSchemaPath(std::move(path));
-	}
-	//! Assign the full qualified name (used for v2.0+ deserialization)
-	void SetName(QualifiedName name_p) {
+	//! Assign the full qualified name
+	void SetQualifiedName(QualifiedName name_p) {
 		name = std::move(name_p);
-	}
-	//! Assign only the bare entry name (used for legacy deserialization)
-	void SetEntryName(Identifier entry_name) {
-		name.name = std::move(entry_name);
 	}
 
 	virtual CatalogType GetCatalogType() const = 0;

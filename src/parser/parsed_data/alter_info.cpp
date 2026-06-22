@@ -5,15 +5,17 @@
 
 namespace duckdb {
 
+AlterInfo::AlterInfo(AlterType type, QualifiedName name_p, OnEntryNotFound if_not_found)
+    : ParseInfo(TYPE), type(type), if_not_found(if_not_found), name(std::move(name_p)), allow_internal(false) {
+}
+
 AlterInfo::AlterInfo(AlterType type, Identifier catalog, Identifier schema, Identifier name_p,
                      OnEntryNotFound if_not_found)
-    : ParseInfo(TYPE), type(type), if_not_found(if_not_found),
-      name(std::move(catalog), std::move(schema), std::move(name_p)), allow_internal(false) {
+    : AlterInfo(type, QualifiedName(std::move(catalog), std::move(schema), std::move(name_p)), if_not_found) {
 }
 
 AlterInfo::AlterInfo(AlterType type, vector<Identifier> schema_path_p, Identifier name_p, OnEntryNotFound if_not_found)
-    : ParseInfo(TYPE), type(type), if_not_found(if_not_found), name(std::move(schema_path_p), std::move(name_p)),
-      allow_internal(false) {
+    : AlterInfo(type, QualifiedName(std::move(schema_path_p), std::move(name_p)), if_not_found) {
 }
 
 AlterInfo::AlterInfo(AlterType type) : ParseInfo(TYPE), type(type) {
@@ -23,12 +25,7 @@ AlterInfo::~AlterInfo() {
 }
 
 AlterEntryData AlterInfo::GetAlterEntryData() const {
-	AlterEntryData data;
-	data.catalog = GetCatalog();
-	data.schema = GetSchema();
-	data.name = name.name;
-	data.if_not_found = if_not_found;
-	return data;
+	return AlterEntryData(name, if_not_found);
 }
 
 bool AlterInfo::IsAddPrimaryKey() const {

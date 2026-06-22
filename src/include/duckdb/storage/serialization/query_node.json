@@ -285,7 +285,7 @@
         "legacy": true,
         "version": "v2.0.0",
         "serialize_property": "table.name",
-        "deserialize_setter": "SetTableName"
+        "deserialize_property": "table.name"
       },
       {
         "id": 203,
@@ -294,7 +294,7 @@
         "legacy": true,
         "version": "v2.0.0",
         "serialize_property": "GetSchema()",
-        "deserialize_setter": "SetSchema"
+        "deserialize_setter": "table.SetSchema"
       },
       {
         "id": 204,
@@ -303,7 +303,7 @@
         "legacy": true,
         "version": "v2.0.0",
         "serialize_property": "GetCatalog()",
-        "deserialize_setter": "SetCatalog"
+        "deserialize_setter": "table.SetCatalog"
       },
       {
         "id": 205,
@@ -338,7 +338,7 @@
         "type": "QualifiedName",
         "version": "v2.0.0",
         "serialize_property": "table",
-        "deserialize_setter": "SetTable",
+        "deserialize_setter": "SetQualifiedName",
         "deserialize_if_present": true
       }
     ]

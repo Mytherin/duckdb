@@ -126,12 +126,11 @@ unique_ptr<QueryNode> InsertQueryNode::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<InsertQueryNode>(new InsertQueryNode());
 	deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(200, "select_statement", result->select_statement);
 	deserializer.ReadPropertyWithDefault<vector<Identifier>>(201, "columns", result->columns);
-	auto table = deserializer.ReadPropertyWithDefault<Identifier>(202, "table");
-	result->SetTableName(std::move(table));
+	deserializer.ReadPropertyWithDefault<Identifier>(202, "table", result->table.name);
 	auto schema = deserializer.ReadPropertyWithDefault<Identifier>(203, "schema");
-	result->SetSchema(std::move(schema));
+	result->table.SetSchema(std::move(schema));
 	auto catalog = deserializer.ReadPropertyWithDefault<Identifier>(204, "catalog");
-	result->SetCatalog(std::move(catalog));
+	result->table.SetCatalog(std::move(catalog));
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(205, "returning_list", result->returning_list);
 	deserializer.ReadPropertyWithDefault<unique_ptr<OnConflictInfo>>(206, "on_conflict_info", result->on_conflict_info);
 	deserializer.ReadPropertyWithDefault<unique_ptr<TableRef>>(207, "table_ref", result->table_ref);
@@ -139,7 +138,7 @@ unique_ptr<QueryNode> InsertQueryNode::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithExplicitDefault<InsertColumnOrder>(209, "column_order", result->column_order, InsertColumnOrder::INSERT_BY_POSITION);
 	auto qualified_table = deserializer.ReadPropertyWithDefault<QualifiedName>(210, "qualified_table");
 	if (!qualified_table.empty()) {
-		result->SetTable(std::move(qualified_table));
+		result->SetQualifiedName(std::move(qualified_table));
 	}
 	return std::move(result);
 }

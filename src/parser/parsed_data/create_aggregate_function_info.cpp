@@ -4,14 +4,14 @@ namespace duckdb {
 
 CreateAggregateFunctionInfo::CreateAggregateFunctionInfo(AggregateFunction function)
     : CreateFunctionInfo(CatalogType::AGGREGATE_FUNCTION_ENTRY), functions(function.name) {
-	SetFunctionName(function.name);
+	name.name = function.name;
 	functions.AddFunction(std::move(function));
 	internal = true;
 }
 
 CreateAggregateFunctionInfo::CreateAggregateFunctionInfo(AggregateFunctionSet set)
     : CreateFunctionInfo(CatalogType::AGGREGATE_FUNCTION_ENTRY), functions(std::move(set)) {
-	SetFunctionName(functions.name);
+	name.name = functions.name;
 	for (auto &func : functions.functions) {
 		func.name = functions.name;
 	}

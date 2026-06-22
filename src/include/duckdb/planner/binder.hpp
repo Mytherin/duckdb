@@ -311,6 +311,7 @@ public:
 	void BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> &root);
 
 	static void BindSchemaOrCatalog(ClientContext &context, Identifier &catalog, Identifier &schema);
+	static void BindSchemaOrCatalog(ClientContext &context, QualifiedName &name);
 
 	void BindLogicalType(LogicalType &type);
 
@@ -576,6 +577,9 @@ private:
 	//! If only a schema name is provided (e.g. "a.b") then figure out if "a" is a schema or a catalog name
 	void BindSchemaOrCatalog(Identifier &catalog_name, Identifier &schema_name);
 	static void BindSchemaOrCatalog(CatalogEntryRetriever &retriever, Identifier &catalog, Identifier &schema);
+	//! Resolve the (optional) schema-or-catalog qualification of a QualifiedName in place
+	void BindSchemaOrCatalog(QualifiedName &name);
+	static void BindSchemaOrCatalog(CatalogEntryRetriever &retriever, QualifiedName &name);
 	Identifier BindCatalog(const Identifier &catalog_name);
 	SchemaCatalogEntry &BindCreateSchema(CreateInfo &info);
 

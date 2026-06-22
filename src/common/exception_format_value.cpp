@@ -8,6 +8,7 @@
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/common/types/string.hpp"
 #include "duckdb/common/identifier.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 
 namespace duckdb {
 
@@ -61,6 +62,11 @@ ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const Identifier &v
 	// An Identifier is a SQL identifier, so it formats with SQL identifier rules (quoted only when required) -
 	// callers should never need to wrap an Identifier in SQLIdentifier when printing.
 	return SQLIdentifier::ToString(value.GetIdentifierName());
+}
+template <>
+ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const QualifiedName &value) {
+	// Format the bare entry name (matching how the unqualified name was printed before catalog/schema were folded in)
+	return SQLIdentifier::ToString(value.name.GetIdentifierName());
 }
 template <>
 ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const SQLString &value) {

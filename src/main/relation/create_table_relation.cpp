@@ -28,9 +28,9 @@ BoundStatement CreateTableRelation::Bind(Binder &binder) {
 
 	CreateStatement stmt;
 	auto info = make_uniq<CreateTableInfo>();
-	info->SetCatalog(catalog_name);
-	info->SetSchema(schema_name);
-	info->SetTableName(table_name);
+	info->name.SetCatalog(catalog_name);
+	info->name.SetSchema(schema_name);
+	info->name.name = table_name;
 	info->query = std::move(select);
 	info->on_conflict = on_conflict;
 	info->temporary = temporary;

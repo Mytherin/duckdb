@@ -716,12 +716,11 @@ def generate_base_class_code(base_class: SerializableClass):
                 base_class_deserialize += (
                     f'\tresult->{entry.deserialize_setter}(std::move({entry.deserialize_property}));\n'
                 )
-        elif move:
-            base_class_deserialize += (
-                f'\tresult->{entry.deserialize_property} = std::move({entry.deserialize_property});\n'
-            )
         else:
-            base_class_deserialize += f'\tresult->{entry.deserialize_property} = {entry.deserialize_property};\n'
+            # the local variable replaces '.' with '_'; the assignment target keeps the dotted member path
+            local = entry.deserialize_property.replace('.', '_')
+            value = f'std::move({local})' if move else local
+            base_class_deserialize += f'\tresult->{entry.deserialize_property} = {value};\n'
     if base_class.finalize_deserialization is not None:
         for line in base_class.finalize_deserialization:
             base_class_deserialize += "\t" + line + "\n"

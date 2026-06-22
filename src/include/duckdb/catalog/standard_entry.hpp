@@ -35,6 +35,8 @@ public:
 	const SchemaCatalogEntry &ParentSchema() const override {
 		return schema;
 	}
+
+	QualifiedName GetQualifiedName() const override;
 };
 
 } // namespace duckdb

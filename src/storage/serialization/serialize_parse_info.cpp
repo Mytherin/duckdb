@@ -105,7 +105,7 @@ unique_ptr<ParseInfo> AlterInfo::Deserialize(Deserializer &deserializer) {
 	auto type = deserializer.ReadProperty<AlterType>(200, "type");
 	auto catalog = deserializer.ReadPropertyWithDefault<Identifier>(201, "catalog");
 	auto schema = deserializer.ReadPropertyWithDefault<Identifier>(202, "schema");
-	auto name = deserializer.ReadPropertyWithDefault<Identifier>(203, "name");
+	auto name_name = deserializer.ReadPropertyWithDefault<Identifier>(203, "name");
 	auto if_not_found = deserializer.ReadProperty<OnEntryNotFound>(204, "if_not_found");
 	auto allow_internal = deserializer.ReadPropertyWithDefault<bool>(205, "allow_internal");
 	auto qualified_name = deserializer.ReadPropertyWithDefault<QualifiedName>(206, "qualified_name");
@@ -132,13 +132,13 @@ unique_ptr<ParseInfo> AlterInfo::Deserialize(Deserializer &deserializer) {
 	default:
 		throw SerializationException("Unsupported type for deserialization of AlterInfo!");
 	}
-	result->SetCatalog(std::move(catalog));
-	result->SetSchema(std::move(schema));
-	result->SetEntryName(std::move(name));
+	result->name.SetCatalog(std::move(catalog));
+	result->name.SetSchema(std::move(schema));
+	result->name.name = std::move(name_name);
 	result->if_not_found = if_not_found;
 	result->allow_internal = allow_internal;
 	if (!qualified_name.empty()) {
-		result->SetName(std::move(qualified_name));
+		result->SetQualifiedName(std::move(qualified_name));
 	}
 	return std::move(result);
 }
@@ -417,11 +417,10 @@ void CopyInfo::Serialize(Serializer &serializer) const {
 unique_ptr<ParseInfo> CopyInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<CopyInfo>(new CopyInfo());
 	auto catalog = deserializer.ReadPropertyWithDefault<Identifier>(200, "catalog");
-	result->SetCatalog(std::move(catalog));
+	result->table.SetCatalog(std::move(catalog));
 	auto schema = deserializer.ReadPropertyWithDefault<Identifier>(201, "schema");
-	result->SetSchema(std::move(schema));
-	auto table = deserializer.ReadPropertyWithDefault<Identifier>(202, "table");
-	result->SetTableName(std::move(table));
+	result->table.SetSchema(std::move(schema));
+	deserializer.ReadPropertyWithDefault<Identifier>(202, "table", result->table.name);
 	deserializer.ReadPropertyWithDefault<vector<Identifier>>(203, "select_list", result->select_list);
 	deserializer.ReadPropertyWithDefault<bool>(204, "is_from", result->is_from);
 	deserializer.ReadPropertyWithDefault<string>(205, "format", result->format);
@@ -431,7 +430,7 @@ unique_ptr<ParseInfo> CopyInfo::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<bool>(209, "is_format_auto_detected", result->is_format_auto_detected);
 	auto qualified_table = deserializer.ReadPropertyWithDefault<QualifiedName>(210, "qualified_table");
 	if (!qualified_table.empty()) {
-		result->SetTable(std::move(qualified_table));
+		result->SetQualifiedName(std::move(qualified_table));
 	}
 	return std::move(result);
 }
@@ -483,18 +482,17 @@ unique_ptr<ParseInfo> DropInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<DropInfo>(new DropInfo());
 	deserializer.ReadProperty<CatalogType>(200, "type", result->type);
 	auto catalog = deserializer.ReadPropertyWithDefault<Identifier>(201, "catalog");
-	result->SetCatalog(std::move(catalog));
+	result->name.SetCatalog(std::move(catalog));
 	auto schema = deserializer.ReadPropertyWithDefault<Identifier>(202, "schema");
-	result->SetSchema(std::move(schema));
-	auto name = deserializer.ReadPropertyWithDefault<Identifier>(203, "name");
-	result->SetEntryName(std::move(name));
+	result->name.SetSchema(std::move(schema));
+	deserializer.ReadPropertyWithDefault<Identifier>(203, "name", result->name.name);
 	deserializer.ReadProperty<OnEntryNotFound>(204, "if_not_found", result->if_not_found);
 	deserializer.ReadPropertyWithDefault<bool>(205, "cascade", result->cascade);
 	deserializer.ReadPropertyWithDefault<bool>(206, "allow_drop_internal", result->allow_drop_internal);
 	deserializer.ReadPropertyWithDefault<unique_ptr<ExtraDropInfo>>(207, "extra_drop_info", result->extra_drop_info);
 	auto qualified_name = deserializer.ReadPropertyWithDefault<QualifiedName>(208, "qualified_name");
 	if (!qualified_name.empty()) {
-		result->SetName(std::move(qualified_name));
+		result->SetQualifiedName(std::move(qualified_name));
 	}
 	return std::move(result);
 }

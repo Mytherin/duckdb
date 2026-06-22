@@ -18,17 +18,17 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateIndexStmt(
 	if (!index_name) {
 		throw NotImplementedException("Please provide an index name, e.g., CREATE INDEX my_name ...");
 	}
-	index_info->SetIndexName(*index_name);
-	index_info->table = base_table_name->table_name;
-	index_info->SetCatalog(base_table_name->catalog_name);
-	index_info->SetSchema(base_table_name->schema_name);
+	index_info->name.name = *index_name;
+	index_info->table = base_table_name->GetTableName();
+	index_info->name.SetCatalog(base_table_name->GetCatalogName());
+	index_info->name.SetSchema(base_table_name->GetSchemaName());
 	index_info->index_type = index_type ? index_type->GetIdentifierName() : "ART";
 	if (insert_column_list) {
 		for (auto &column : *insert_column_list) {
 			index_info->expressions.push_back(
-			    make_uniq<ColumnRefExpression>(Identifier(column), base_table_name->table_name));
+			    make_uniq<ColumnRefExpression>(Identifier(column), base_table_name->GetTableName()));
 			index_info->parsed_expressions.push_back(
-			    make_uniq<ColumnRefExpression>(Identifier(column), base_table_name->table_name));
+			    make_uniq<ColumnRefExpression>(Identifier(column), base_table_name->GetTableName()));
 		}
 	}
 	if (index_element) {

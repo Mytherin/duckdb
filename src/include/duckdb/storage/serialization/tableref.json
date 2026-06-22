@@ -37,12 +37,20 @@
       {
         "id": 200,
         "name": "schema_name",
-        "type": "Identifier"
+        "type": "Identifier",
+        "legacy": true,
+        "version": "v2.0.0",
+        "serialize_property": "GetSchemaName()",
+        "deserialize_setter": "name.SetSchema"
       },
       {
         "id": 201,
         "name": "table_name",
-        "type": "Identifier"
+        "type": "Identifier",
+        "legacy": true,
+        "version": "v2.0.0",
+        "serialize_property": "GetTableName()",
+        "deserialize_property": "name.name"
       },
       {
         "id": 202,
@@ -52,12 +60,24 @@
       {
         "id": 203,
         "name": "catalog_name",
-        "type": "Identifier"
+        "type": "Identifier",
+        "legacy": true,
+        "version": "v2.0.0",
+        "serialize_property": "GetCatalogName()",
+        "deserialize_setter": "name.SetCatalog"
       },
       {
         "id": 204,
         "name": "at_clause",
         "type": "AtClause*"
+      },
+      {
+        "id": 205,
+        "name": "name",
+        "type": "QualifiedName",
+        "version": "v2.0.0",
+        "deserialize_setter": "SetQualifiedName",
+        "deserialize_if_present": true
       }
     ]
   },

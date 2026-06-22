@@ -33,9 +33,6 @@ struct CreateFunctionInfo : public CreateInfo {
 	const Identifier &GetFunctionName() const {
 		return CreateInfo::name.name;
 	}
-	void SetFunctionName(Identifier function_name) {
-		CreateInfo::name.name = std::move(function_name);
-	}
 	//! The function name of which this function is an alias
 	Identifier alias_of;
 	//! Function description

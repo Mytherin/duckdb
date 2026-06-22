@@ -22,14 +22,14 @@ void Binder::BindDropTrigger(DropStatement &stmt, StatementProperties &propertie
 		throw BinderException("DROP TRIGGER requires an ON clause specifying the table");
 	}
 	auto &base_table_ref = trigger_extra.base_table->Cast<BaseTableRef>();
-	Identifier catalog_name = base_table_ref.catalog_name;
-	Identifier schema_name = base_table_ref.schema_name;
+	Identifier catalog_name = base_table_ref.GetCatalogName();
+	Identifier schema_name = base_table_ref.GetSchemaName();
 	BindSchemaOrCatalog(catalog_name, schema_name);
 	// IF EXISTS only guards the trigger, not the table (PostgreSQL-compatible behavior).
 	auto &table_entry =
-	    Catalog::GetEntry<TableCatalogEntry>(context, catalog_name, schema_name, base_table_ref.table_name);
-	stmt.info->SetCatalog(table_entry.ParentCatalog().GetName());
-	stmt.info->SetSchema(table_entry.ParentSchema().name);
+	    Catalog::GetEntry<TableCatalogEntry>(context, catalog_name, schema_name, base_table_ref.GetTableName());
+	stmt.info->name.SetCatalog(table_entry.ParentCatalog().GetName());
+	stmt.info->name.SetSchema(table_entry.ParentSchema().name);
 	properties.RegisterDBModify(table_entry.ParentCatalog(), context, DatabaseModificationType::DROP_CATALOG_ENTRY);
 }
 
@@ -59,8 +59,8 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		auto drop_catalog = stmt.info->GetCatalog();
 		auto drop_schema = stmt.info->GetSchema();
 		BindSchemaOrCatalog(drop_catalog, drop_schema);
-		stmt.info->SetCatalog(drop_catalog);
-		stmt.info->SetSchema(drop_schema);
+		stmt.info->name.SetCatalog(drop_catalog);
+		stmt.info->name.SetSchema(drop_schema);
 		auto catalog = Catalog::GetCatalogEntry(context, stmt.info->GetCatalog());
 		if (catalog) {
 			// mark catalog as accessed
@@ -100,12 +100,11 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		if (entry->internal) {
 			throw CatalogException("Cannot drop internal catalog entry \"%s\"!", entry->name.GetIdentifierName());
 		}
-		stmt.info->SetCatalog(entry->ParentCatalog().GetName());
 		if (!entry->temporary) {
 			// we can only drop temporary schema entries in read-only mode
 			properties.RegisterDBModify(entry->ParentCatalog(), context, DatabaseModificationType::DROP_CATALOG_ENTRY);
 		}
-		stmt.info->SetSchema(entry->ParentSchema().name);
+		stmt.info->SetQualifiedName(entry->GetQualifiedName());
 		break;
 	}
 	case CatalogType::SECRET_ENTRY: {

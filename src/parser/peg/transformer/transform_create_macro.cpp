@@ -12,12 +12,12 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateMacroStmt(
 	auto info = make_uniq<CreateMacroInfo>(CatalogType::MACRO_ENTRY);
 
 	if (qualified_name.GetSchema().empty()) {
-		info->SetSchema(qualified_name.GetCatalog());
+		info->name.SetSchema(qualified_name.GetCatalog());
 	} else {
-		info->SetCatalog(qualified_name.GetCatalog());
-		info->SetSchema(qualified_name.GetSchema());
+		info->name.SetCatalog(qualified_name.GetCatalog());
+		info->name.SetSchema(qualified_name.GetSchema());
 	}
-	info->SetFunctionName(qualified_name.name);
+	info->name.name = qualified_name.name;
 
 	info->on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	for (auto &macro_function : macro_definition) {

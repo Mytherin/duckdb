@@ -27,9 +27,6 @@ struct CreateTableInfo : public CreateInfo {
 	const Identifier &GetTableName() const {
 		return name.name;
 	}
-	void SetTableName(Identifier table_name) {
-		name.name = std::move(table_name);
-	}
 	//! List of columns of the table
 	ColumnList columns;
 	//! List of constraints on the table

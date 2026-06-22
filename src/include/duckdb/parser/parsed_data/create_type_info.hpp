@@ -59,9 +59,6 @@ struct CreateTypeInfo : public CreateInfo {
 	const Identifier &GetTypeName() const {
 		return CreateInfo::name.name;
 	}
-	void SetTypeName(Identifier type_name) {
-		CreateInfo::name.name = std::move(type_name);
-	}
 	//! Logical Type
 	LogicalType type;
 	//! Used by create enum from query

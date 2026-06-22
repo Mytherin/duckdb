@@ -12,12 +12,12 @@ CreateViewInfo::CreateViewInfo() : CreateInfo(CatalogType::VIEW_ENTRY, Identifie
 }
 CreateViewInfo::CreateViewInfo(Identifier catalog_p, Identifier schema_p, Identifier view_name_p)
     : CreateInfo(CatalogType::VIEW_ENTRY, std::move(schema_p), std::move(catalog_p)) {
-	SetViewName(std::move(view_name_p));
+	name.name = std::move(view_name_p);
 }
 
 CreateViewInfo::CreateViewInfo(vector<Identifier> schema_path, Identifier view_name_p)
     : CreateInfo(CatalogType::VIEW_ENTRY, std::move(schema_path)) {
-	SetViewName(std::move(view_name_p));
+	name.name = std::move(view_name_p);
 }
 
 CreateViewInfo::CreateViewInfo(SchemaCatalogEntry &schema, Identifier view_name)
@@ -96,8 +96,8 @@ unique_ptr<CreateViewInfo> CreateViewInfo::FromCreateView(ClientContext &context
 	}
 
 	auto result = unique_ptr_cast<CreateInfo, CreateViewInfo>(std::move(create_statement.info));
-	result->SetCatalog(schema.ParentCatalog().GetName());
-	result->SetSchema(schema.name);
+	result->name.SetCatalog(schema.ParentCatalog().GetName());
+	result->name.SetSchema(schema.name);
 
 	auto view_binder = Binder::CreateBinder(context);
 	view_binder->BindCreateViewInfo(*result);

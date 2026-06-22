@@ -5,13 +5,13 @@ namespace duckdb {
 
 CreateTableFunctionInfo::CreateTableFunctionInfo(TableFunction function)
     : CreateFunctionInfo(CatalogType::TABLE_FUNCTION_ENTRY), functions(function.name) {
-	SetFunctionName(function.name);
+	name.name = function.name;
 	functions.AddFunction(std::move(function));
 	internal = true;
 }
 CreateTableFunctionInfo::CreateTableFunctionInfo(TableFunctionSet set)
     : CreateFunctionInfo(CatalogType::TABLE_FUNCTION_ENTRY), functions(std::move(set)) {
-	SetFunctionName(functions.name);
+	name.name = functions.name;
 	for (auto &func : functions.functions) {
 		func.name = functions.name;
 	}
@@ -27,8 +27,8 @@ unique_ptr<CreateInfo> CreateTableFunctionInfo::Copy() const {
 }
 
 unique_ptr<AlterInfo> CreateTableFunctionInfo::GetAlterInfo() const {
-	return make_uniq_base<AlterInfo, AddTableFunctionOverloadInfo>(
-	    AlterEntryData(GetCatalog(), GetSchema(), GetFunctionName(), OnEntryNotFound::RETURN_NULL), functions);
+	return make_uniq_base<AlterInfo, AddTableFunctionOverloadInfo>(AlterEntryData(name, OnEntryNotFound::RETURN_NULL),
+	                                                               functions);
 }
 
 } // namespace duckdb
