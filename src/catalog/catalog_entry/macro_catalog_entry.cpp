@@ -41,9 +41,9 @@ unique_ptr<CatalogEntry> TableMacroCatalogEntry::Copy(ClientContext &context) co
 
 unique_ptr<CreateInfo> MacroCatalogEntry::GetInfo() const {
 	auto info = make_uniq<CreateMacroInfo>(type);
-	info->SetCatalog(catalog.GetName());
-	info->SetSchema(schema.name);
-	info->SetFunctionName(name);
+	info->name.SetCatalog(catalog.GetName());
+	info->name.SetSchema(schema.name);
+	info->name.name = name;
 	for (auto &function : macros) {
 		info->macros.push_back(function->Copy());
 	}

@@ -57,7 +57,7 @@ BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &e
 
 	auto unique_constraint = constraint_info.constraint->Cast<UniqueConstraint>();
 	auto index_name = unique_constraint.GetName(table_info.name.name);
-	create_index_info->SetIndexName(index_name);
+	create_index_info->name.name = index_name;
 	D_ASSERT(!create_index_info->index_name.empty());
 
 	// Plan the table scan.
@@ -115,8 +115,8 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	auto alter_catalog = stmt.info->GetCatalog();
 	auto alter_schema = stmt.info->GetSchema();
 	BindSchemaOrCatalog(alter_catalog, alter_schema);
-	stmt.info->SetCatalog(alter_catalog);
-	stmt.info->SetSchema(alter_schema);
+	stmt.info->name.SetCatalog(alter_catalog);
+	stmt.info->name.SetSchema(alter_schema);
 
 	optional_ptr<CatalogEntry> entry;
 	if (stmt.info->type == AlterType::SET_COLUMN_COMMENT) {
@@ -161,8 +161,7 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 		// We can only alter temporary tables and views in read-only mode.
 		properties.RegisterDBModify(catalog, context, DatabaseModificationType::ALTER_TABLE);
 	}
-	stmt.info->SetCatalog(catalog.GetName());
-	stmt.info->SetSchema(entry->ParentSchema().name);
+	stmt.info->SetQualifiedName(entry->GetQualifiedName());
 
 	if (!stmt.info->IsAddPrimaryKey()) {
 		result.plan = make_uniq<LogicalSimple>(LogicalOperatorType::LOGICAL_ALTER, std::move(stmt.info));

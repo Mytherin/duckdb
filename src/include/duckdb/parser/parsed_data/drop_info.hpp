@@ -47,25 +47,12 @@ public:
 	const Identifier &GetSchema() const {
 		return name.GetSchema();
 	}
-	void SetCatalog(Identifier catalog_p) {
-		name.SetCatalog(std::move(catalog_p));
-	}
-	void SetSchema(Identifier schema_p) {
-		name.SetSchema(std::move(schema_p));
-	}
 	const vector<Identifier> &GetSchemaPath() const {
 		return name.GetSchemaPath();
 	}
-	void SetSchemaPath(vector<Identifier> path) {
-		name.SetSchemaPath(std::move(path));
-	}
-	//! Assign the full qualified name (used for v2.0+ deserialization)
-	void SetName(QualifiedName name_p) {
+	//! Assign the full qualified name
+	void SetQualifiedName(QualifiedName name_p) {
 		name = std::move(name_p);
-	}
-	//! Assign only the bare entry name (used for legacy deserialization)
-	void SetEntryName(Identifier entry_name) {
-		name.name = std::move(entry_name);
 	}
 
 	virtual unique_ptr<DropInfo> Copy() const;

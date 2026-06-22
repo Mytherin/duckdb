@@ -11,6 +11,7 @@
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/parser/tableref.hpp"
 #include "duckdb/parser/tableref/at_clause.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 
 namespace duckdb {
 
@@ -20,22 +21,30 @@ public:
 	static constexpr const TableReferenceType TYPE = TableReferenceType::BASE_TABLE;
 
 public:
-	BaseTableRef()
-	    : TableRef(TableReferenceType::BASE_TABLE), catalog_name(INVALID_CATALOG), schema_name(INVALID_SCHEMA) {
+	BaseTableRef() : TableRef(TableReferenceType::BASE_TABLE) {
 	}
 	explicit BaseTableRef(const TableDescription &description)
-	    : TableRef(TableReferenceType::BASE_TABLE), catalog_name(description.database), schema_name(description.schema),
-	      table_name(description.table) {
+	    : TableRef(TableReferenceType::BASE_TABLE), name(description.database, description.schema, description.table) {
 	}
 
-	//! The catalog name.
-	Identifier catalog_name;
-	//! The schema name.
-	Identifier schema_name;
-	//! The table name.
-	Identifier table_name;
+	//! The (optionally qualified) table name - the bare table name plus its catalog/schema qualification path
+	QualifiedName name;
 	//! The timestamp/version at which to read this table entry (if any)
 	unique_ptr<AtClause> at_clause;
+
+public:
+	const Identifier &GetCatalogName() const {
+		return name.GetCatalog();
+	}
+	const Identifier &GetSchemaName() const {
+		return name.GetSchema();
+	}
+	const Identifier &GetTableName() const {
+		return name.name;
+	}
+	void SetQualifiedName(QualifiedName name_p) {
+		name = std::move(name_p);
+	}
 
 public:
 	string ToString() const override;

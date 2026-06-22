@@ -1,0 +1,288 @@
+diff --git a/src/include/storage/mysql_table_entry.hpp b/src/include/storage/mysql_table_entry.hpp
+index 7adb82c..3834253 100644
+--- a/src/include/storage/mysql_table_entry.hpp
++++ b/src/include/storage/mysql_table_entry.hpp
+@@ -26,7 +26,7 @@ struct MySQLTableInfo {
+ 	}
+ 
+ 	const string &GetTableName() const {
+-		return create_info->table.GetIdentifierName();
++		return create_info->GetTableName().GetIdentifierName();
+ 	}
+ 
+ 	unique_ptr<CreateTableInfo> create_info;
+diff --git a/src/mysql_sql_writer.cpp b/src/mysql_sql_writer.cpp
+index 6f7028c..ca10268 100644
+--- a/src/mysql_sql_writer.cpp
++++ b/src/mysql_sql_writer.cpp
+@@ -512,10 +512,10 @@ string MySQLSQLWriter::WriteTableRef(const TableRef &ref) {
+ 	case TableReferenceType::BASE_TABLE: {
+ 		auto &base = ref.Cast<BaseTableRef>();
+ 		string result;
+-		if (!base.schema_name.empty()) {
+-			result += WriteIdentifier(base.schema_name.GetIdentifierName()) + ".";
++		if (!base.GetSchemaName().empty()) {
++			result += WriteIdentifier(base.GetSchemaName().GetIdentifierName()) + ".";
+ 		}
+-		result += WriteIdentifier(base.table_name.GetIdentifierName());
++		result += WriteIdentifier(base.GetTableName().GetIdentifierName());
+ 		if (!base.alias.empty()) {
+ 			result += " AS " + WriteIdentifier(base.alias.GetIdentifierName());
+ 		}
+diff --git a/src/storage/mysql_catalog.cpp b/src/storage/mysql_catalog.cpp
+index 75e12fe..1322f57 100644
+--- a/src/storage/mysql_catalog.cpp
++++ b/src/storage/mysql_catalog.cpp
+@@ -460,7 +460,7 @@ optional_ptr<CatalogEntry> MySQLCatalog::CreateSchema(CatalogTransaction transac
+ 	if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
+ 		DropInfo try_drop;
+ 		try_drop.type = CatalogType::SCHEMA_ENTRY;
+-		try_drop.name = info.schema;
++		try_drop.name.name = info.GetSchema();
+ 		try_drop.if_not_found = OnEntryNotFound::RETURN_NULL;
+ 		try_drop.cascade = false;
+ 		schemas.DropEntry(transaction.GetContext(), try_drop);
+@@ -755,7 +755,7 @@ static void MySQLCollectJoinTableNames(const TableRef &ref, case_insensitive_set
+ 	}
+ 	case TableReferenceType::BASE_TABLE: {
+ 		auto &base = ref.Cast<BaseTableRef>();
+-		const auto &name = base.alias.empty() ? base.table_name : base.alias;
++		const auto &name = base.alias.empty() ? base.GetTableName() : base.alias;
+ 		if (!names.insert(name.GetIdentifierName()).second) {
+ 			duplicate = true;
+ 		}
+diff --git a/src/storage/mysql_catalog_set.cpp b/src/storage/mysql_catalog_set.cpp
+index 1aaf5d8..7d9c58d 100644
+--- a/src/storage/mysql_catalog_set.cpp
++++ b/src/storage/mysql_catalog_set.cpp
+@@ -33,7 +33,7 @@ void MySQLCatalogSet::DropEntry(ClientContext &context, DropInfo &info) {
+ 	if (info.if_not_found == OnEntryNotFound::RETURN_NULL) {
+ 		drop_query += " IF EXISTS ";
+ 	}
+-	drop_query += MySQLUtils::WriteIdentifier(info.name.GetIdentifierName());
++	drop_query += MySQLUtils::WriteIdentifier(info.name.name.GetIdentifierName());
+ 	if (info.type != CatalogType::SCHEMA_ENTRY) {
+ 		if (info.cascade) {
+ 			drop_query += " CASCADE";
+@@ -43,7 +43,7 @@ void MySQLCatalogSet::DropEntry(ClientContext &context, DropInfo &info) {
+ 	transaction.Query(drop_query);
+ 
+ 	// erase the entry from the catalog set
+-	EraseEntryInternal(info.name.GetIdentifierName());
++	EraseEntryInternal(info.name.name.GetIdentifierName());
+ }
+ 
+ void MySQLCatalogSet::EraseEntryInternal(const string &name) {
+diff --git a/src/storage/mysql_index.cpp b/src/storage/mysql_index.cpp
+index c9f2f5a..a5fc17c 100644
+--- a/src/storage/mysql_index.cpp
++++ b/src/storage/mysql_index.cpp
+@@ -18,10 +18,10 @@ MySQLCreateIndex::MySQLCreateIndex(PhysicalPlan &physical_plan, unique_ptr<Creat
+ SourceResultType MySQLCreateIndex::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                    OperatorSourceInput &input) const {
+ 	auto &catalog = table.catalog;
+-	if (info->catalog == INVALID_CATALOG && info->schema == catalog.GetName()) {
+-		info->schema = Identifier::DefaultSchema();
++	if (info->GetCatalog() == INVALID_CATALOG && info->GetSchema() == catalog.GetName()) {
++		info->name.SetSchema(Identifier::DefaultSchema());
+ 	}
+-	auto &schema = catalog.GetSchema(context.client, info->schema);
++	auto &schema = catalog.GetSchema(context.client, info->GetSchema());
+ 	schema.CreateIndex(context.client, *info, table);
+ 
+ 	return SourceResultType::FINISHED;
+diff --git a/src/storage/mysql_index_set.cpp b/src/storage/mysql_index_set.cpp
+index a1352a6..a00bea2 100644
+--- a/src/storage/mysql_index_set.cpp
++++ b/src/storage/mysql_index_set.cpp
+@@ -11,7 +11,7 @@ MySQLIndexSet::MySQLIndexSet(MySQLSchemaEntry &schema) : MySQLInSchemaSet(schema
+ }
+ 
+ void MySQLIndexSet::DropEntry(ClientContext &context, DropInfo &info) {
+-	auto entry = GetEntry(context, info.name.GetIdentifierName());
++	auto entry = GetEntry(context, info.name.name.GetIdentifierName());
+ 	if (!entry) {
+ 		if (info.if_not_found == OnEntryNotFound::RETURN_NULL) {
+ 			return;
+@@ -20,13 +20,13 @@ void MySQLIndexSet::DropEntry(ClientContext &context, DropInfo &info) {
+ 	}
+ 	auto &mysql_index = entry->Cast<MySQLIndexEntry>();
+ 	string drop_query = "DROP INDEX ";
+-	drop_query += MySQLUtils::WriteIdentifier(info.name.GetIdentifierName());
++	drop_query += MySQLUtils::WriteIdentifier(info.name.name.GetIdentifierName());
+ 	drop_query += " ON ";
+ 	drop_query += MySQLUtils::WriteIdentifier(mysql_index.table_name);
+ 	auto &transaction = MySQLTransaction::Get(context, catalog);
+ 	transaction.Query(drop_query);
+ 
+-	EraseEntryInternal(info.name.GetIdentifierName());
++	EraseEntryInternal(info.name.name.GetIdentifierName());
+ }
+ 
+ void MySQLIndexSet::LoadEntries(ClientContext &context) {
+@@ -43,9 +43,9 @@ WHERE TABLE_SCHEMA = 'mysqlscanner';
+ 		auto table_name = result->GetString(0);
+ 		auto index_name = result->GetString(1);
+ 		CreateIndexInfo info;
+-		info.schema = schema.name;
++		info.name.SetSchema(schema.name);
+ 		info.table = Identifier(table_name);
+-		info.index_name = Identifier(index_name);
++		info.name.name = Identifier(index_name);
+ 		auto index_entry = make_uniq<MySQLIndexEntry>(catalog, schema, info, table_name);
+ 		CreateEntry(std::move(index_entry));
+ 	}
+diff --git a/src/storage/mysql_insert.cpp b/src/storage/mysql_insert.cpp
+index 64d3412..9f1db93 100644
+--- a/src/storage/mysql_insert.cpp
++++ b/src/storage/mysql_insert.cpp
+@@ -268,7 +268,7 @@ string MySQLInsert::GetName() const {
+ 
+ InsertionOrderPreservingMap<string> MySQLInsert::ParamsToString() const {
+ 	InsertionOrderPreservingMap<string> result;
+-	result["Table Name"] = table ? table->name.GetIdentifierName() : info->Base().table.GetIdentifierName();
++	result["Table Name"] = table ? table->name.GetIdentifierName() : info->Base().GetTableName().GetIdentifierName();
+ 	return result;
+ }
+ 
+diff --git a/src/storage/mysql_schema_entry.cpp b/src/storage/mysql_schema_entry.cpp
+index 77e2e8c..7dafbca 100644
+--- a/src/storage/mysql_schema_entry.cpp
++++ b/src/storage/mysql_schema_entry.cpp
+@@ -28,7 +28,7 @@ MySQLTransaction &GetMySQLTransaction(CatalogTransaction transaction) {
+ void MySQLSchemaEntry::TryDropEntry(ClientContext &context, CatalogType catalog_type, const string &name) {
+ 	DropInfo info;
+ 	info.type = catalog_type;
+-	info.name = Identifier(name);
++	info.name.name = Identifier(name);
+ 	info.cascade = false;
+ 	info.if_not_found = OnEntryNotFound::RETURN_NULL;
+ 	DropEntry(context, info);
+@@ -36,7 +36,7 @@ void MySQLSchemaEntry::TryDropEntry(ClientContext &context, CatalogType catalog_
+ 
+ optional_ptr<CatalogEntry> MySQLSchemaEntry::CreateTable(CatalogTransaction transaction, BoundCreateTableInfo &info) {
+ 	auto &base_info = info.Base();
+-	auto table_name = base_info.table;
++	auto table_name = base_info.GetTableName();
+ 	if (base_info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
+ 		// CREATE OR REPLACE - drop any existing entries first (if any)
+ 		TryDropEntry(transaction.GetContext(), CatalogType::TABLE_ENTRY, table_name.GetIdentifierName());
+@@ -66,7 +66,7 @@ string GetMySQLCreateIndex(CreateIndexInfo &info, TableCatalogEntry &tbl) {
+ 		sql += " UNIQUE";
+ 	}
+ 	sql += " INDEX ";
+-	sql += MySQLUtils::WriteIdentifier(info.index_name.GetIdentifierName());
++	sql += MySQLUtils::WriteIdentifier(info.GetIndexName().GetIdentifierName());
+ 	sql += " ON ";
+ 	sql += MySQLUtils::WriteIdentifier(tbl.name.GetIdentifierName());
+ 	sql += "(";
+@@ -98,7 +98,7 @@ optional_ptr<CatalogEntry> MySQLSchemaEntry::CreateIndex(CatalogTransaction tran
+ string GetMySQLCreateView(CreateViewInfo &info) {
+ 	string sql;
+ 	sql = "CREATE VIEW ";
+-	sql += MySQLUtils::WriteIdentifier(info.view_name.GetIdentifierName());
++	sql += MySQLUtils::WriteIdentifier(info.GetViewName().GetIdentifierName());
+ 	sql += " ";
+ 	if (!info.aliases.empty()) {
+ 		sql += "(";
+@@ -123,18 +123,18 @@ optional_ptr<CatalogEntry> MySQLSchemaEntry::CreateView(CatalogTransaction trans
+ 	}
+ 	if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT ||
+ 	    info.on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
+-		auto current_entry = GetEntry(transaction, CatalogType::VIEW_ENTRY, info.view_name);
++		auto current_entry = GetEntry(transaction, CatalogType::VIEW_ENTRY, info.GetViewName());
+ 		if (current_entry) {
+ 			if (info.on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
+ 				return current_entry;
+ 			}
+ 			// CREATE OR REPLACE - drop any existing entries first (if any)
+-			TryDropEntry(transaction.GetContext(), CatalogType::VIEW_ENTRY, info.view_name.GetIdentifierName());
++			TryDropEntry(transaction.GetContext(), CatalogType::VIEW_ENTRY, info.GetViewName().GetIdentifierName());
+ 		}
+ 	}
+ 	auto &mysql_transaction = GetMySQLTransaction(transaction);
+ 	mysql_transaction.Query(GetMySQLCreateView(info));
+-	return tables.RefreshTable(transaction.GetContext(), info.view_name.GetIdentifierName());
++	return tables.RefreshTable(transaction.GetContext(), info.GetViewName().GetIdentifierName());
+ }
+ 
+ optional_ptr<CatalogEntry> MySQLSchemaEntry::CreateType(CatalogTransaction transaction, CreateTypeInfo &info) {
+diff --git a/src/storage/mysql_schema_set.cpp b/src/storage/mysql_schema_set.cpp
+index f85419d..b5e4b9b 100644
+--- a/src/storage/mysql_schema_set.cpp
++++ b/src/storage/mysql_schema_set.cpp
+@@ -24,8 +24,8 @@ FROM information_schema.schemata;
+ 	auto result = transaction.Query(query);
+ 	while (result->Next()) {
+ 		CreateSchemaInfo info;
+-		info.schema = Identifier(result->GetString(0));
+-		info.internal = MySQLSchemaIsInternal(info.schema.GetIdentifierName());
++		info.name.SetSchema(Identifier(result->GetString(0)));
++		info.internal = MySQLSchemaIsInternal(info.GetSchema().GetIdentifierName());
+ 		auto schema = make_uniq<MySQLSchemaEntry>(catalog, info);
+ 		CreateEntry(std::move(schema));
+ 	}
+@@ -34,7 +34,7 @@ FROM information_schema.schemata;
+ optional_ptr<CatalogEntry> MySQLSchemaSet::CreateSchema(ClientContext &context, CreateSchemaInfo &info) {
+ 	auto &transaction = MySQLTransaction::Get(context, catalog);
+ 
+-	string create_sql = "CREATE SCHEMA " + MySQLUtils::WriteIdentifier(info.schema.GetIdentifierName());
++	string create_sql = "CREATE SCHEMA " + MySQLUtils::WriteIdentifier(info.GetSchema().GetIdentifierName());
+ 	transaction.Query(create_sql);
+ 	auto schema_entry = make_uniq<MySQLSchemaEntry>(catalog, info);
+ 	return CreateEntry(std::move(schema_entry));
+diff --git a/src/storage/mysql_table_set.cpp b/src/storage/mysql_table_set.cpp
+index e6be4a9..36b84fd 100644
+--- a/src/storage/mysql_table_set.cpp
++++ b/src/storage/mysql_table_set.cpp
+@@ -214,11 +214,11 @@ string GetMySQLCreateTable(ClientContext &context, CreateTableInfo &info) {
+ 	if (info.on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
+ 		ss << "IF NOT EXISTS ";
+ 	}
+-	if (!info.schema.empty()) {
+-		ss << MySQLUtils::WriteIdentifier(info.schema.GetIdentifierName());
++	if (!info.GetSchema().empty()) {
++		ss << MySQLUtils::WriteIdentifier(info.GetSchema().GetIdentifierName());
+ 		ss << ".";
+ 	}
+-	ss << MySQLUtils::WriteIdentifier(info.table.GetIdentifierName());
++	ss << MySQLUtils::WriteIdentifier(info.GetTableName().GetIdentifierName());
+ 	ss << MySQLColumnsToSQL(info.columns, info.constraints);
+ 	ss << ";";
+ 	return ss.str();
+@@ -235,7 +235,7 @@ optional_ptr<CatalogEntry> MySQLTableSet::CreateTable(ClientContext &context, Bo
+ void MySQLTableSet::AlterTable(ClientContext &context, RenameTableInfo &info) {
+ 	auto &transaction = MySQLTransaction::Get(context, catalog);
+ 	string sql = "ALTER TABLE ";
+-	sql += MySQLUtils::WriteIdentifier(info.name.GetIdentifierName());
++	sql += MySQLUtils::WriteIdentifier(info.name.name.GetIdentifierName());
+ 	sql += " RENAME TO ";
+ 	sql += MySQLUtils::WriteIdentifier(info.new_table_name.GetIdentifierName());
+ 	transaction.Query(sql);
+@@ -244,7 +244,7 @@ void MySQLTableSet::AlterTable(ClientContext &context, RenameTableInfo &info) {
+ void MySQLTableSet::AlterTable(ClientContext &context, RenameColumnInfo &info) {
+ 	auto &transaction = MySQLTransaction::Get(context, catalog);
+ 	string sql = "ALTER TABLE ";
+-	sql += MySQLUtils::WriteIdentifier(info.name.GetIdentifierName());
++	sql += MySQLUtils::WriteIdentifier(info.name.name.GetIdentifierName());
+ 	sql += " RENAME COLUMN  ";
+ 	sql += MySQLUtils::WriteIdentifier(info.old_name.GetIdentifierName());
+ 	sql += " TO ";
+@@ -256,7 +256,7 @@ void MySQLTableSet::AlterTable(ClientContext &context, RenameColumnInfo &info) {
+ void MySQLTableSet::AlterTable(ClientContext &context, AddColumnInfo &info) {
+ 	auto &transaction = MySQLTransaction::Get(context, catalog);
+ 	string sql = "ALTER TABLE ";
+-	sql += MySQLUtils::WriteIdentifier(info.name.GetIdentifierName());
++	sql += MySQLUtils::WriteIdentifier(info.name.name.GetIdentifierName());
+ 	sql += " ADD COLUMN  ";
+ 	if (info.if_column_not_exists) {
+ 		sql += "IF NOT EXISTS ";
+@@ -270,7 +270,7 @@ void MySQLTableSet::AlterTable(ClientContext &context, AddColumnInfo &info) {
+ void MySQLTableSet::AlterTable(ClientContext &context, RemoveColumnInfo &info) {
+ 	auto &transaction = MySQLTransaction::Get(context, catalog);
+ 	string sql = "ALTER TABLE ";
+-	sql += MySQLUtils::WriteIdentifier(info.name.GetIdentifierName());
++	sql += MySQLUtils::WriteIdentifier(info.name.name.GetIdentifierName());
+ 	sql += " DROP COLUMN  ";
+ 	if (info.if_column_exists) {
+ 		throw NotImplementedException("DROP COLUMN IF EXISTS not supported in MySQL");

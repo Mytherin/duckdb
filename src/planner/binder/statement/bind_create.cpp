@@ -58,9 +58,7 @@ static unique_ptr<CommonTableExpressionInfo> MakeTriggerValidationCTE(const Tabl
 	auto alias_select = make_uniq<SelectNode>();
 	alias_select->select_list.push_back(make_uniq<StarExpression>());
 	auto alias_table_ref = make_uniq<BaseTableRef>();
-	alias_table_ref->table_name = table.name;
-	alias_table_ref->schema_name = table.schema.name;
-	alias_table_ref->catalog_name = table.catalog.GetName();
+	alias_table_ref->name = table.GetQualifiedName();
 	alias_select->from_table = std::move(alias_table_ref);
 	auto alias_cte = make_uniq<CommonTableExpressionInfo>();
 	alias_cte->query_node = std::move(alias_select);
@@ -114,6 +112,23 @@ void Binder::BindSchemaOrCatalog(Identifier &catalog, Identifier &schema) {
 	BindSchemaOrCatalog(context, catalog, schema);
 }
 
+void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, QualifiedName &name) {
+	auto catalog = name.GetCatalog();
+	auto schema = name.GetSchema();
+	BindSchemaOrCatalog(retriever, catalog, schema);
+	name = QualifiedName(std::move(catalog), std::move(schema), std::move(name.name));
+}
+
+void Binder::BindSchemaOrCatalog(QualifiedName &name) {
+	CatalogEntryRetriever retriever(context);
+	BindSchemaOrCatalog(retriever, name);
+}
+
+void Binder::BindSchemaOrCatalog(ClientContext &context, QualifiedName &name) {
+	CatalogEntryRetriever retriever(context);
+	BindSchemaOrCatalog(retriever, name);
+}
+
 Identifier Binder::BindCatalog(const Identifier &catalog) {
 	auto &db_manager = DatabaseManager::Get(context);
 	optional_ptr<AttachedDatabase> database = db_manager.GetDatabase(context, catalog);
@@ -154,8 +169,8 @@ void Binder::SearchSchema(CreateInfo &info) {
 			throw ParserException("TEMPORARY table names can *only* use the \"%s\" catalog", TEMP_CATALOG);
 		}
 	}
-	info.SetCatalog(catalog);
-	info.SetSchema(schema);
+	info.name.SetCatalog(catalog);
+	info.name.SetSchema(schema);
 }
 
 SchemaCatalogEntry &Binder::BindSchema(CreateInfo &info) {
@@ -163,7 +178,7 @@ SchemaCatalogEntry &Binder::BindSchema(CreateInfo &info) {
 	// fetch the schema in which we want to create the object
 	auto &schema_obj = Catalog::GetSchema(context, info.GetCatalog(), info.GetSchema());
 	D_ASSERT(schema_obj.type == CatalogType::SCHEMA_ENTRY);
-	info.SetSchema(schema_obj.name);
+	info.name.SetSchema(schema_obj.name);
 	if (!info.temporary) {
 		auto &properties = GetStatementProperties();
 		properties.RegisterDBModify(schema_obj.catalog, context, DatabaseModificationType::CREATE_CATALOG_ENTRY);
@@ -486,9 +501,9 @@ bool BoundBodyContainsTrigger(const LogicalOperator &op);
 
 SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trigger_info) {
 	// Resolve the base table first — triggers inherit catalog/schema from their table (like Postgres)
-	TableDescription table_description(create_trigger_info.base_table->catalog_name,
-	                                   create_trigger_info.base_table->schema_name,
-	                                   create_trigger_info.base_table->table_name);
+	TableDescription table_description(create_trigger_info.base_table->GetCatalogName(),
+	                                   create_trigger_info.base_table->GetSchemaName(),
+	                                   create_trigger_info.base_table->GetTableName());
 	auto table_ref = make_uniq<BaseTableRef>(table_description);
 	auto bound_table = Bind(*table_ref);
 	if (bound_table.plan->type != LogicalOperatorType::LOGICAL_GET) {
@@ -502,8 +517,8 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	auto &table = *table_ptr;
 
 	// Trigger inherits catalog/schema from the base table
-	create_trigger_info.SetCatalog(table.catalog.GetName());
-	create_trigger_info.SetSchema(table.schema.name);
+	create_trigger_info.name.SetCatalog(table.catalog.GetName());
+	create_trigger_info.name.SetSchema(table.schema.name);
 
 	auto &schema = BindCreateSchema(create_trigger_info);
 

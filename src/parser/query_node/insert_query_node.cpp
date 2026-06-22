@@ -174,7 +174,6 @@ bool InsertQueryNode::Equals(const QueryNode *other_p) const {
 unique_ptr<QueryNode> InsertQueryNode::Copy() const {
 	auto result = make_uniq<InsertQueryNode>();
 	result->table = table;
-	result->SetSchemaPath(GetSchemaPath());
 	result->columns = columns;
 	result->default_values = default_values;
 	result->column_order = column_order;

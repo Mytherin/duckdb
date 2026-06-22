@@ -87,8 +87,8 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 		throw SerializationException("Unsupported type for deserialization of CreateInfo!");
 	}
 	deserializer.Unset<CatalogType>();
-	result->SetCatalog(std::move(catalog));
-	result->SetSchema(std::move(schema));
+	result->name.SetCatalog(std::move(catalog));
+	result->name.SetSchema(std::move(schema));
 	result->temporary = temporary;
 	result->internal = internal;
 	result->on_conflict = on_conflict;
@@ -98,7 +98,7 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 	result->dependencies = dependencies;
 	result->extension_name = std::move(extension_name);
 	if (!qualified_name.empty()) {
-		result->SetName(std::move(qualified_name));
+		result->SetQualifiedName(std::move(qualified_name));
 	}
 	return result;
 }
@@ -121,8 +121,7 @@ void CreateIndexInfo::Serialize(Serializer &serializer) const {
 
 unique_ptr<CreateInfo> CreateIndexInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<CreateIndexInfo>(new CreateIndexInfo());
-	auto index_name = deserializer.ReadPropertyWithDefault<Identifier>(200, "name");
-	result->SetIndexName(std::move(index_name));
+	deserializer.ReadPropertyWithDefault<Identifier>(200, "name", result->name.name);
 	deserializer.ReadPropertyWithDefault<Identifier>(201, "table", result->table);
 	deserializer.ReadDeletedProperty<DeprecatedIndexType>(202, "index_type");
 	deserializer.ReadProperty<IndexConstraintType>(203, "constraint_type", result->constraint_type);
@@ -145,11 +144,11 @@ void CreateMacroInfo::Serialize(Serializer &serializer) const {
 }
 
 unique_ptr<CreateInfo> CreateMacroInfo::Deserialize(Deserializer &deserializer) {
-	auto name = deserializer.ReadPropertyWithDefault<Identifier>(200, "name");
+	auto name_name = deserializer.ReadPropertyWithDefault<Identifier>(200, "name");
 	auto function = deserializer.ReadPropertyWithDefault<unique_ptr<MacroFunction>>(201, "function");
 	auto extra_functions = deserializer.ReadPropertyWithDefault<vector<unique_ptr<MacroFunction>>>(202, "extra_functions");
 	auto result = duckdb::unique_ptr<CreateMacroInfo>(new CreateMacroInfo(deserializer.Get<CatalogType>(), std::move(function), std::move(extra_functions)));
-	result->SetFunctionName(std::move(name));
+	result->name.name = std::move(name_name);
 	return std::move(result);
 }
 
@@ -180,8 +179,7 @@ void CreateSequenceInfo::Serialize(Serializer &serializer) const {
 
 unique_ptr<CreateInfo> CreateSequenceInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<CreateSequenceInfo>(new CreateSequenceInfo());
-	auto name = deserializer.ReadPropertyWithDefault<Identifier>(200, "name");
-	result->SetSequenceName(std::move(name));
+	deserializer.ReadPropertyWithDefault<Identifier>(200, "name", result->name.name);
 	deserializer.ReadPropertyWithDefault<uint64_t>(201, "usage_count", result->usage_count);
 	deserializer.ReadPropertyWithDefault<int64_t>(202, "increment", result->increment);
 	deserializer.ReadPropertyWithDefault<int64_t>(203, "min_value", result->min_value);
@@ -207,8 +205,7 @@ void CreateTableInfo::Serialize(Serializer &serializer) const {
 
 unique_ptr<CreateInfo> CreateTableInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<CreateTableInfo>(new CreateTableInfo());
-	auto table = deserializer.ReadPropertyWithDefault<Identifier>(200, "table");
-	result->SetTableName(std::move(table));
+	deserializer.ReadPropertyWithDefault<Identifier>(200, "table", result->name.name);
 	deserializer.ReadProperty<ColumnList>(201, "columns", result->columns);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Constraint>>>(202, "constraints", result->constraints);
 	deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(203, "query", result->query);
@@ -235,8 +232,7 @@ void CreateTriggerInfo::Serialize(Serializer &serializer) const {
 
 unique_ptr<CreateInfo> CreateTriggerInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<CreateTriggerInfo>(new CreateTriggerInfo());
-	auto trigger_name = deserializer.ReadPropertyWithDefault<Identifier>(200, "trigger_name");
-	result->SetTriggerName(std::move(trigger_name));
+	deserializer.ReadPropertyWithDefault<Identifier>(200, "trigger_name", result->name.name);
 	auto base_table = deserializer.ReadPropertyWithDefault<unique_ptr<TableRef>>(201, "base_table");
 	result->base_table = unique_ptr_cast<TableRef, BaseTableRef>(std::move(base_table));
 	deserializer.ReadProperty<TriggerTiming>(204, "timing", result->timing);
@@ -259,8 +255,7 @@ void CreateTypeInfo::Serialize(Serializer &serializer) const {
 
 unique_ptr<CreateInfo> CreateTypeInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<CreateTypeInfo>(new CreateTypeInfo());
-	auto name = deserializer.ReadPropertyWithDefault<Identifier>(200, "name");
-	result->SetTypeName(std::move(name));
+	deserializer.ReadPropertyWithDefault<Identifier>(200, "name", result->name.name);
 	deserializer.ReadProperty<LogicalType>(201, "logical_type", result->type);
 	return std::move(result);
 }
@@ -283,7 +278,7 @@ void CreateViewInfo::Serialize(Serializer &serializer) const {
 }
 
 unique_ptr<CreateInfo> CreateViewInfo::Deserialize(Deserializer &deserializer) {
-	auto view_name = deserializer.ReadPropertyWithDefault<Identifier>(200, "view_name");
+	auto name_name = deserializer.ReadPropertyWithDefault<Identifier>(200, "view_name");
 	auto aliases = deserializer.ReadPropertyWithDefault<vector<Identifier>>(201, "aliases");
 	auto types = deserializer.ReadPropertyWithDefault<vector<LogicalType>>(202, "types");
 	auto query = deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(203, "query");
@@ -291,7 +286,7 @@ unique_ptr<CreateInfo> CreateViewInfo::Deserialize(Deserializer &deserializer) {
 	auto column_comments = deserializer.ReadPropertyWithDefault<vector<Value>>(205, "column_comments");
 	auto column_comments_map = deserializer.ReadPropertyWithExplicitDefault<identifier_map_t<Value>>(206, "column_comments_map", identifier_map_t<Value>());
 	auto result = duckdb::unique_ptr<CreateViewInfo>(new CreateViewInfo(std::move(names), std::move(column_comments), std::move(column_comments_map)));
-	result->SetViewName(std::move(view_name));
+	result->name.name = std::move(name_name);
 	result->aliases = std::move(aliases);
 	result->types = std::move(types);
 	result->query = std::move(query);

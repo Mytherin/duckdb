@@ -21,12 +21,12 @@ IndexCatalogEntry::IndexCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schem
 
 unique_ptr<CreateInfo> IndexCatalogEntry::GetInfo() const {
 	auto result = make_uniq<CreateIndexInfo>();
-	result->SetSchema(GetSchemaName());
+	result->name.SetSchema(GetSchemaName());
 	result->table = GetTableName();
 
 	result->temporary = temporary;
 	result->sql = sql;
-	result->SetIndexName(name);
+	result->name.name = name;
 	result->index_type = index_type;
 	result->constraint_type = index_constraint_type;
 	result->column_ids = column_ids;

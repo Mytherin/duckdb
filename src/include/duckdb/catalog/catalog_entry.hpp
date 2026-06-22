@@ -16,6 +16,7 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/exception/catalog_exception.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include <memory>
 
 namespace duckdb {
@@ -90,6 +91,10 @@ public:
 	virtual const Catalog &ParentCatalog() const;
 	virtual SchemaCatalogEntry &ParentSchema();
 	virtual const SchemaCatalogEntry &ParentSchema() const;
+
+	//! The (optionally qualified) name of this entry. The base implementation returns just the bare name;
+	//! entries that know their catalog/schema (e.g. StandardEntry) override this to return the full path.
+	virtual QualifiedName GetQualifiedName() const;
 
 	virtual void Verify(Catalog &catalog);
 

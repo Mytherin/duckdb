@@ -36,9 +36,6 @@ struct CreateSequenceInfo : public CreateInfo {
 	const Identifier &GetSequenceName() const {
 		return CreateInfo::name.name;
 	}
-	void SetSequenceName(Identifier sequence_name) {
-		CreateInfo::name.name = std::move(sequence_name);
-	}
 	//! Usage count of the sequence
 	uint64_t usage_count;
 	//! The increment value

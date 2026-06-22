@@ -29,9 +29,6 @@ public:
 	const Identifier &GetViewName() const {
 		return name.name;
 	}
-	void SetViewName(Identifier view_name_p) {
-		name.name = std::move(view_name_p);
-	}
 	//! Aliases of the view
 	vector<Identifier> aliases;
 	//! Return types

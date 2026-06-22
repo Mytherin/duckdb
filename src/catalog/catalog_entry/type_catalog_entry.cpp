@@ -31,9 +31,9 @@ unique_ptr<CatalogEntry> TypeCatalogEntry::Copy(ClientContext &context) const {
 
 unique_ptr<CreateInfo> TypeCatalogEntry::GetInfo() const {
 	auto result = make_uniq<CreateTypeInfo>();
-	result->SetCatalog(catalog.GetName());
-	result->SetSchema(schema.name);
-	result->SetTypeName(name);
+	result->name.SetCatalog(catalog.GetName());
+	result->name.SetSchema(schema.name);
+	result->name.name = name;
 	result->type = user_type;
 	result->extension_name = extension_name;
 	result->dependencies = dependencies;

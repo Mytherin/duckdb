@@ -4,18 +4,18 @@ namespace duckdb {
 
 CreatePragmaFunctionInfo::CreatePragmaFunctionInfo(PragmaFunction function)
     : CreateFunctionInfo(CatalogType::PRAGMA_FUNCTION_ENTRY), functions(function.name) {
-	SetFunctionName(function.name);
+	name.name = function.name;
 	functions.AddFunction(std::move(function));
 	internal = true;
 }
 CreatePragmaFunctionInfo::CreatePragmaFunctionInfo(PragmaFunctionSet functions_p)
     : CreateFunctionInfo(CatalogType::PRAGMA_FUNCTION_ENTRY), functions(std::move(functions_p)) {
-	SetFunctionName(functions.name);
+	name.name = functions.name;
 	internal = true;
 }
 CreatePragmaFunctionInfo::CreatePragmaFunctionInfo(Identifier name, PragmaFunctionSet functions_p)
     : CreateFunctionInfo(CatalogType::PRAGMA_FUNCTION_ENTRY), functions(std::move(functions_p)) {
-	SetFunctionName(std::move(name));
+	CreateInfo::name.name = std::move(name);
 	internal = true;
 }
 

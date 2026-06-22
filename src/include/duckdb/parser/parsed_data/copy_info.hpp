@@ -56,25 +56,12 @@ public:
 	const Identifier &GetSchema() const {
 		return table.GetSchema();
 	}
-	void SetCatalog(Identifier catalog_p) {
-		table.SetCatalog(std::move(catalog_p));
-	}
-	void SetSchema(Identifier schema_p) {
-		table.SetSchema(std::move(schema_p));
-	}
 	const vector<Identifier> &GetSchemaPath() const {
 		return table.GetSchemaPath();
 	}
-	void SetSchemaPath(vector<Identifier> path) {
-		table.SetSchemaPath(std::move(path));
-	}
-	//! Assign the full qualified table name (used for v2.0+ deserialization)
-	void SetTable(QualifiedName table_p) {
+	//! Assign the full qualified table name
+	void SetQualifiedName(QualifiedName table_p) {
 		table = std::move(table_p);
-	}
-	//! Assign only the bare table name (used for legacy deserialization)
-	void SetTableName(Identifier table_name) {
-		table.name = std::move(table_name);
 	}
 
 	string CopyOptionsToString() const;

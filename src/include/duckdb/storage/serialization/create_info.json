@@ -21,7 +21,7 @@
         "legacy": true,
         "version": "v2.0.0",
         "serialize_property": "GetCatalog()",
-        "deserialize_setter": "SetCatalog"
+        "deserialize_setter": "name.SetCatalog"
       },
       {
         "id": 102,
@@ -30,7 +30,7 @@
         "legacy": true,
         "version": "v2.0.0",
         "serialize_property": "GetSchema()",
-        "deserialize_setter": "SetSchema"
+        "deserialize_setter": "name.SetSchema"
       },
       {
         "id": 103,
@@ -82,7 +82,7 @@
         "type": "QualifiedName",
         "version": "v2.0.0",
         "serialize_property": "name",
-        "deserialize_setter": "SetName",
+        "deserialize_setter": "SetQualifiedName",
         "deserialize_if_present": true
       }
     ]
@@ -103,7 +103,7 @@
         "legacy": true,
         "version": "v2.0.0",
         "serialize_property": "GetIndexName()",
-        "deserialize_setter": "SetIndexName"
+        "deserialize_property": "name.name"
       },
       {
         "id": 201,
@@ -169,7 +169,7 @@
         "legacy": true,
         "version": "v2.0.0",
         "serialize_property": "GetTableName()",
-        "deserialize_setter": "SetTableName"
+        "deserialize_property": "name.name"
       },
       {
         "id": 201,
@@ -228,7 +228,7 @@
         "legacy": true,
         "version": "v2.0.0",
         "serialize_property": "GetViewName()",
-        "deserialize_setter": "SetViewName"
+        "deserialize_property": "name.name"
       },
       {
         "id": 201,
@@ -283,7 +283,7 @@
         "legacy": true,
         "version": "v2.0.0",
         "serialize_property": "GetTypeName()",
-        "deserialize_setter": "SetTypeName"
+        "deserialize_property": "name.name"
       },
       {
         "id": 201,
@@ -308,7 +308,7 @@
         "legacy": true,
         "version": "v2.0.0",
         "serialize_property": "GetFunctionName()",
-        "deserialize_setter": "SetFunctionName"
+        "deserialize_property": "name.name"
       },
       {
         "id": 201,
@@ -340,7 +340,7 @@
         "legacy": true,
         "version": "v2.0.0",
         "serialize_property": "GetSequenceName()",
-        "deserialize_setter": "SetSequenceName"
+        "deserialize_property": "name.name"
       },
       {
         "id": 201,
@@ -395,7 +395,7 @@
         "legacy": true,
         "version": "v2.0.0",
         "serialize_property": "GetTriggerName()",
-        "deserialize_setter": "SetTriggerName"
+        "deserialize_property": "name.name"
       },
       {
         "id": 201,

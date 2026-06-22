@@ -11,7 +11,7 @@ unique_ptr<CreateInfo> CreateSequenceInfo::Copy() const {
 	auto result = make_uniq<CreateSequenceInfo>();
 	CopyProperties(*result);
 	result->name = name;
-	result->SetSchema(GetSchema());
+	result->name.SetSchema(GetSchema());
 	result->usage_count = usage_count;
 	result->increment = increment;
 	result->min_value = min_value;

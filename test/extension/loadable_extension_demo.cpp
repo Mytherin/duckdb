@@ -1132,7 +1132,7 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 	child_types.emplace_back(make_pair("y", LogicalType::INTEGER));
 	auto alias_info = make_uniq<CreateTypeInfo>();
 	alias_info->internal = true;
-	alias_info->SetTypeName(Identifier(alias_name));
+	alias_info->name.name = Identifier(alias_name);
 	LogicalType target_type = LogicalType::STRUCT(child_types);
 	target_type.SetAlias(alias_name);
 	alias_info->type = target_type;
@@ -1170,8 +1170,8 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 	// Table with tagged columns
 	{
 		auto tagged_table_info = make_uniq<CreateTableInfo>();
-		tagged_table_info->SetSchema(Identifier::DefaultSchema());
-		tagged_table_info->SetTableName("tagged_table");
+		tagged_table_info->name.SetSchema(Identifier::DefaultSchema());
+		tagged_table_info->name.name = "tagged_table";
 		tagged_table_info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 		tagged_table_info->temporary = false;
 		tagged_table_info->internal = true;

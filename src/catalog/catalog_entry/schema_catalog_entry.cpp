@@ -61,7 +61,7 @@ CatalogSet::EntryLookup SchemaCatalogEntry::LookupEntryDetailed(CatalogTransacti
 
 unique_ptr<CreateInfo> SchemaCatalogEntry::GetInfo() const {
 	auto result = make_uniq<CreateSchemaInfo>();
-	result->SetSchema(name);
+	result->name.SetSchema(name);
 	result->comment = comment;
 	result->tags = tags;
 	return std::move(result);

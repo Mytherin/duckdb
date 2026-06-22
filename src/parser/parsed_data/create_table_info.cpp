@@ -10,12 +10,12 @@ CreateTableInfo::CreateTableInfo() : CreateInfo(CatalogType::TABLE_ENTRY, Identi
 
 CreateTableInfo::CreateTableInfo(Identifier catalog_p, Identifier schema_p, Identifier name_p)
     : CreateInfo(CatalogType::TABLE_ENTRY, std::move(schema_p), std::move(catalog_p)) {
-	SetEntryName(std::move(name_p));
+	name.name = std::move(name_p);
 }
 
 CreateTableInfo::CreateTableInfo(vector<Identifier> schema_path, Identifier name_p)
     : CreateInfo(CatalogType::TABLE_ENTRY, std::move(schema_path)) {
-	SetEntryName(std::move(name_p));
+	name.name = std::move(name_p);
 }
 
 CreateTableInfo::CreateTableInfo(SchemaCatalogEntry &schema, Identifier name_p)

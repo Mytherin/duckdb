@@ -29,7 +29,7 @@ void DuckCatalog::Initialize(bool load_builtin) {
 
 	// create the default schema
 	CreateSchemaInfo info;
-	info.SetSchema(Identifier::DefaultSchema());
+	info.name.SetSchema(Identifier::DefaultSchema());
 	info.internal = true;
 	info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	CreateSchema(data, info);
@@ -84,7 +84,7 @@ optional_ptr<CatalogEntry> DuckCatalog::CreateSchema(CatalogTransaction transact
 		case OnCreateConflict::REPLACE_ON_CONFLICT: {
 			DropInfo drop_info;
 			drop_info.type = CatalogType::SCHEMA_ENTRY;
-			drop_info.SetCatalog(info.GetCatalog());
+			drop_info.name.SetCatalog(info.GetCatalog());
 			drop_info.name.name = info.GetSchema();
 			DropSchema(transaction, drop_info);
 			result = CreateSchemaInternal(transaction, info);

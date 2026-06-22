@@ -1,6 +1,8 @@
 #include "duckdb/catalog/catalog_entry.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/standard_entry.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/main/database.hpp"
@@ -100,6 +102,14 @@ const SchemaCatalogEntry &CatalogEntry::ParentSchema() const {
 	throw InternalException("CatalogEntry::ParentSchema called on catalog entry without schema");
 }
 // LCOV_EXCL_STOP
+
+QualifiedName CatalogEntry::GetQualifiedName() const {
+	return QualifiedName(name);
+}
+
+QualifiedName StandardEntry::GetQualifiedName() const {
+	return QualifiedName(ParentCatalog().GetName(), ParentSchema().name, name);
+}
 
 void CatalogEntry::Serialize(Serializer &serializer) const {
 	const auto info = GetInfo();

@@ -67,9 +67,9 @@ unique_ptr<SQLStatement> PEGTransformer::GenerateCreateEnumStmt(unique_ptr<Creat
 	auto info = make_uniq<CreateTypeInfo>();
 	info->temporary = true;
 	info->internal = false;
-	info->SetCatalog(Identifier::InvalidCatalog());
-	info->SetSchema(Identifier::InvalidSchema());
-	info->SetEntryName(Identifier(std::move(entry->enum_name)));
+	info->name.SetCatalog(Identifier::InvalidCatalog());
+	info->name.SetSchema(Identifier::InvalidSchema());
+	info->name.name = Identifier(std::move(entry->enum_name));
 	info->on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
 
 	// generate the query that will result in the enum creation
