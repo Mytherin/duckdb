@@ -266,7 +266,8 @@ optional_ptr<CatalogEntry> ColumnQualifier::QualifyFunction(FunctionExpression &
 	binder.BindSchemaOrCatalog(catalog, schema);
 	function.SetSchemaPath(SchemaPathFromCatalogSchema(std::move(catalog), std::move(schema)));
 
-	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, function.FunctionName(), error_context);
+	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, QualifiedName(function.FunctionName()),
+	                                error_context);
 	auto func =
 	    binder.GetCatalogEntry(function.Catalog(), function.Schema(), function_lookup, OnEntryNotFound::RETURN_NULL);
 	if (func) {

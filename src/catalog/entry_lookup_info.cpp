@@ -11,6 +11,15 @@ EntryLookupInfo::EntryLookupInfo(CatalogType catalog_type_p, QualifiedName name_
     : catalog_type(catalog_type_p), name(std::move(name_p)), at_clause(at_clause_p), error_context(error_context_p) {
 }
 
+EntryLookupInfo::EntryLookupInfo(CatalogType catalog_type_p, Identifier name_p, QueryErrorContext error_context_p)
+    : EntryLookupInfo(catalog_type_p, QualifiedName(std::move(name_p)), error_context_p) {
+}
+
+EntryLookupInfo::EntryLookupInfo(CatalogType catalog_type_p, Identifier name_p, optional_ptr<BoundAtClause> at_clause_p,
+                                 QueryErrorContext error_context_p)
+    : EntryLookupInfo(catalog_type_p, QualifiedName(std::move(name_p)), at_clause_p, error_context_p) {
+}
+
 EntryLookupInfo::EntryLookupInfo(const EntryLookupInfo &parent, QualifiedName name_p)
     : catalog_type(parent.catalog_type), name(std::move(name_p)), at_clause(parent.at_clause),
       error_context(parent.error_context) {

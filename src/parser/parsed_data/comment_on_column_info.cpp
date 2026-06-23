@@ -44,8 +44,10 @@ string SetColumnCommentInfo::ToString() const {
 }
 
 optional_ptr<CatalogEntry> SetColumnCommentInfo::TryResolveCatalogEntry(CatalogEntryRetriever &retriever) {
-	EntryLookupInfo lookup_info(CatalogType::TABLE_ENTRY, name.name);
-	auto entry = retriever.GetEntry(GetCatalog(), GetSchema(), lookup_info, if_not_found);
+	EntryLookupInfo lookup_info(CatalogType::TABLE_ENTRY, QualifiedName(name.name));
+	auto entry = retriever.GetEntry(
+	    EntryLookupInfo(lookup_info, QualifiedName(GetCatalog(), GetSchema(), lookup_info.GetEntryIdentifier())),
+	    if_not_found);
 
 	if (entry) {
 		catalog_entry_type = entry->type;
