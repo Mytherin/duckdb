@@ -529,7 +529,8 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt, const CopyFunction &fun
 	BindSchemaOrCatalog(copy_catalog, copy_schema);
 	stmt.info->table.SetCatalog(copy_catalog);
 	stmt.info->table.SetSchema(copy_schema);
-	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, copy_catalog, copy_schema, stmt.info->table.name);
+	auto &table =
+	    Catalog::GetEntry<TableCatalogEntry>(context, QualifiedName(copy_catalog, copy_schema, stmt.info->table.name));
 	physical_index_vector_t<idx_t> column_index_map;
 	vector<LogicalIndex> named_column_map;
 	vector<LogicalType> expected_types;
@@ -676,15 +677,17 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 	    stmt.info->is_format_auto_detected ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	CatalogEntryRetriever entry_retriever {context};
 	auto &catalog = Catalog::GetSystemCatalog(context);
-	auto entry =
-	    catalog.GetEntry(entry_retriever, Identifier::DefaultSchema(),
-	                     EntryLookupInfo(CatalogType::COPY_FUNCTION_ENTRY, Identifier(stmt.info->format)), on_entry_do);
+	auto entry = catalog.GetEntry(entry_retriever,
+	                              EntryLookupInfo(CatalogType::COPY_FUNCTION_ENTRY, Identifier(stmt.info->format))
+	                                  .WithQualification(catalog.GetName(), Identifier::DefaultSchema()),
+	                              on_entry_do);
 
 	if (!entry) {
 		IsFormatExtensionKnown(stmt.info->format);
 		// If we did not find an entry, we default to a CSV
-		entry = catalog.GetEntry(entry_retriever, Identifier::DefaultSchema(),
-		                         EntryLookupInfo(CatalogType::COPY_FUNCTION_ENTRY, "csv"),
+		entry = catalog.GetEntry(entry_retriever,
+		                         EntryLookupInfo(CatalogType::COPY_FUNCTION_ENTRY, "csv")
+		                             .WithQualification(catalog.GetName(), Identifier::DefaultSchema()),
 		                         OnEntryNotFound::THROW_EXCEPTION);
 	}
 	auto &copy_function = entry->Cast<CopyFunctionCatalogEntry>();

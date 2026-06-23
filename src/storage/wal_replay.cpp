@@ -932,8 +932,9 @@ void WriteAheadLogDeserializer::ReplayCreateTrigger() {
 		return;
 	}
 	auto &trigger_info = info->Cast<CreateTriggerInfo>();
-	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, trigger_info.GetCatalog(), trigger_info.GetSchema(),
-	                                                   trigger_info.base_table->GetTableName());
+	auto &table =
+	    Catalog::GetEntry<TableCatalogEntry>(context, QualifiedName(trigger_info.GetCatalog(), trigger_info.GetSchema(),
+	                                                                trigger_info.base_table->GetTableName()));
 	auto &duck_table = table.Cast<DuckTableEntry>();
 	auto transaction = catalog.GetCatalogTransaction(context);
 	duck_table.CreateTrigger(transaction, trigger_info);
@@ -952,7 +953,8 @@ void WriteAheadLogDeserializer::ReplayDropTrigger() {
 		throw InternalException("WAL replay: DROP TRIGGER entry has an empty table name for trigger \"%s\"",
 		                        info.name.name);
 	}
-	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, catalog.GetName(), info.GetSchema(), table_name);
+	auto &table =
+	    Catalog::GetEntry<TableCatalogEntry>(context, QualifiedName(catalog.GetName(), info.GetSchema(), table_name));
 	auto &duck_table = table.Cast<DuckTableEntry>();
 	auto transaction = catalog.GetCatalogTransaction(context);
 	duck_table.DropTrigger(transaction, info.name.name, info.cascade);

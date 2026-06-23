@@ -603,7 +603,8 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 	BindSchemaOrCatalog(insert_catalog, insert_schema);
 	node.table.SetCatalog(insert_catalog);
 	node.table.SetSchema(insert_schema);
-	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, insert_catalog, insert_schema, node.table.name);
+	auto &table =
+	    Catalog::GetEntry<TableCatalogEntry>(context, QualifiedName(insert_catalog, insert_schema, node.table.name));
 
 	if (auto expanded = TryExpandTriggers(node, table, TriggerEventType::INSERT_EVENT)) {
 		return std::move(*expanded);
