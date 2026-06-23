@@ -365,7 +365,12 @@ static bool ConvertUnshreddedStats(BaseStatistics &result, optional_ptr<BaseStat
 	D_ASSERT(result.GetType().id() == LogicalTypeId::UINTEGER);
 
 	if (!input_p) {
-		return false;
+		//! No stats for the unshredded 'value' - we can't prove this field is fully shredded. Mark it conservatively
+		//! (can hold non-null unshredded values, no min/max) so this field is treated as not-fully-shredded, but do
+		//! NOT fail the entire variant stats - other (provably shredded) paths can still be pushed down.
+		result.SetHasNull();
+		result.SetHasNoNull();
+		return true;
 	}
 	auto &input = *input_p;
 	D_ASSERT(input.GetType().id() == LogicalTypeId::BLOB);
@@ -375,7 +380,9 @@ static bool ConvertUnshreddedStats(BaseStatistics &result, optional_ptr<BaseStat
 		return true;
 	}
 	if (!StringStats::HasMinMax(input)) {
-		return false;
+		//! The unshredded 'value' has non-null entries but no min/max stats - we can't prove they are all VARIANT_NULL.
+		//! Leave min/max unset so this field reads as not-fully-shredded, instead of nulling the whole variant's stats.
+		return true;
 	}
 
 	auto min = StringStats::Min(input);
