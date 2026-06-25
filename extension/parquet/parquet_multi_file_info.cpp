@@ -689,6 +689,11 @@ unique_ptr<BaseStatistics> ParquetReader::GetStatistics(ClientContext &context, 
 	return ReadStatistics(name);
 }
 
+unique_ptr<BaseStatistics> ParquetReader::GetStatistics(ClientContext &context, const Identifier &name,
+                                                        optional_ptr<const ColumnIndex> extract_index) {
+	return ReadStatistics(name, extract_index);
+}
+
 double ParquetReader::GetProgressInFile(ClientContext &context) {
 	auto read_rows = rows_read.load();
 	return 100.0 * (static_cast<double>(read_rows) / static_cast<double>(NumRows()));

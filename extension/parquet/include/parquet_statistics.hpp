@@ -58,6 +58,10 @@ struct ParquetStatisticsUtils {
 
 	static Value ConvertValue(const LogicalType &type, const ParquetColumnSchema &schema_ele, const std::string &stats);
 
+	//! Given the merged BLOB stats of an unshredded variant 'value' column, returns whether they prove the field is
+	//! fully shredded (every row is absent, SQL NULL, or VARIANT_NULL - never an unshredded leftover)
+	static bool UnshreddedValueIsFullyShredded(optional_ptr<BaseStatistics> value_stats);
+
 	static bool BloomFilterSupported(const LogicalTypeId &type_id);
 
 	static bool BloomFilterExcludes(const TableFilter &filter, const duckdb_parquet::ColumnMetaData &column_meta_data,

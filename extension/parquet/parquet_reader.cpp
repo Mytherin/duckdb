@@ -611,9 +611,42 @@ static unique_ptr<BaseStatistics> ReadColumnStatistics(const FileMetaData &file_
 	return column_stats;
 }
 
-static bool IsFullyShredded(BaseStatistics &variant_stats, const ColumnIndex &column_index) {
+//! Determine whether the pushed-down extract path is fully shredded by reading ONLY the unshredded 'value' column
+//! statistics along the path. Building statistics for the entire variant subtree is prohibitively expensive for wide
+//! nested schemas (it would touch every leaf column in every row group just to decide a single path).
+static bool IsVariantPathFullyShredded(const FileMetaData &file_meta_data, const ParquetColumnSchema &variant_schema,
+                                       const ColumnIndex &column_index, const ParquetOptions &parquet_options) {
 	D_ASSERT(column_index.IsPushdownExtract());
-	return VariantStats::IsShredded(variant_stats, column_index);
+	reference<const ParquetColumnSchema> node(variant_schema);
+	reference<const ColumnIndex> path_iter(column_index);
+	while (true) {
+		//! Each variant node has an unshredded 'value' column - prove it carries no leftovers along this path
+		auto value_index = node.get().GetChildIndexByName("value");
+		if (value_index.IsValid()) {
+			auto &value_schema = node.get().GetChildByIndex(value_index.GetIndex());
+			auto value_stats = ReadColumnStatistics(file_meta_data, value_schema, parquet_options);
+			if (!ParquetStatisticsUtils::UnshreddedValueIsFullyShredded(value_stats.get())) {
+				return false;
+			}
+		}
+		auto typed_value_index = node.get().GetChildIndexByName("typed_value");
+		if (!typed_value_index.IsValid()) {
+			return false;
+		}
+		auto &typed_value_schema = node.get().GetChildByIndex(typed_value_index.GetIndex());
+		if (!path_iter.get().HasChildren()) {
+			//! End of the extract path - only pushable if the leaf maps to a primitive 'typed_value'
+			return !typed_value_schema.type.IsNested();
+		}
+		//! Descend into the next path field within 'typed_value'
+		auto &child = path_iter.get().GetChildIndexes()[0];
+		auto field_index = typed_value_schema.GetChildIndexByName(child.GetFieldName());
+		if (!field_index.IsValid()) {
+			return false;
+		}
+		node = typed_value_schema.GetChildByIndex(field_index.GetIndex());
+		path_iter = child;
+	}
 }
 
 static ColumnIndex CreateVariantTypedValuePushdown(const ParquetColumnSchema &schema, const ColumnIndex &column_id) {
@@ -759,9 +792,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 		}
 
 		//! VARIANT is shredded AND we have a pushed down extract to execute
-		auto variant_stats = ReadColumnStatistics(*GetFileMetadata(), schema, parquet_options);
-
-		if (variant_stats && IsFullyShredded(*variant_stats, column_id)) {
+		if (IsVariantPathFullyShredded(*GetFileMetadata(), schema, column_id, parquet_options)) {
 			//! This field is present in 'typed_value' across all rowgroups
 			//! So we can directly push a struct extract into 'typed_value' and ignore 'value'+'metadata'
 			auto typed_value_index = CreateVariantTypedValuePushdown(typed_value_schema, column_id);
@@ -1276,15 +1307,78 @@ const FileMetaData *ParquetReader::GetFileMetadata() const {
 	return metadata->metadata.get();
 }
 
+//! Prune a nested 'typed_value' STRUCT schema to contain only the field along the extract path. Keeps the schema's
+//! type and children consistent so the regular statistics builder reads stats for ONLY the path's columns.
+static ParquetColumnSchema PruneTypedValueToPath(const ParquetColumnSchema &typed_value, const ColumnIndex &path_node) {
+	auto &field_col = path_node.GetChildIndexes()[0];
+	auto field_index = typed_value.GetChildIndexByName(field_col.GetFieldName());
+	if (!field_index.IsValid()) {
+		//! Path field not present in 'typed_value' - leave it untouched and let the stats build handle it
+		return typed_value;
+	}
+	auto field_schema = typed_value.GetChildByIndex(field_index.GetIndex()); //! copy: STRUCT{value, typed_value}
+	if (field_col.HasChildren()) {
+		auto nested_index = field_schema.GetChildIndexByName("typed_value");
+		if (nested_index.IsValid()) {
+			auto pruned_child =
+			    PruneTypedValueToPath(field_schema.GetChildByIndex(nested_index.GetIndex()), field_col);
+			//! Rebuild the field's children + type so the pruned nested 'typed_value' is reflected consistently
+			child_list_t<LogicalType> field_type_children;
+			vector<ParquetColumnSchema> new_children;
+			for (idx_t i = 0; i < field_schema.children.size(); i++) {
+				auto &child = field_schema.children[i];
+				if (i == nested_index.GetIndex()) {
+					field_type_children.emplace_back(child.name, pruned_child.type);
+					new_children.push_back(std::move(pruned_child));
+				} else {
+					field_type_children.emplace_back(child.name, child.type);
+					new_children.push_back(child);
+				}
+			}
+			field_schema.type = LogicalType::STRUCT(std::move(field_type_children));
+			field_schema.children = std::move(new_children);
+		}
+	}
+	//! Build a 'typed_value' STRUCT containing only the path field
+	auto field_name = field_schema.name;
+	auto field_type = field_schema.type;
+	ParquetColumnSchema result = typed_value; //! copy (preserves define/repeat/index metadata)
+	result.children.clear();
+	result.children.push_back(std::move(field_schema));
+	child_list_t<LogicalType> root_children;
+	root_children.emplace_back(field_name, field_type);
+	result.type = LogicalType::STRUCT(std::move(root_children));
+	return result;
+}
+
+//! Prune a shredded VARIANT schema so its 'typed_value' only contains the single extract path
+static ParquetColumnSchema PruneVariantSchemaToPath(const ParquetColumnSchema &variant_schema,
+                                                    const ColumnIndex &column_index) {
+	D_ASSERT(column_index.IsPushdownExtract());
+	D_ASSERT(variant_schema.children.size() == 3);
+	ParquetColumnSchema result = variant_schema; //! copy: VARIANT{metadata, value, typed_value}
+	result.children[2] = PruneTypedValueToPath(variant_schema.children[2], column_index);
+	return result;
+}
+
 static unique_ptr<BaseStatistics> ReadStatisticsInternal(const FileMetaData &file_meta_data,
                                                          const ParquetColumnSchema &root_schema,
                                                          const ParquetOptions &parquet_options,
-                                                         const idx_t &file_col_idx) {
+                                                         const idx_t &file_col_idx,
+                                                         optional_ptr<const ColumnIndex> extract_index) {
 	auto &column_schema = root_schema.children[file_col_idx];
+	//! When a VARIANT column is read through a pushed-down extract, prune the variant schema to the requested path so
+	//! we only read statistics for the path's columns instead of every (potentially thousands of) leaf column.
+	if (extract_index && extract_index->IsPushdownExtract() &&
+	    column_schema.schema_type == ParquetColumnSchemaType::VARIANT && column_schema.children.size() == 3) {
+		auto pruned = PruneVariantSchemaToPath(column_schema, *extract_index);
+		return ReadColumnStatistics(file_meta_data, pruned, parquet_options);
+	}
 	return ReadColumnStatistics(file_meta_data, column_schema, parquet_options);
 }
 
-unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const Identifier &name) {
+unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const Identifier &name,
+                                                         optional_ptr<const ColumnIndex> extract_index) {
 	idx_t file_col_idx;
 	for (file_col_idx = 0; file_col_idx < columns.size(); file_col_idx++) {
 		if (columns[file_col_idx].name == name) {
@@ -1295,7 +1389,7 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const Identifier &name)
 		return nullptr;
 	}
 
-	return ReadStatisticsInternal(*GetFileMetadata(), *root_schema, parquet_options, file_col_idx);
+	return ReadStatisticsInternal(*GetFileMetadata(), *root_schema, parquet_options, file_col_idx, extract_index);
 }
 
 unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(ClientContext &context, ParquetOptions parquet_options,
@@ -1319,7 +1413,7 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const ParquetUnionData 
 	}
 
 	return ReadStatisticsInternal(*union_data.metadata->metadata, *union_data.root_schema, union_data.options,
-	                              file_col_idx);
+	                              file_col_idx, nullptr);
 }
 
 string ParquetReader::GetUniqueFileIdentifier(const duckdb_parquet::EncryptionAlgorithm &encryption_algorithm) {

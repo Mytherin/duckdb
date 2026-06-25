@@ -781,7 +781,7 @@ public:
 			}
 			return merged_stats;
 		}
-		auto result = bind_data.initial_reader->GetStatistics(context, col_name);
+		auto result = bind_data.initial_reader->GetStatistics(context, col_name, column_index);
 		if (!result || !column_index.IsPushdownExtract()) {
 			return result;
 		}

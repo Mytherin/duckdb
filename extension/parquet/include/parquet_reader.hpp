@@ -329,6 +329,8 @@ public:
 
 	shared_ptr<BaseUnionData> GetUnionData(idx_t file_idx) override;
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const Identifier &name) override;
+	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const Identifier &name,
+	                                         optional_ptr<const ColumnIndex> extract_index) override;
 
 	bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
 	                       LocalTableFunctionState &lstate) override;
@@ -359,7 +361,8 @@ public:
 	uint32_t ReadDataEncrypted(duckdb_apache::thrift::protocol::TProtocol &iprot, const data_ptr_t buffer,
 	                           const uint32_t buffer_size, CryptoMetaData &aad_crypto_metadata) const;
 
-	unique_ptr<BaseStatistics> ReadStatistics(const Identifier &name);
+	unique_ptr<BaseStatistics> ReadStatistics(const Identifier &name,
+	                                          optional_ptr<const ColumnIndex> extract_index = nullptr);
 
 	CachingFileHandle &GetHandle() {
 		return *file_handle;

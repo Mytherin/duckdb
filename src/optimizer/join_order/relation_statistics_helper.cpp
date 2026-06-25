@@ -195,6 +195,11 @@ unique_ptr<BaseStatistics> RelationStatisticsHelper::GetColumnStatistics(Logical
 
 DistinctCount RelationStatisticsHelper::GetDistinctCount(LogicalGet &get, ClientContext &context,
                                                          const ColumnIndex &column_id, idx_t base_table_cardinality) {
+	//! VARIANT column statistics never yield a usable distinct count (no HLL, no numeric min/max), so skip computing
+	//! them - building full statistics for a (potentially huge) variant column here would be pure overhead
+	if (get.GetColumnType(column_id).id() == LogicalTypeId::VARIANT) {
+		return DistinctCount(0, DistinctCountSource::CARDINALITY);
+	}
 	auto column_statistics = GetColumnStatistics(get, context, column_id);
 	if (!column_statistics) {
 		return DistinctCount(0, DistinctCountSource::CARDINALITY);

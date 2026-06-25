@@ -361,6 +361,27 @@ bool IsVariantNull(const string &str) {
 	return str.size() == 1 && str[0] == '\0';
 }
 
+bool ParquetStatisticsUtils::UnshreddedValueIsFullyShredded(optional_ptr<BaseStatistics> value_stats) {
+	if (!value_stats) {
+		//! No stats for the 'value' column - we can't prove the field is fully shredded
+		return false;
+	}
+	auto &input = *value_stats;
+	if (input.GetType().id() != LogicalTypeId::BLOB) {
+		return false;
+	}
+	if (!input.CanHaveNoNull()) {
+		//! The 'value' column is entirely NULL - every row is shredded (or a SQL NULL)
+		return true;
+	}
+	if (!StringStats::HasMinMax(input)) {
+		//! Has non-null entries but no min/max - we can't prove they are all VARIANT_NULL
+		return false;
+	}
+	//! All non-null unshredded values are VARIANT_NULL
+	return IsVariantNull(StringStats::Min(input)) && IsVariantNull(StringStats::Max(input));
+}
+
 static bool ConvertUnshreddedStats(BaseStatistics &result, optional_ptr<BaseStatistics> input_p) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::UINTEGER);
 

@@ -87,6 +87,10 @@ public:
 	DUCKDB_API virtual shared_ptr<BaseUnionData> GetUnionData(idx_t file_idx);
 	//! Get statistics for a specific column
 	DUCKDB_API virtual unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const Identifier &name);
+	//! Get statistics for a specific column, optionally scoped to a pushed-down extract path. Defaults to ignoring the
+	//! extract path and returning the full-column statistics.
+	DUCKDB_API virtual unique_ptr<BaseStatistics>
+	GetStatistics(ClientContext &context, const Identifier &name, optional_ptr<const ColumnIndex> extract_index);
 	//! Prepare reader for scanning
 	DUCKDB_API virtual void PrepareReader(ClientContext &context, GlobalTableFunctionState &);
 

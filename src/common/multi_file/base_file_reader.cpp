@@ -7,6 +7,12 @@ unique_ptr<BaseStatistics> BaseFileReader::GetStatistics(ClientContext &context,
 	return nullptr;
 }
 
+unique_ptr<BaseStatistics> BaseFileReader::GetStatistics(ClientContext &context, const Identifier &name,
+                                                         optional_ptr<const ColumnIndex> extract_index) {
+	//! Default: ignore the extract path and return the full-column statistics
+	return GetStatistics(context, name);
+}
+
 shared_ptr<BaseUnionData> BaseFileReader::GetUnionData(idx_t file_idx) {
 	throw NotImplementedException("Union by name not supported for reader of type %s", GetReaderType());
 }
