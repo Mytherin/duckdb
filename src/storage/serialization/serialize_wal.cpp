@@ -9,17 +9,117 @@
 
 namespace duckdb {
 
-void WALCheckpoint::Serialize(Serializer &serializer) const {
-	serializer.WriteProperty<MetaBlockPointer>(101, "meta_block", meta_block);
+void WALEntry::Serialize(Serializer &serializer) const {
+	serializer.WriteProperty<WALType>(100, "wal_type", wal_type);
 }
 
-WALCheckpoint WALCheckpoint::Deserialize(Deserializer &deserializer) {
-	WALCheckpoint result;
-	deserializer.ReadProperty<MetaBlockPointer>(101, "meta_block", result.meta_block);
+unique_ptr<WALEntry> WALEntry::Deserialize(Deserializer &deserializer) {
+	auto wal_type = deserializer.ReadProperty<WALType>(100, "wal_type");
+	unique_ptr<WALEntry> result;
+	switch (wal_type) {
+	case WALType::ALTER_INFO:
+		result = WALAlter::Deserialize(deserializer);
+		break;
+	case WALType::CHECKPOINT:
+		result = WALCheckpoint::Deserialize(deserializer);
+		break;
+	case WALType::CREATE_INDEX:
+		result = WALCreateIndex::Deserialize(deserializer);
+		break;
+	case WALType::CREATE_MACRO:
+		result = WALCreateMacro::Deserialize(deserializer);
+		break;
+	case WALType::CREATE_SCHEMA:
+		result = WALCreateSchema::Deserialize(deserializer);
+		break;
+	case WALType::CREATE_SEQUENCE:
+		result = WALCreateSequence::Deserialize(deserializer);
+		break;
+	case WALType::CREATE_TABLE:
+		result = WALCreateTable::Deserialize(deserializer);
+		break;
+	case WALType::CREATE_TABLE_MACRO:
+		result = WALCreateTableMacro::Deserialize(deserializer);
+		break;
+	case WALType::CREATE_TRIGGER:
+		result = WALCreateTrigger::Deserialize(deserializer);
+		break;
+	case WALType::CREATE_TYPE:
+		result = WALCreateType::Deserialize(deserializer);
+		break;
+	case WALType::CREATE_VIEW:
+		result = WALCreateView::Deserialize(deserializer);
+		break;
+	case WALType::DELETE_TUPLE:
+		result = WALDelete::Deserialize(deserializer);
+		break;
+	case WALType::DROP_INDEX:
+		result = WALDropIndex::Deserialize(deserializer);
+		break;
+	case WALType::DROP_MACRO:
+		result = WALDropMacro::Deserialize(deserializer);
+		break;
+	case WALType::DROP_SCHEMA:
+		result = WALDropSchema::Deserialize(deserializer);
+		break;
+	case WALType::DROP_SEQUENCE:
+		result = WALDropSequence::Deserialize(deserializer);
+		break;
+	case WALType::DROP_TABLE:
+		result = WALDropTable::Deserialize(deserializer);
+		break;
+	case WALType::DROP_TABLE_MACRO:
+		result = WALDropTableMacro::Deserialize(deserializer);
+		break;
+	case WALType::DROP_TRIGGER:
+		result = WALDropTrigger::Deserialize(deserializer);
+		break;
+	case WALType::DROP_TYPE:
+		result = WALDropType::Deserialize(deserializer);
+		break;
+	case WALType::DROP_VIEW:
+		result = WALDropView::Deserialize(deserializer);
+		break;
+	case WALType::INSERT_TUPLE:
+		result = WALInsert::Deserialize(deserializer);
+		break;
+	case WALType::ROW_GROUP_DATA:
+		result = WALRowGroupData::Deserialize(deserializer);
+		break;
+	case WALType::SEQUENCE_VALUE:
+		result = WALSequenceValue::Deserialize(deserializer);
+		break;
+	case WALType::UPDATE_TUPLE:
+		result = WALUpdate::Deserialize(deserializer);
+		break;
+	case WALType::USE_TABLE:
+		result = WALUseTable::Deserialize(deserializer);
+		break;
+	case WALType::WAL_FLUSH:
+		result = WALFlush::Deserialize(deserializer);
+		break;
+	case WALType::WAL_VERSION:
+		result = WALVersion::Deserialize(deserializer);
+		break;
+	default:
+		throw SerializationException("Unsupported type for deserialization of WALEntry!");
+	}
 	return result;
 }
 
+void WALCheckpoint::Serialize(Serializer &serializer) const {
+	WALEntry::Serialize(serializer);
+	serializer.WriteProperty<MetaBlockPointer>(101, "meta_block", meta_block);
+}
+
+unique_ptr<WALEntry> WALCheckpoint::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<WALCheckpoint>(new WALCheckpoint());
+	deserializer.ReadProperty<MetaBlockPointer>(101, "meta_block", result->meta_block);
+	return std::move(result);
+}
+
 void WALCreateMacro::Serialize(Serializer &serializer) const {
+	WALEntry::Serialize(serializer);
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WritePropertyWithDefault<unique_ptr<CreateInfo>>(101, "macro", macro);
 	} else {
@@ -27,13 +127,14 @@ void WALCreateMacro::Serialize(Serializer &serializer) const {
 	}
 }
 
-WALCreateMacro WALCreateMacro::Deserialize(Deserializer &deserializer) {
-	WALCreateMacro result;
-	deserializer.ReadPropertyWithDefault<unique_ptr<CreateInfo>>(101, "macro", result.macro);
-	return result;
+unique_ptr<WALEntry> WALCreateMacro::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<WALCreateMacro>(new WALCreateMacro());
+	deserializer.ReadPropertyWithDefault<unique_ptr<CreateInfo>>(101, "macro", result->macro);
+	return std::move(result);
 }
 
 void WALCreateSchema::Serialize(Serializer &serializer) const {
+	WALEntry::Serialize(serializer);
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WritePropertyWithDefault<Identifier>(101, "schema", schema);
 	} else {
@@ -41,13 +142,14 @@ void WALCreateSchema::Serialize(Serializer &serializer) const {
 	}
 }
 
-WALCreateSchema WALCreateSchema::Deserialize(Deserializer &deserializer) {
-	WALCreateSchema result;
-	deserializer.ReadPropertyWithDefault<Identifier>(101, "schema", result.schema);
-	return result;
+unique_ptr<WALEntry> WALCreateSchema::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<WALCreateSchema>(new WALCreateSchema());
+	deserializer.ReadPropertyWithDefault<Identifier>(101, "schema", result->schema);
+	return std::move(result);
 }
 
 void WALCreateSequence::Serialize(Serializer &serializer) const {
+	WALEntry::Serialize(serializer);
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WritePropertyWithDefault<unique_ptr<CreateInfo>>(101, "sequence", sequence);
 	} else {
@@ -55,13 +157,14 @@ void WALCreateSequence::Serialize(Serializer &serializer) const {
 	}
 }
 
-WALCreateSequence WALCreateSequence::Deserialize(Deserializer &deserializer) {
-	WALCreateSequence result;
-	deserializer.ReadPropertyWithDefault<unique_ptr<CreateInfo>>(101, "sequence", result.sequence);
-	return result;
+unique_ptr<WALEntry> WALCreateSequence::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<WALCreateSequence>(new WALCreateSequence());
+	deserializer.ReadPropertyWithDefault<unique_ptr<CreateInfo>>(101, "sequence", result->sequence);
+	return std::move(result);
 }
 
 void WALCreateTable::Serialize(Serializer &serializer) const {
+	WALEntry::Serialize(serializer);
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WritePropertyWithDefault<unique_ptr<CreateInfo>>(101, "table", table);
 	} else {
@@ -69,13 +172,14 @@ void WALCreateTable::Serialize(Serializer &serializer) const {
 	}
 }
 
-WALCreateTable WALCreateTable::Deserialize(Deserializer &deserializer) {
-	WALCreateTable result;
-	deserializer.ReadPropertyWithDefault<unique_ptr<CreateInfo>>(101, "table", result.table);
-	return result;
+unique_ptr<WALEntry> WALCreateTable::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<WALCreateTable>(new WALCreateTable());
+	deserializer.ReadPropertyWithDefault<unique_ptr<CreateInfo>>(101, "table", result->table);
+	return std::move(result);
 }
 
 void WALCreateTableMacro::Serialize(Serializer &serializer) const {
+	WALEntry::Serialize(serializer);
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WritePropertyWithDefault<unique_ptr<CreateInfo>>(101, "table_macro", table_macro);
 	} else {
@@ -83,13 +187,14 @@ void WALCreateTableMacro::Serialize(Serializer &serializer) const {
 	}
 }
 
-WALCreateTableMacro WALCreateTableMacro::Deserialize(Deserializer &deserializer) {
-	WALCreateTableMacro result;
-	deserializer.ReadPropertyWithDefault<unique_ptr<CreateInfo>>(101, "table_macro", result.table_macro);
-	return result;
+unique_ptr<WALEntry> WALCreateTableMacro::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<WALCreateTableMacro>(new WALCreateTableMacro());
+	deserializer.ReadPropertyWithDefault<unique_ptr<CreateInfo>>(101, "table_macro", result->table_macro);
+	return std::move(result);
 }
 
 void WALCreateTrigger::Serialize(Serializer &serializer) const {
+	WALEntry::Serialize(serializer);
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WritePropertyWithDefault<unique_ptr<CreateInfo>>(101, "trigger", trigger);
 	} else {
@@ -97,13 +202,14 @@ void WALCreateTrigger::Serialize(Serializer &serializer) const {
 	}
 }
 
-WALCreateTrigger WALCreateTrigger::Deserialize(Deserializer &deserializer) {
-	WALCreateTrigger result;
-	deserializer.ReadPropertyWithDefault<unique_ptr<CreateInfo>>(101, "trigger", result.trigger);
-	return result;
+unique_ptr<WALEntry> WALCreateTrigger::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<WALCreateTrigger>(new WALCreateTrigger());
+	deserializer.ReadPropertyWithDefault<unique_ptr<CreateInfo>>(101, "trigger", result->trigger);
+	return std::move(result);
 }
 
 void WALCreateType::Serialize(Serializer &serializer) const {
+	WALEntry::Serialize(serializer);
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WritePropertyWithDefault<unique_ptr<CreateInfo>>(101, "type", type);
 	} else {
@@ -111,13 +217,14 @@ void WALCreateType::Serialize(Serializer &serializer) const {
 	}
 }
 
-WALCreateType WALCreateType::Deserialize(Deserializer &deserializer) {
-	WALCreateType result;
-	deserializer.ReadPropertyWithDefault<unique_ptr<CreateInfo>>(101, "type", result.type);
-	return result;
+unique_ptr<WALEntry> WALCreateType::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<WALCreateType>(new WALCreateType());
+	deserializer.ReadPropertyWithDefault<unique_ptr<CreateInfo>>(101, "type", result->type);
+	return std::move(result);
 }
 
 void WALCreateView::Serialize(Serializer &serializer) const {
+	WALEntry::Serialize(serializer);
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WritePropertyWithDefault<unique_ptr<CreateInfo>>(101, "view", view);
 	} else {
@@ -125,13 +232,14 @@ void WALCreateView::Serialize(Serializer &serializer) const {
 	}
 }
 
-WALCreateView WALCreateView::Deserialize(Deserializer &deserializer) {
-	WALCreateView result;
-	deserializer.ReadPropertyWithDefault<unique_ptr<CreateInfo>>(101, "view", result.view);
-	return result;
+unique_ptr<WALEntry> WALCreateView::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<WALCreateView>(new WALCreateView());
+	deserializer.ReadPropertyWithDefault<unique_ptr<CreateInfo>>(101, "view", result->view);
+	return std::move(result);
 }
 
 void WALDropIndex::Serialize(Serializer &serializer) const {
+	WALEntry::Serialize(serializer);
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WritePropertyWithDefault<Identifier>(101, "schema", schema);
 	} else {
@@ -144,14 +252,15 @@ void WALDropIndex::Serialize(Serializer &serializer) const {
 	}
 }
 
-WALDropIndex WALDropIndex::Deserialize(Deserializer &deserializer) {
-	WALDropIndex result;
-	deserializer.ReadPropertyWithDefault<Identifier>(101, "schema", result.schema);
-	deserializer.ReadPropertyWithDefault<Identifier>(102, "name", result.name);
-	return result;
+unique_ptr<WALEntry> WALDropIndex::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<WALDropIndex>(new WALDropIndex());
+	deserializer.ReadPropertyWithDefault<Identifier>(101, "schema", result->schema);
+	deserializer.ReadPropertyWithDefault<Identifier>(102, "name", result->name);
+	return std::move(result);
 }
 
 void WALDropMacro::Serialize(Serializer &serializer) const {
+	WALEntry::Serialize(serializer);
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WritePropertyWithDefault<Identifier>(101, "schema", schema);
 	} else {
@@ -164,14 +273,15 @@ void WALDropMacro::Serialize(Serializer &serializer) const {
 	}
 }
 
-WALDropMacro WALDropMacro::Deserialize(Deserializer &deserializer) {
-	WALDropMacro result;
-	deserializer.ReadPropertyWithDefault<Identifier>(101, "schema", result.schema);
-	deserializer.ReadPropertyWithDefault<Identifier>(102, "name", result.name);
-	return result;
+unique_ptr<WALEntry> WALDropMacro::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<WALDropMacro>(new WALDropMacro());
+	deserializer.ReadPropertyWithDefault<Identifier>(101, "schema", result->schema);
+	deserializer.ReadPropertyWithDefault<Identifier>(102, "name", result->name);
+	return std::move(result);
 }
 
 void WALDropSchema::Serialize(Serializer &serializer) const {
+	WALEntry::Serialize(serializer);
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WritePropertyWithDefault<Identifier>(101, "schema", schema);
 	} else {
@@ -179,13 +289,14 @@ void WALDropSchema::Serialize(Serializer &serializer) const {
 	}
 }
 
-WALDropSchema WALDropSchema::Deserialize(Deserializer &deserializer) {
-	WALDropSchema result;
-	deserializer.ReadPropertyWithDefault<Identifier>(101, "schema", result.schema);
-	return result;
+unique_ptr<WALEntry> WALDropSchema::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<WALDropSchema>(new WALDropSchema());
+	deserializer.ReadPropertyWithDefault<Identifier>(101, "schema", result->schema);
+	return std::move(result);
 }
 
 void WALDropSequence::Serialize(Serializer &serializer) const {
+	WALEntry::Serialize(serializer);
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WritePropertyWithDefault<Identifier>(101, "schema", schema);
 	} else {
@@ -198,14 +309,15 @@ void WALDropSequence::Serialize(Serializer &serializer) const {
 	}
 }
 
-WALDropSequence WALDropSequence::Deserialize(Deserializer &deserializer) {
-	WALDropSequence result;
-	deserializer.ReadPropertyWithDefault<Identifier>(101, "schema", result.schema);
-	deserializer.ReadPropertyWithDefault<Identifier>(102, "name", result.name);
-	return result;
+unique_ptr<WALEntry> WALDropSequence::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<WALDropSequence>(new WALDropSequence());
+	deserializer.ReadPropertyWithDefault<Identifier>(101, "schema", result->schema);
+	deserializer.ReadPropertyWithDefault<Identifier>(102, "name", result->name);
+	return std::move(result);
 }
 
 void WALDropTable::Serialize(Serializer &serializer) const {
+	WALEntry::Serialize(serializer);
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WritePropertyWithDefault<Identifier>(101, "schema", schema);
 	} else {
@@ -218,14 +330,15 @@ void WALDropTable::Serialize(Serializer &serializer) const {
 	}
 }
 
-WALDropTable WALDropTable::Deserialize(Deserializer &deserializer) {
-	WALDropTable result;
-	deserializer.ReadPropertyWithDefault<Identifier>(101, "schema", result.schema);
-	deserializer.ReadPropertyWithDefault<Identifier>(102, "name", result.name);
-	return result;
+unique_ptr<WALEntry> WALDropTable::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<WALDropTable>(new WALDropTable());
+	deserializer.ReadPropertyWithDefault<Identifier>(101, "schema", result->schema);
+	deserializer.ReadPropertyWithDefault<Identifier>(102, "name", result->name);
+	return std::move(result);
 }
 
 void WALDropTableMacro::Serialize(Serializer &serializer) const {
+	WALEntry::Serialize(serializer);
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WritePropertyWithDefault<Identifier>(101, "schema", schema);
 	} else {
@@ -238,14 +351,15 @@ void WALDropTableMacro::Serialize(Serializer &serializer) const {
 	}
 }
 
-WALDropTableMacro WALDropTableMacro::Deserialize(Deserializer &deserializer) {
-	WALDropTableMacro result;
-	deserializer.ReadPropertyWithDefault<Identifier>(101, "schema", result.schema);
-	deserializer.ReadPropertyWithDefault<Identifier>(102, "name", result.name);
-	return result;
+unique_ptr<WALEntry> WALDropTableMacro::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<WALDropTableMacro>(new WALDropTableMacro());
+	deserializer.ReadPropertyWithDefault<Identifier>(101, "schema", result->schema);
+	deserializer.ReadPropertyWithDefault<Identifier>(102, "name", result->name);
+	return std::move(result);
 }
 
 void WALDropTrigger::Serialize(Serializer &serializer) const {
+	WALEntry::Serialize(serializer);
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WritePropertyWithDefault<Identifier>(101, "schema", schema);
 	} else {
@@ -263,15 +377,16 @@ void WALDropTrigger::Serialize(Serializer &serializer) const {
 	}
 }
 
-WALDropTrigger WALDropTrigger::Deserialize(Deserializer &deserializer) {
-	WALDropTrigger result;
-	deserializer.ReadPropertyWithDefault<Identifier>(101, "schema", result.schema);
-	deserializer.ReadPropertyWithDefault<Identifier>(102, "name", result.name);
-	deserializer.ReadPropertyWithDefault<Identifier>(103, "table", result.table);
-	return result;
+unique_ptr<WALEntry> WALDropTrigger::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<WALDropTrigger>(new WALDropTrigger());
+	deserializer.ReadPropertyWithDefault<Identifier>(101, "schema", result->schema);
+	deserializer.ReadPropertyWithDefault<Identifier>(102, "name", result->name);
+	deserializer.ReadPropertyWithDefault<Identifier>(103, "table", result->table);
+	return std::move(result);
 }
 
 void WALDropType::Serialize(Serializer &serializer) const {
+	WALEntry::Serialize(serializer);
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WritePropertyWithDefault<Identifier>(101, "schema", schema);
 	} else {
@@ -284,14 +399,15 @@ void WALDropType::Serialize(Serializer &serializer) const {
 	}
 }
 
-WALDropType WALDropType::Deserialize(Deserializer &deserializer) {
-	WALDropType result;
-	deserializer.ReadPropertyWithDefault<Identifier>(101, "schema", result.schema);
-	deserializer.ReadPropertyWithDefault<Identifier>(102, "name", result.name);
-	return result;
+unique_ptr<WALEntry> WALDropType::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<WALDropType>(new WALDropType());
+	deserializer.ReadPropertyWithDefault<Identifier>(101, "schema", result->schema);
+	deserializer.ReadPropertyWithDefault<Identifier>(102, "name", result->name);
+	return std::move(result);
 }
 
 void WALDropView::Serialize(Serializer &serializer) const {
+	WALEntry::Serialize(serializer);
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WritePropertyWithDefault<Identifier>(101, "schema", schema);
 	} else {
@@ -304,14 +420,24 @@ void WALDropView::Serialize(Serializer &serializer) const {
 	}
 }
 
-WALDropView WALDropView::Deserialize(Deserializer &deserializer) {
-	WALDropView result;
-	deserializer.ReadPropertyWithDefault<Identifier>(101, "schema", result.schema);
-	deserializer.ReadPropertyWithDefault<Identifier>(102, "name", result.name);
-	return result;
+unique_ptr<WALEntry> WALDropView::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<WALDropView>(new WALDropView());
+	deserializer.ReadPropertyWithDefault<Identifier>(101, "schema", result->schema);
+	deserializer.ReadPropertyWithDefault<Identifier>(102, "name", result->name);
+	return std::move(result);
+}
+
+void WALFlush::Serialize(Serializer &serializer) const {
+	WALEntry::Serialize(serializer);
+}
+
+unique_ptr<WALEntry> WALFlush::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<WALFlush>(new WALFlush());
+	return std::move(result);
 }
 
 void WALSequenceValue::Serialize(Serializer &serializer) const {
+	WALEntry::Serialize(serializer);
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WritePropertyWithDefault<Identifier>(101, "schema", schema);
 	} else {
@@ -332,18 +458,23 @@ void WALSequenceValue::Serialize(Serializer &serializer) const {
 	} else {
 		serializer.WriteProperty<int64_t>(104, "counter", counter);
 	}
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<optional<int64_t>>(105, "last_value", last_value, optional<int64_t>());
+	}
 }
 
-WALSequenceValue WALSequenceValue::Deserialize(Deserializer &deserializer) {
-	WALSequenceValue result;
-	deserializer.ReadPropertyWithDefault<Identifier>(101, "schema", result.schema);
-	deserializer.ReadPropertyWithDefault<Identifier>(102, "name", result.name);
-	deserializer.ReadPropertyWithDefault<uint64_t>(103, "usage_count", result.usage_count);
-	deserializer.ReadPropertyWithDefault<int64_t>(104, "counter", result.counter);
-	return result;
+unique_ptr<WALEntry> WALSequenceValue::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<WALSequenceValue>(new WALSequenceValue());
+	deserializer.ReadPropertyWithDefault<Identifier>(101, "schema", result->schema);
+	deserializer.ReadPropertyWithDefault<Identifier>(102, "name", result->name);
+	deserializer.ReadPropertyWithDefault<uint64_t>(103, "usage_count", result->usage_count);
+	deserializer.ReadPropertyWithDefault<int64_t>(104, "counter", result->counter);
+	deserializer.ReadPropertyWithExplicitDefault<optional<int64_t>>(105, "last_value", result->last_value, optional<int64_t>());
+	return std::move(result);
 }
 
 void WALUseTable::Serialize(Serializer &serializer) const {
+	WALEntry::Serialize(serializer);
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WritePropertyWithDefault<Identifier>(101, "schema", schema);
 	} else {
@@ -356,11 +487,11 @@ void WALUseTable::Serialize(Serializer &serializer) const {
 	}
 }
 
-WALUseTable WALUseTable::Deserialize(Deserializer &deserializer) {
-	WALUseTable result;
-	deserializer.ReadPropertyWithDefault<Identifier>(101, "schema", result.schema);
-	deserializer.ReadPropertyWithDefault<Identifier>(102, "table", result.table);
-	return result;
+unique_ptr<WALEntry> WALUseTable::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<WALUseTable>(new WALUseTable());
+	deserializer.ReadPropertyWithDefault<Identifier>(101, "schema", result->schema);
+	deserializer.ReadPropertyWithDefault<Identifier>(102, "table", result->table);
+	return std::move(result);
 }
 
 } // namespace duckdb

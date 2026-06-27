@@ -34,6 +34,7 @@ class Transaction;
 class TransactionManager;
 class WriteAheadLogDeserializer;
 struct PersistentCollectionData;
+struct WALEntry;
 
 enum class WALInitState { NO_WAL, UNINITIALIZED, UNINITIALIZED_REQUIRES_TRUNCATE, INITIALIZED };
 
@@ -123,6 +124,10 @@ public:
 	//! Increment the WAL entry count, which is used for the auto-checkpoint threshold.
 	void IncrementWALEntriesCount();
 	void WriteCheckpoint(MetaBlockPointer meta_block);
+
+protected:
+	//! Serialize a single WAL entry (writes the WALType marker + payload, framed with a checksum).
+	void WriteEntry(const WALEntry &entry);
 
 protected:
 	StorageManager &storage_manager;

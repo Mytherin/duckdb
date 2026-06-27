@@ -70,6 +70,22 @@ public:
 	vector<ReplayIndexInfo> replay_index_infos;
 };
 
+//! Context made available on the deserializer so the index entries (CREATE_INDEX / ALTER ADD PRIMARY KEY) can
+//! materialize their on-disk index buffers while reading.
+struct WALIndexReplayState : SerializationData::CustomData {
+	WALIndexReplayState(ClientContext &context, AttachedDatabase &db, bool deserialize_only)
+	    : context(context), db(db), deserialize_only(deserialize_only) {
+	}
+
+	ClientContext &context;
+	AttachedDatabase &db;
+	bool deserialize_only;
+
+	static string GetType() {
+		return "WALIndexReplayState";
+	}
+};
+
 class WriteAheadLogDeserializer {
 public:
 	WriteAheadLogDeserializer(ReplayState &state_p, BufferedFileReader &stream_p, bool deserialize_only = false)
@@ -203,13 +219,25 @@ public:
 
 	bool ReplayEntry() {
 		deserializer.Begin();
-		auto wal_type = deserializer.ReadProperty<WALType>(100, "wal_type");
-		if (wal_type == WALType::WAL_FLUSH) {
-			deserializer.End();
+		// Some data-heavy entries need additional context during deserialization (it is harmless for the others).
+		deserializer.Set<DatabaseInstance &>(db.GetDatabase());
+		CompressionInfo compression_info(db.GetStorageManager().GetBlockManager());
+		deserializer.Set<const CompressionInfo &>(compression_info);
+		WALIndexReplayState index_state(context, db, deserialize_only);
+		auto &serialization_data = deserializer.GetSerializationData();
+		serialization_data.SetCustom(index_state);
+
+		current_entry = WALEntry::Deserialize(deserializer);
+
+		serialization_data.customs[WALIndexReplayState::GetType()].pop();
+		deserializer.Unset<const CompressionInfo>();
+		deserializer.Unset<DatabaseInstance>();
+		deserializer.End();
+
+		if (current_entry->wal_type == WALType::WAL_FLUSH) {
 			return true;
 		}
-		ReplayEntry(wal_type);
-		deserializer.End();
+		ReplayEntry(current_entry->wal_type);
 		return false;
 	}
 
@@ -261,13 +289,12 @@ protected:
 	void ReplayCheckpoint();
 
 private:
-	void ReplayIndexData(IndexStorageInfo &info);
-
-private:
 	ReplayState &state;
 	AttachedDatabase &db;
 	ClientContext &context;
 	Catalog &catalog;
+	//! The entry currently being replayed (deserialized in ReplayEntry, consumed by the Replay* handlers)
+	unique_ptr<WALEntry> current_entry;
 	unique_ptr<data_t[]> data;
 	MemoryStream stream;
 	BinaryDeserializer deserializer;
@@ -672,25 +699,31 @@ void WriteAheadLogDeserializer::ThrowVersionError(idx_t checkpoint_iteration, id
 	                  relation, expected_checkpoint_iteration, checkpoint_iteration);
 }
 
-void WriteAheadLogDeserializer::ReplayVersion() {
-	state.wal_version = deserializer.ReadProperty<idx_t>(101, "version");
-
-	auto &single_file_block_manager = db.GetStorageManager().GetBlockManager().Cast<SingleFileBlockManager>();
-	data_t db_identifier[MainHeader::DB_IDENTIFIER_LEN];
-	bool is_set = false;
+unique_ptr<WALEntry> WALVersion::Deserialize(Deserializer &deserializer) {
+	auto result = make_uniq<WALVersion>();
+	result->version = deserializer.ReadProperty<idx_t>(101, "version");
 	deserializer.ReadOptionalList(102, "db_identifier", [&](Deserializer::List &list, idx_t i) {
 		if (i >= MainHeader::DB_IDENTIFIER_LEN) {
 			throw IOException("Corrupt file - database identifier in header out of range");
 		}
-		db_identifier[i] = list.ReadElement<uint8_t>();
-		is_set = true;
+		result->db_identifier.push_back(list.ReadElement<uint8_t>());
 	});
-	auto checkpoint_iteration = deserializer.ReadPropertyWithDefault<optional_idx>(103, "checkpoint_iteration");
+	result->checkpoint_iteration = deserializer.ReadPropertyWithDefault<optional_idx>(103, "checkpoint_iteration");
+	return std::move(result);
+}
+
+void WriteAheadLogDeserializer::ReplayVersion() {
+	auto &entry = current_entry->Cast<WALVersion>();
+	state.wal_version = entry.version;
+
+	auto &single_file_block_manager = db.GetStorageManager().GetBlockManager().Cast<SingleFileBlockManager>();
+	bool is_set = !entry.db_identifier.empty();
+	auto &checkpoint_iteration = entry.checkpoint_iteration;
 	if (!is_set || !checkpoint_iteration.IsValid()) {
 		return;
 	}
 	auto expected_db_identifier = single_file_block_manager.GetDBIdentifier();
-	if (!MainHeader::CompareDBIdentifiers(db_identifier, expected_db_identifier)) {
+	if (!MainHeader::CompareDBIdentifiers(entry.db_identifier.data(), expected_db_identifier)) {
 		throw IOException("WAL does not match database file.");
 	}
 
@@ -718,7 +751,7 @@ void WriteAheadLogDeserializer::ReplayVersion() {
 // Replay Table
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateTable() {
-	auto entry = WALCreateTable::Deserialize(deserializer);
+	auto &entry = current_entry->Cast<WALCreateTable>();
 	auto info = std::move(entry.table);
 	if (DeserializeOnly()) {
 		return;
@@ -732,7 +765,7 @@ void WriteAheadLogDeserializer::ReplayCreateTable() {
 }
 
 void WriteAheadLogDeserializer::ReplayDropTable() {
-	auto entry = WALDropTable::Deserialize(deserializer);
+	auto &entry = current_entry->Cast<WALDropTable>();
 	DropInfo info;
 
 	info.type = CatalogType::TABLE_ENTRY;
@@ -760,10 +793,12 @@ void ReplayWithoutIndex(ClientContext &context, Catalog &catalog, AlterInfo &inf
 	catalog.Alter(context, info);
 }
 
-void WriteAheadLogDeserializer::ReplayIndexData(IndexStorageInfo &info) {
+//! Read the on-disk index buffers (id 103) into buffer handles, converting them to persistent blocks (unless we are
+//! only deserializing). This runs while the entry is being deserialized so that the buffers can be read zero-copy.
+static void ReplayIndexData(Deserializer &deserializer, IndexStorageInfo &info, WALIndexReplayState &index_state) {
 	D_ASSERT(info.IsValid() && !info.name.empty());
 
-	auto &single_file_sm = db.GetStorageManager().Cast<SingleFileStorageManager>();
+	auto &single_file_sm = index_state.db.GetStorageManager().Cast<SingleFileStorageManager>();
 	auto &block_manager = single_file_sm.block_manager;
 	auto &buffer_manager = block_manager->buffer_manager;
 
@@ -780,9 +815,9 @@ void WriteAheadLogDeserializer::ReplayIndexData(IndexStorageInfo &info) {
 			list.ReadElement<bool>(data_ptr, data_info.allocation_sizes[j]);
 
 			// Convert the buffer handle to a persistent block and store the block id.
-			if (!deserialize_only) {
+			if (!index_state.deserialize_only) {
 				auto block_id = block_manager->GetFreeBlockIdForCheckpoint();
-				block_manager->ConvertToPersistent(context, block_id, std::move(block_handle),
+				block_manager->ConvertToPersistent(index_state.context, block_id, std::move(block_handle),
 				                                   std::move(buffer_handle));
 				data_info.block_pointers[j].block_id = block_id;
 			}
@@ -790,19 +825,42 @@ void WriteAheadLogDeserializer::ReplayIndexData(IndexStorageInfo &info) {
 	});
 }
 
+unique_ptr<WALEntry> WALCreateIndex::Deserialize(Deserializer &deserializer) {
+	auto result = make_uniq<WALCreateIndex>();
+	result->index_catalog_entry = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "index_catalog_entry");
+	result->index_storage_info = deserializer.ReadProperty<IndexStorageInfo>(102, "index_storage_info");
+	result->has_index_storage = true;
+	auto &index_state = deserializer.GetSerializationData().GetCustom<WALIndexReplayState>();
+	ReplayIndexData(deserializer, result->index_storage_info, index_state);
+	return std::move(result);
+}
+
+unique_ptr<WALEntry> WALAlter::Deserialize(Deserializer &deserializer) {
+	auto result = make_uniq<WALAlter>();
+	result->info = deserializer.ReadProperty<unique_ptr<ParseInfo>>(101, "info");
+	auto &alter_info = result->info->Cast<AlterInfo>();
+	if (alter_info.IsAddPrimaryKey()) {
+		result->index_storage_info = deserializer.ReadProperty<IndexStorageInfo>(102, "index_storage_info");
+		result->has_index_storage = true;
+		auto &index_state = deserializer.GetSerializationData().GetCustom<WALIndexReplayState>();
+		ReplayIndexData(deserializer, result->index_storage_info, index_state);
+	}
+	return std::move(result);
+}
+
 void WriteAheadLogDeserializer::ReplayAlter() {
-	auto info = deserializer.ReadProperty<unique_ptr<ParseInfo>>(101, "info");
-	auto &alter_info = info->Cast<AlterInfo>();
+	auto &entry = current_entry->Cast<WALAlter>();
+	auto &alter_info = entry.info->Cast<AlterInfo>();
 	alter_info.bind_mode = AlterBindMode::SKIP_BINDING;
 	if (!alter_info.IsAddPrimaryKey()) {
 		return ReplayWithoutIndex(context, catalog, alter_info, DeserializeOnly());
 	}
 
-	auto index_storage_info = deserializer.ReadProperty<IndexStorageInfo>(102, "index_storage_info");
-	ReplayIndexData(index_storage_info);
+	// the index data was already read (and converted to blocks) while deserializing the entry
 	if (DeserializeOnly()) {
 		return;
 	}
+	auto &index_storage_info = entry.index_storage_info;
 
 	auto &table_info = alter_info.Cast<AlterTableInfo>();
 	auto &constraint_info = table_info.Cast<AddConstraintInfo>();
@@ -864,7 +922,7 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 // Replay View
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateView() {
-	auto wal_entry = WALCreateView::Deserialize(deserializer);
+	auto &wal_entry = current_entry->Cast<WALCreateView>();
 	auto &entry = wal_entry.view;
 	if (DeserializeOnly()) {
 		return;
@@ -873,7 +931,7 @@ void WriteAheadLogDeserializer::ReplayCreateView() {
 }
 
 void WriteAheadLogDeserializer::ReplayDropView() {
-	auto entry = WALDropView::Deserialize(deserializer);
+	auto &entry = current_entry->Cast<WALDropView>();
 	DropInfo info;
 	info.type = CatalogType::VIEW_ENTRY;
 	info.SetQualifiedName(QualifiedName({std::move(entry.schema)}, std::move(entry.name)));
@@ -887,7 +945,7 @@ void WriteAheadLogDeserializer::ReplayDropView() {
 // Replay Schema
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateSchema() {
-	auto entry = WALCreateSchema::Deserialize(deserializer);
+	auto &entry = current_entry->Cast<WALCreateSchema>();
 	CreateSchemaInfo info;
 	info.SetQualifiedName(QualifiedName({std::move(entry.schema)}, Identifier()));
 	if (DeserializeOnly()) {
@@ -898,7 +956,7 @@ void WriteAheadLogDeserializer::ReplayCreateSchema() {
 }
 
 void WriteAheadLogDeserializer::ReplayDropSchema() {
-	auto entry = WALDropSchema::Deserialize(deserializer);
+	auto &entry = current_entry->Cast<WALDropSchema>();
 	DropInfo info;
 
 	info.type = CatalogType::SCHEMA_ENTRY;
@@ -914,7 +972,7 @@ void WriteAheadLogDeserializer::ReplayDropSchema() {
 // Replay Custom Type
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateType() {
-	auto wal_entry = WALCreateType::Deserialize(deserializer);
+	auto &wal_entry = current_entry->Cast<WALCreateType>();
 	auto &info = wal_entry.type;
 	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	if (DeserializeOnly()) {
@@ -924,7 +982,7 @@ void WriteAheadLogDeserializer::ReplayCreateType() {
 }
 
 void WriteAheadLogDeserializer::ReplayDropType() {
-	auto entry = WALDropType::Deserialize(deserializer);
+	auto &entry = current_entry->Cast<WALDropType>();
 	DropInfo info;
 
 	info.type = CatalogType::TYPE_ENTRY;
@@ -940,7 +998,7 @@ void WriteAheadLogDeserializer::ReplayDropType() {
 // Replay Trigger
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateTrigger() {
-	auto wal_entry = WALCreateTrigger::Deserialize(deserializer);
+	auto &wal_entry = current_entry->Cast<WALCreateTrigger>();
 	auto &info = wal_entry.trigger;
 	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	if (DeserializeOnly()) {
@@ -956,7 +1014,7 @@ void WriteAheadLogDeserializer::ReplayCreateTrigger() {
 }
 
 void WriteAheadLogDeserializer::ReplayDropTrigger() {
-	auto entry = WALDropTrigger::Deserialize(deserializer);
+	auto &entry = current_entry->Cast<WALDropTrigger>();
 	DropInfo info;
 	info.type = CatalogType::TRIGGER_ENTRY;
 	auto table_name = std::move(entry.table);
@@ -979,7 +1037,7 @@ void WriteAheadLogDeserializer::ReplayDropTrigger() {
 // Replay Sequence
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateSequence() {
-	auto wal_entry = WALCreateSequence::Deserialize(deserializer);
+	auto &wal_entry = current_entry->Cast<WALCreateSequence>();
 	auto &entry = wal_entry.sequence;
 	if (DeserializeOnly()) {
 		return;
@@ -989,7 +1047,7 @@ void WriteAheadLogDeserializer::ReplayCreateSequence() {
 }
 
 void WriteAheadLogDeserializer::ReplayDropSequence() {
-	auto entry = WALDropSequence::Deserialize(deserializer);
+	auto &entry = current_entry->Cast<WALDropSequence>();
 	DropInfo info;
 	info.type = CatalogType::SEQUENCE_ENTRY;
 	info.SetQualifiedName(QualifiedName({std::move(entry.schema)}, std::move(entry.name)));
@@ -1001,10 +1059,7 @@ void WriteAheadLogDeserializer::ReplayDropSequence() {
 }
 
 void WriteAheadLogDeserializer::ReplaySequenceValue() {
-	auto entry = WALSequenceValue::Deserialize(deserializer);
-	// last_value (id 105) is read manually, preserving its tolerant (optional) decoding for older WALs
-	auto last_value = deserializer.ReadPropertyWithDefault<optional<int64_t>>(105, "last_value");
-
+	auto &entry = current_entry->Cast<WALSequenceValue>();
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -1012,14 +1067,14 @@ void WriteAheadLogDeserializer::ReplaySequenceValue() {
 	// fetch the sequence from the catalog
 	auto &seq = catalog.GetEntry<SequenceCatalogEntry>(
 	    context, QualifiedName(catalog.GetName(), std::move(entry.schema), std::move(entry.name)));
-	seq.ReplayValue(entry.usage_count, entry.counter, last_value);
+	seq.ReplayValue(entry.usage_count, entry.counter, entry.last_value);
 }
 
 //===--------------------------------------------------------------------===//
 // Replay Macro
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateMacro() {
-	auto wal_entry = WALCreateMacro::Deserialize(deserializer);
+	auto &wal_entry = current_entry->Cast<WALCreateMacro>();
 	auto &entry = wal_entry.macro;
 	if (DeserializeOnly()) {
 		return;
@@ -1029,7 +1084,7 @@ void WriteAheadLogDeserializer::ReplayCreateMacro() {
 }
 
 void WriteAheadLogDeserializer::ReplayDropMacro() {
-	auto entry = WALDropMacro::Deserialize(deserializer);
+	auto &entry = current_entry->Cast<WALDropMacro>();
 	DropInfo info;
 	info.type = CatalogType::MACRO_ENTRY;
 	info.SetQualifiedName(QualifiedName({std::move(entry.schema)}, std::move(entry.name)));
@@ -1044,7 +1099,7 @@ void WriteAheadLogDeserializer::ReplayDropMacro() {
 // Replay Table Macro
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateTableMacro() {
-	auto wal_entry = WALCreateTableMacro::Deserialize(deserializer);
+	auto &wal_entry = current_entry->Cast<WALCreateTableMacro>();
 	auto &entry = wal_entry.table_macro;
 	if (DeserializeOnly()) {
 		return;
@@ -1053,7 +1108,7 @@ void WriteAheadLogDeserializer::ReplayCreateTableMacro() {
 }
 
 void WriteAheadLogDeserializer::ReplayDropTableMacro() {
-	auto entry = WALDropTableMacro::Deserialize(deserializer);
+	auto &entry = current_entry->Cast<WALDropTableMacro>();
 	DropInfo info;
 	info.type = CatalogType::TABLE_MACRO_ENTRY;
 	info.SetQualifiedName(QualifiedName({std::move(entry.schema)}, std::move(entry.name)));
@@ -1068,10 +1123,10 @@ void WriteAheadLogDeserializer::ReplayDropTableMacro() {
 // Replay Index
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateIndex() {
-	auto create_info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "index_catalog_entry");
-	auto index_info = deserializer.ReadProperty<IndexStorageInfo>(102, "index_storage_info");
-
-	ReplayIndexData(index_info);
+	auto &wal_entry = current_entry->Cast<WALCreateIndex>();
+	auto create_info = std::move(wal_entry.index_catalog_entry);
+	// the index data was already read (and converted to blocks) while deserializing the entry
+	auto index_info = std::move(wal_entry.index_storage_info);
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -1102,7 +1157,7 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 }
 
 void WriteAheadLogDeserializer::ReplayDropIndex() {
-	auto entry = WALDropIndex::Deserialize(deserializer);
+	auto &entry = current_entry->Cast<WALDropIndex>();
 	DropInfo info;
 	info.type = CatalogType::INDEX_ENTRY;
 	info.SetQualifiedName(QualifiedName({std::move(entry.schema)}, std::move(entry.name)));
@@ -1126,7 +1181,7 @@ void WriteAheadLogDeserializer::ReplayDropIndex() {
 // Replay Data
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayUseTable() {
-	auto entry = WALUseTable::Deserialize(deserializer);
+	auto &entry = current_entry->Cast<WALUseTable>();
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -1134,9 +1189,34 @@ void WriteAheadLogDeserializer::ReplayUseTable() {
 	    context, QualifiedName(catalog.GetName(), std::move(entry.schema), std::move(entry.table)));
 }
 
+unique_ptr<WALEntry> WALInsert::Deserialize(Deserializer &deserializer) {
+	auto result = make_uniq<WALInsert>();
+	deserializer.ReadObject(101, "chunk", [&](Deserializer &object) { result->chunk.Deserialize(object); });
+	return std::move(result);
+}
+
+unique_ptr<WALEntry> WALDelete::Deserialize(Deserializer &deserializer) {
+	auto result = make_uniq<WALDelete>();
+	deserializer.ReadObject(101, "chunk", [&](Deserializer &object) { result->chunk.Deserialize(object); });
+	return std::move(result);
+}
+
+unique_ptr<WALEntry> WALUpdate::Deserialize(Deserializer &deserializer) {
+	auto result = make_uniq<WALUpdate>();
+	result->column_indexes = deserializer.ReadProperty<vector<column_t>>(101, "column_indexes");
+	deserializer.ReadObject(102, "chunk", [&](Deserializer &object) { result->chunk.Deserialize(object); });
+	return std::move(result);
+}
+
+unique_ptr<WALEntry> WALRowGroupData::Deserialize(Deserializer &deserializer) {
+	// the DatabaseInstance / CompressionInfo context required here is set by WriteAheadLogDeserializer::ReplayEntry
+	auto result = make_uniq<WALRowGroupData>();
+	deserializer.ReadProperty(101, "row_group_data", result->row_group_data);
+	return std::move(result);
+}
+
 void WriteAheadLogDeserializer::ReplayInsert() {
-	DataChunk chunk;
-	deserializer.ReadObject(101, "chunk", [&](Deserializer &object) { chunk.Deserialize(object); });
+	auto &chunk = current_entry->Cast<WALInsert>().chunk;
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -1151,14 +1231,8 @@ void WriteAheadLogDeserializer::ReplayInsert() {
 }
 
 void WriteAheadLogDeserializer::ReplayRowGroupData() {
+	auto &data = current_entry->Cast<WALRowGroupData>().row_group_data;
 	auto &block_manager = db.GetStorageManager().GetBlockManager();
-	PersistentCollectionData data;
-	deserializer.Set<DatabaseInstance &>(db.GetDatabase());
-	CompressionInfo compression_info(block_manager);
-	deserializer.Set<const CompressionInfo &>(compression_info);
-	deserializer.ReadProperty(101, "row_group_data", data);
-	deserializer.Unset<const CompressionInfo>();
-	deserializer.Unset<DatabaseInstance>();
 	if (DeserializeOnly()) {
 		// label blocks in data as used - they will be used after the WAL replay is finished
 		// we need to do this during the deserialization phase to ensure the blocks will not be overwritten
@@ -1209,8 +1283,7 @@ void WriteAheadLogDeserializer::ReplayRowGroupData() {
 }
 
 void WriteAheadLogDeserializer::ReplayDelete() {
-	DataChunk chunk;
-	deserializer.ReadObject(101, "chunk", [&](Deserializer &object) { chunk.Deserialize(object); });
+	auto &chunk = current_entry->Cast<WALDelete>().chunk;
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -1236,10 +1309,9 @@ void WriteAheadLogDeserializer::ReplayDelete() {
 }
 
 void WriteAheadLogDeserializer::ReplayUpdate() {
-	auto column_path = deserializer.ReadProperty<vector<column_t>>(101, "column_indexes");
-
-	DataChunk chunk;
-	deserializer.ReadObject(102, "chunk", [&](Deserializer &object) { chunk.Deserialize(object); });
+	auto &entry = current_entry->Cast<WALUpdate>();
+	auto &column_path = entry.column_indexes;
+	auto &chunk = entry.chunk;
 
 	if (DeserializeOnly()) {
 		return;
@@ -1261,7 +1333,7 @@ void WriteAheadLogDeserializer::ReplayUpdate() {
 }
 
 void WriteAheadLogDeserializer::ReplayCheckpoint() {
-	auto entry = WALCheckpoint::Deserialize(deserializer);
+	auto &entry = current_entry->Cast<WALCheckpoint>();
 	state.checkpoint_id = entry.meta_block;
 	state.checkpoint_position = state.current_position;
 }
