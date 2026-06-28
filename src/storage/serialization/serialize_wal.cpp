@@ -135,16 +135,18 @@ unique_ptr<WALEntry> WALCreateMacro::Deserialize(Deserializer &deserializer) {
 
 void WALCreateSchema::Serialize(Serializer &serializer) const {
 	WALEntry::Serialize(serializer);
-	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WritePropertyWithDefault<Identifier>(101, "schema", schema);
-	} else {
-		serializer.WriteProperty<Identifier>(101, "schema", schema);
+	}
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<QualifiedName>(102, "qualified_name", qualified_name, QualifiedName());
 	}
 }
 
 unique_ptr<WALEntry> WALCreateSchema::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<WALCreateSchema>(new WALCreateSchema());
 	deserializer.ReadPropertyWithDefault<Identifier>(101, "schema", result->schema);
+	deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(102, "qualified_name", result->qualified_name, QualifiedName());
 	return std::move(result);
 }
 

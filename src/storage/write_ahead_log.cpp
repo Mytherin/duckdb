@@ -315,7 +315,17 @@ void WriteAheadLog::WriteDropTable(const TableCatalogEntry &entry) {
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCreateSchema(const SchemaCatalogEntry &entry) {
 	WALCreateSchema wal_entry;
+	// serialize the schema as a QualifiedName: parent schemas form the path, the schema name is the name. For storage
+	// versions older than v2.0.0 (which only support top-level schemas) the legacy "schema" name field is written.
 	wal_entry.schema = entry.name;
+	vector<Identifier> parent_schemas;
+	auto parent = entry.GetParentSchema();
+	while (parent) {
+		parent_schemas.push_back(parent->name);
+		parent = parent->GetParentSchema();
+	}
+	std::reverse(parent_schemas.begin(), parent_schemas.end());
+	wal_entry.qualified_name = QualifiedName(std::move(parent_schemas), entry.name);
 	WriteEntry(wal_entry);
 }
 
@@ -342,7 +352,8 @@ void WriteAheadLog::WriteSequenceValue(SequenceValue val) {
 	wal_entry.name = sequence.name;
 	wal_entry.usage_count = val.usage_count;
 	wal_entry.counter = val.counter;
-	// last_value is only serialized from v2.0.0 storage onwards (handled by the generated Serialize)
+	// last_value is only serialized from v2.0.0 storage onwards, and omitted when unset (handled by the generated
+	// Serialize), so older readers can still replay sequence values that do not carry a last_value
 	wal_entry.last_value = val.entry->GetData().last_value;
 	WriteEntry(wal_entry);
 }

@@ -16,6 +16,7 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/storage/block.hpp"
 #include "duckdb/storage/index_storage_info.hpp"
 #include "duckdb/storage/table/column_data.hpp"
@@ -117,7 +118,10 @@ struct WALCreateSchema : WALEntry {
 	WALCreateSchema() : WALEntry(WALType::CREATE_SCHEMA) {
 	}
 
+	// legacy top-level schema name (serialized for storage versions older than v2.0.0)
 	Identifier schema;
+	// the schema as a QualifiedName (parent schemas form the path, the schema name is the name); v2.0.0 onwards
+	QualifiedName qualified_name;
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<WALEntry> Deserialize(Deserializer &deserializer);
@@ -183,6 +187,8 @@ struct WALSequenceValue : WALEntry {
 	Identifier name;
 	uint64_t usage_count = 0;
 	int64_t counter = 0;
+	// the last value produced by the sequence; only serialized from storage version v2.0.0 onwards, and omitted when
+	// unset (so older readers can still replay sequence values that do not carry a last_value)
 	optional<int64_t> last_value;
 
 	void Serialize(Serializer &serializer) const override;

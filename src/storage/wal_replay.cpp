@@ -947,7 +947,19 @@ void WriteAheadLogDeserializer::ReplayDropView() {
 void WriteAheadLogDeserializer::ReplayCreateSchema() {
 	auto &entry = current_entry->Cast<WALCreateSchema>();
 	CreateSchemaInfo info;
-	info.SetQualifiedName(QualifiedName({std::move(entry.schema)}, Identifier()));
+	// build the CreateSchemaInfo path [catalog, parent schemas..., new schema, <empty name>]
+	vector<Identifier> path;
+	path.push_back(catalog.GetName());
+	if (!entry.qualified_name.Path().empty()) {
+		// v2.0.0+: the qualified name's path is [parent schemas..., new schema]
+		for (auto &component : entry.qualified_name.Path()) {
+			path.push_back(component);
+		}
+	} else {
+		// legacy: only the (top-level) schema name was serialized
+		path.push_back(std::move(entry.schema));
+	}
+	info.SetQualifiedName(QualifiedName(std::move(path), Identifier()));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -960,7 +972,7 @@ void WriteAheadLogDeserializer::ReplayDropSchema() {
 	DropInfo info;
 
 	info.type = CatalogType::SCHEMA_ENTRY;
-	info.NameMutable() = std::move(entry.schema);
+	info.SetName(std::move(entry.schema));
 	if (DeserializeOnly()) {
 		return;
 	}
