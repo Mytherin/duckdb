@@ -87,6 +87,13 @@
         "serialize_condition": "qualified_name.Path().size() > 3",
         "deserialize_default": "QualifiedName()",
         "deserialize_skip_assign": true
+      },
+      {
+        "id": 112,
+        "name": "oid",
+        "type": "optional_idx",
+        "version": "v2.0.0",
+        "default": "optional_idx()"
       }
     ],
     "methods": {

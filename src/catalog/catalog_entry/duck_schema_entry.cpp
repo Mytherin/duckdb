@@ -95,6 +95,7 @@ unique_ptr<CatalogEntry> DuckSchemaEntry::Copy(ClientContext &context) const {
 
 unique_ptr<CreateInfo> DuckSchemaEntry::GetInfo() const {
 	auto result = make_uniq<CreateSchemaInfo>();
+	result->oid = oid;
 	// collect the parent chain (innermost first)
 	vector<Identifier> parents;
 	auto current = GetParentSchema();

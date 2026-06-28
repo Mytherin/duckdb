@@ -14,8 +14,18 @@ CatalogEntry::CatalogEntry(CatalogType type, Identifier name_p, idx_t oid)
       parent(nullptr) {
 }
 
-CatalogEntry::CatalogEntry(CatalogType type, Catalog &catalog, Identifier name_p)
-    : CatalogEntry(type, std::move(name_p), catalog.GetDatabase().GetDatabaseManager().NextOid()) {
+static idx_t ResolveCatalogEntryOid(Catalog &catalog, optional_idx oid) {
+	auto &db_manager = catalog.GetDatabase().GetDatabaseManager();
+	if (oid.IsValid()) {
+		// the entry has a persisted oid - reuse it, and make sure future oids never collide with it
+		db_manager.ReseedNextOid(oid.GetIndex() + 1);
+		return oid.GetIndex();
+	}
+	return db_manager.NextOid();
+}
+
+CatalogEntry::CatalogEntry(CatalogType type, Catalog &catalog, Identifier name_p, optional_idx oid)
+    : CatalogEntry(type, std::move(name_p), ResolveCatalogEntryOid(catalog, oid)) {
 }
 
 CatalogEntry::~CatalogEntry() {
@@ -119,8 +129,8 @@ void CatalogEntry::Rollback(CatalogEntry &prev_entry) {
 void CatalogEntry::OnDrop() {
 }
 
-InCatalogEntry::InCatalogEntry(CatalogType type, Catalog &catalog, Identifier name)
-    : CatalogEntry(type, catalog, std::move(name)), catalog(catalog) {
+InCatalogEntry::InCatalogEntry(CatalogType type, Catalog &catalog, Identifier name, optional_idx oid)
+    : CatalogEntry(type, catalog, std::move(name), oid), catalog(catalog) {
 }
 
 InCatalogEntry::~InCatalogEntry() {

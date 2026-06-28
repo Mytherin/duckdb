@@ -13,6 +13,7 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/block_allocator.hpp"
@@ -281,6 +282,8 @@ void DatabaseHeader::Write(WriteStream &ser) {
 		ser.Write<idx_t>(ser_version);
 	} else {
 		ser.Write<idx_t>(static_cast<idx_t>(storage_compatibility));
+		// fields added in v2.0.0
+		ser.Write<idx_t>(next_oid);
 	}
 }
 
@@ -366,6 +369,11 @@ DatabaseHeader DatabaseHeader::Read(const MainHeader &main_header, ReadStream &s
 	auto database_header_storage_version = static_cast<StorageVersion>(h_storage_version);
 	SetStorageVersionInDatabaseHeader(header, static_cast<StorageVersion>(main_header.version_number),
 	                                  database_header_storage_version);
+
+	// fields added in v2.0.0 (pre-v2.0.0 the trailing value is a small serialization version, never >= V2_0_0)
+	if (database_header_storage_version >= StorageVersion::V2_0_0) {
+		header.next_oid = source.Read<idx_t>();
+	}
 
 	return header;
 }
@@ -705,6 +713,7 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 	h2 = DeserializeDatabaseHeader(main_header, header_buffer.GetDataMutable());
 
 	// check the header with the highest iteration count
+	reference<DatabaseHeader> active_db_header(h1);
 	if (h1.iteration > h2.iteration) {
 		// h1 is active header
 		active_header = 0;
@@ -712,8 +721,11 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 	} else {
 		// h2 is active header
 		active_header = 1;
+		active_db_header = h2;
 		Initialize(h2, GetOptionalBlockAllocSize());
 	}
+	// restore the oid counter from the active header so newly created entries never collide with persisted oids
+	DatabaseManager::Get(db.GetDatabase()).ReseedNextOid(active_db_header.get().next_oid);
 	AddStorageVersionTag();
 	LoadFreeList(context);
 }

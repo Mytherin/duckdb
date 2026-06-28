@@ -1,0 +1,95 @@
+# name: test/sql/storage/catalog/persist_oid.test
+# description: Test that catalog entry oids are persisted across restarts (storage v2.0.0+)
+# group: [catalog]
+
+# the oid persistence only applies to storage versions >= v2.0.0
+statement ok
+ATTACH '{TEST_DIR}/persist_oid.db' AS db1 (STORAGE_VERSION 'v2.0.0');
+
+statement ok
+USE db1;
+
+statement ok
+CREATE SCHEMA sch1;
+
+statement ok
+CREATE TABLE t1(i INTEGER);
+
+statement ok
+CREATE TABLE sch1.t2(j INTEGER);
+
+statement ok
+CREATE VIEW v1 AS SELECT 42;
+
+statement ok
+CREATE SEQUENCE seq1;
+
+statement ok
+CREATE TYPE typ1 AS ENUM ('a', 'b');
+
+statement ok
+CREATE MACRO mac1(x) AS x + 1;
+
+# snapshot the oids of every catalog entry into the in-memory catalog so they survive a detach
+statement ok
+CREATE TABLE memory.saved AS
+    SELECT 'table' AS kind, table_name AS name, table_oid AS oid FROM duckdb_tables() WHERE database_name='db1'
+    UNION ALL SELECT 'view', view_name, view_oid FROM duckdb_views() WHERE database_name='db1' AND internal=false
+    UNION ALL SELECT 'sequence', sequence_name, sequence_oid FROM duckdb_sequences() WHERE database_name='db1'
+    UNION ALL SELECT 'type', type_name, type_oid FROM duckdb_types() WHERE database_name='db1' AND type_name='typ1'
+    UNION ALL SELECT 'schema', schema_name, oid FROM duckdb_schemas() WHERE database_name='db1' AND schema_name='sch1';
+
+# we should have snapshotted all 6 user entries
+query I
+SELECT COUNT(*) FROM memory.saved;
+----
+6
+
+# detach + re-attach forces a full reload from disk (re-reads the database header + catalog)
+statement ok
+USE memory;
+
+statement ok
+DETACH db1;
+
+statement ok
+ATTACH '{TEST_DIR}/persist_oid.db' AS db1;
+
+statement ok
+USE db1;
+
+# every entry must keep the exact same oid it had before the restart
+query I
+SELECT COUNT(*) FROM (
+    SELECT 'table' AS kind, table_name AS name, table_oid AS oid FROM duckdb_tables() WHERE database_name='db1'
+    UNION ALL SELECT 'view', view_name, view_oid FROM duckdb_views() WHERE database_name='db1' AND internal=false
+    UNION ALL SELECT 'sequence', sequence_name, sequence_oid FROM duckdb_sequences() WHERE database_name='db1'
+    UNION ALL SELECT 'type', type_name, type_oid FROM duckdb_types() WHERE database_name='db1' AND type_name='typ1'
+    UNION ALL SELECT 'schema', schema_name, oid FROM duckdb_schemas() WHERE database_name='db1' AND schema_name='sch1'
+) cur JOIN memory.saved s ON cur.kind=s.kind AND cur.name=s.name WHERE cur.oid <> s.oid;
+----
+0
+
+# creating new entries after the restart must not collide with the persisted oids
+statement ok
+CREATE TABLE t_new(k INTEGER);
+
+statement ok
+CREATE TABLE t_new2(l INTEGER);
+
+# the new tables must get oids that do not collide with any persisted oid
+query I
+SELECT COUNT(*) FROM duckdb_tables()
+WHERE database_name='db1' AND table_name IN ('t_new', 't_new2') AND table_oid IN (SELECT oid FROM memory.saved);
+----
+0
+
+# there must be no duplicate oids among all entries
+query I
+SELECT COUNT(*) - COUNT(DISTINCT oid) FROM (
+    SELECT table_oid AS oid FROM duckdb_tables() WHERE database_name='db1'
+    UNION ALL SELECT view_oid FROM duckdb_views() WHERE database_name='db1'
+    UNION ALL SELECT sequence_oid FROM duckdb_sequences() WHERE database_name='db1'
+);
+----
+0

@@ -27,8 +27,8 @@ namespace duckdb {
 constexpr const char *TableCatalogEntry::Name;
 
 TableCatalogEntry::TableCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info)
-    : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info.GetTableName()), columns(std::move(info.columns)),
-      constraints(std::move(info.constraints)) {
+    : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info.GetTableName(), info.oid),
+      columns(std::move(info.columns)), constraints(std::move(info.constraints)) {
 	this->temporary = info.temporary;
 	this->dependencies = info.dependencies;
 	this->comment = info.comment;
@@ -96,6 +96,7 @@ vector<LogicalType> TableCatalogEntry::GetTypes() const {
 
 unique_ptr<CreateInfo> TableCatalogEntry::GetInfo() const {
 	auto result = make_uniq<CreateTableInfo>();
+	result->oid = oid;
 	result->SetQualifiedName(QualifiedName(catalog.GetName(), schema.name, name));
 	result->columns = columns.Copy();
 	result->constraints.reserve(constraints.size());

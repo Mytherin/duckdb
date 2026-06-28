@@ -11,7 +11,7 @@
 namespace duckdb {
 
 SchemaCatalogEntry::SchemaCatalogEntry(Catalog &catalog, CreateSchemaInfo &info)
-    : InCatalogEntry(CatalogType::SCHEMA_ENTRY, catalog, info.SchemaName()) {
+    : InCatalogEntry(CatalogType::SCHEMA_ENTRY, catalog, info.SchemaName(), info.oid) {
 	this->internal = info.internal;
 	this->comment = info.comment;
 	this->tags = info.tags;
@@ -61,6 +61,7 @@ CatalogSet::EntryLookup SchemaCatalogEntry::LookupEntryDetailed(CatalogTransacti
 
 unique_ptr<CreateInfo> SchemaCatalogEntry::GetInfo() const {
 	auto result = make_uniq<CreateSchemaInfo>();
+	result->oid = oid;
 	result->SetQualifiedName(QualifiedName({name}, Identifier()));
 	result->comment = comment;
 	result->tags = tags;

@@ -22,6 +22,7 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
+#include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -290,6 +291,8 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	header.meta_block = meta_block.block_pointer;
 	header.block_alloc_size = block_manager.GetBlockAllocSize();
 	header.vector_size = STANDARD_VECTOR_SIZE;
+	// persist the oid counter so newly created entries never collide with persisted oids after a restart
+	header.next_oid = DatabaseManager::Get(db.GetDatabase()).GetCurrentOid();
 	block_manager.WriteHeader(context, header);
 
 	auto debug_verify_blocks = Settings::Get<DebugVerifyBlocksSetting>(db.GetDatabase());

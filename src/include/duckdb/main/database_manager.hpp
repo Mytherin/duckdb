@@ -103,6 +103,18 @@ public:
 	idx_t NextOid() {
 		return next_oid++;
 	}
+	//! Returns the current value of the oid counter (the next oid that would be handed out)
+	idx_t GetCurrentOid() const {
+		return next_oid.load();
+	}
+	//! Bumps the oid counter up to (at least) new_value - never lowers it. Used to restore the counter on load so
+	//! that newly created entries never collide with persisted oids.
+	void ReseedNextOid(idx_t new_value) {
+		auto current = next_oid.load();
+		while (current < new_value && !next_oid.compare_exchange_weak(current, new_value)) {
+			// retry with the updated current value
+		}
+	}
 	bool HasDefaultDatabase() {
 		return !default_database.empty();
 	}

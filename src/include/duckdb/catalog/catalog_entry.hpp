@@ -14,6 +14,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/exception/catalog_exception.hpp"
 #include "duckdb/common/types/value.hpp"
 #include <memory>
@@ -35,7 +36,7 @@ struct CreateInfo;
 //! Abstract base class of an entry in the catalog
 class CatalogEntry {
 public:
-	CatalogEntry(CatalogType type, Catalog &catalog, Identifier name);
+	CatalogEntry(CatalogType type, Catalog &catalog, Identifier name, optional_idx oid = optional_idx());
 	CatalogEntry(CatalogType type, Identifier name, idx_t oid);
 	virtual ~CatalogEntry();
 
@@ -120,7 +121,7 @@ public:
 
 class InCatalogEntry : public CatalogEntry {
 public:
-	InCatalogEntry(CatalogType type, Catalog &catalog, Identifier name);
+	InCatalogEntry(CatalogType type, Catalog &catalog, Identifier name, optional_idx oid = optional_idx());
 	~InCatalogEntry() override;
 
 	//! The catalog the entry belongs to

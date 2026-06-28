@@ -382,6 +382,9 @@ struct DatabaseHeader {
 	idx_t vector_size = 0;
 	//! The storage compatibility version
 	StorageVersion storage_compatibility = StorageVersion::INVALID;
+	//! The next object identifier to hand out - persisted so entry oids remain stable and unique across restarts
+	//! (only present for storage versions >= v2.0.0)
+	idx_t next_oid = 0;
 
 	void Write(WriteStream &ser);
 	static DatabaseHeader Read(const MainHeader &header, ReadStream &source);

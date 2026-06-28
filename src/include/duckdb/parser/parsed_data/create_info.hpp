@@ -10,6 +10,7 @@
 
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/common/identifier.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/common/enum_util.hpp"
@@ -51,6 +52,8 @@ public:
 	Value comment;
 	//! Key-value tags with additional metadata
 	InsertionOrderPreservingMap<string> tags;
+	//! The persisted object identifier of the entry (invalid for newly created, not-yet-persisted entries)
+	optional_idx oid;
 
 public:
 	const QualifiedName &GetQualifiedName() const {
