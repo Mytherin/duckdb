@@ -17,8 +17,12 @@ CatalogEntry::CatalogEntry(CatalogType type, Identifier name_p, idx_t oid)
 static idx_t ResolveCatalogEntryOid(Catalog &catalog, optional_idx oid) {
 	auto &db_manager = catalog.GetDatabase().GetDatabaseManager();
 	if (oid.IsValid()) {
-		// the entry has a persisted oid - reuse it, and make sure future oids never collide with it
-		db_manager.ReseedNextOid(oid.GetIndex() + 1);
+		// the entry has a persisted oid - reuse it. The oid counter was already restored from the database header on
+		// load, so any persisted oid must be below it - otherwise the on-disk oid counter is inconsistent with the
+		// stored entries and the database is corrupt.
+		if (oid.GetIndex() >= db_manager.GetCurrentOid()) {
+			throw InvalidInputException("Corrupt database - next oid is smaller than an oid stored in the database");
+		}
 		return oid.GetIndex();
 	}
 	return db_manager.NextOid();

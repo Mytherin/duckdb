@@ -324,7 +324,8 @@ void WriteAheadLog::WriteCreateSchema(const SchemaCatalogEntry &entry) {
 		parent = parent->GetParentSchema();
 	}
 	std::reverse(parent_schemas.begin(), parent_schemas.end());
-	serializer.WriteEntry(WALCreateSchema {entry.name, QualifiedName(std::move(parent_schemas), entry.name)});
+	serializer.WriteEntry(
+	    WALCreateSchema {entry.name, QualifiedName(std::move(parent_schemas), entry.name), optional_idx(entry.oid)});
 	serializer.End();
 }
 

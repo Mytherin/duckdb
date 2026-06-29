@@ -40,12 +40,16 @@ void WALCreateSchema::Serialize(Serializer &serializer) const {
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WritePropertyWithDefault<QualifiedName>(102, "qualified_name", qualified_name, QualifiedName());
 	}
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<optional_idx>(103, "oid", oid, optional_idx());
+	}
 }
 
 WALCreateSchema WALCreateSchema::Deserialize(Deserializer &deserializer) {
 	WALCreateSchema result;
 	deserializer.ReadPropertyWithDefault<Identifier>(101, "schema", result.schema);
 	deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(102, "qualified_name", result.qualified_name, QualifiedName());
+	deserializer.ReadPropertyWithExplicitDefault<optional_idx>(103, "oid", result.oid, optional_idx());
 	return result;
 }
 

@@ -16,6 +16,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
@@ -262,6 +263,9 @@ protected:
 
 private:
 	void ReplayIndexData(IndexStorageInfo &info);
+	//! Bump the oid counter so a replayed entry keeps its persisted oid. Entries created after the last checkpoint
+	//! have oids beyond the counter restored from the header - reseed so they remain unique and collision-free.
+	void ReseedOid(optional_idx oid);
 
 private:
 	ReplayState &state;
@@ -714,6 +718,12 @@ void WriteAheadLogDeserializer::ReplayVersion() {
 	}
 }
 
+void WriteAheadLogDeserializer::ReseedOid(optional_idx oid) {
+	if (oid.IsValid()) {
+		catalog.GetDatabase().GetDatabaseManager().ReseedNextOid(oid.GetIndex() + 1);
+	}
+}
+
 //===--------------------------------------------------------------------===//
 // Replay Table
 //===--------------------------------------------------------------------===//
@@ -723,6 +733,7 @@ void WriteAheadLogDeserializer::ReplayCreateTable() {
 	if (DeserializeOnly()) {
 		return;
 	}
+	ReseedOid(info->oid);
 	// bind the constraints to the table again
 	auto binder = Binder::CreateBinder(context);
 	auto &schema = catalog.GetSchema(context, info->GetQualifiedName().Schema());
@@ -869,6 +880,7 @@ void WriteAheadLogDeserializer::ReplayCreateView() {
 	if (DeserializeOnly()) {
 		return;
 	}
+	ReseedOid(entry->oid);
 	catalog.CreateView(context, entry->Cast<CreateViewInfo>());
 }
 
@@ -902,10 +914,12 @@ void WriteAheadLogDeserializer::ReplayCreateSchema() {
 		path.push_back(std::move(entry.schema));
 	}
 	info.SetQualifiedName(QualifiedName(std::move(path), Identifier()));
+	info.oid = entry.oid;
 	if (DeserializeOnly()) {
 		return;
 	}
 
+	ReseedOid(info.oid);
 	catalog.CreateSchema(context, info);
 }
 
@@ -932,6 +946,7 @@ void WriteAheadLogDeserializer::ReplayCreateType() {
 	if (DeserializeOnly()) {
 		return;
 	}
+	ReseedOid(info->oid);
 	catalog.CreateType(context, info->Cast<CreateTypeInfo>());
 }
 
@@ -958,6 +973,7 @@ void WriteAheadLogDeserializer::ReplayCreateTrigger() {
 	if (DeserializeOnly()) {
 		return;
 	}
+	ReseedOid(info->oid);
 	auto &trigger_info = info->Cast<CreateTriggerInfo>();
 	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, QualifiedName(trigger_info.GetQualifiedName().Catalog(),
 	                                                                          trigger_info.GetQualifiedName().Schema(),
@@ -997,6 +1013,7 @@ void WriteAheadLogDeserializer::ReplayCreateSequence() {
 		return;
 	}
 
+	ReseedOid(entry->oid);
 	catalog.CreateSequence(context, entry->Cast<CreateSequenceInfo>());
 }
 
@@ -1035,6 +1052,7 @@ void WriteAheadLogDeserializer::ReplayCreateMacro() {
 		return;
 	}
 
+	ReseedOid(entry->oid);
 	catalog.CreateFunction(context, entry->Cast<CreateMacroInfo>());
 }
 
@@ -1059,6 +1077,7 @@ void WriteAheadLogDeserializer::ReplayCreateTableMacro() {
 	if (DeserializeOnly()) {
 		return;
 	}
+	ReseedOid(entry->oid);
 	catalog.CreateFunction(context, entry->Cast<CreateMacroInfo>());
 }
 
@@ -1085,6 +1104,7 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	if (DeserializeOnly()) {
 		return;
 	}
+	ReseedOid(create_info->oid);
 	auto &info = create_info->Cast<CreateIndexInfo>();
 
 	// Ensure that the index type exists.

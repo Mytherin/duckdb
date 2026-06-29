@@ -1,0 +1,97 @@
+# name: test/sql/storage/catalog/persist_oid_wal.test
+# description: Test that catalog entry oids survive a WAL replay (crash recovery) - storage v2.0.0+
+# group: [catalog]
+
+require skip_reload
+
+# v2.0.0 storage is required for oid persistence
+load {TEST_DIR}/persist_oid_wal.db readwrite v2.0.0
+
+# keep the entries in the WAL: do not checkpoint so the restart below replays them
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+CREATE SCHEMA sch1;
+
+statement ok
+CREATE TABLE t1(i INTEGER);
+
+statement ok
+CREATE TABLE sch1.t2(j INTEGER);
+
+statement ok
+CREATE VIEW v1 AS SELECT 42;
+
+statement ok
+CREATE SEQUENCE seq1;
+
+statement ok
+CREATE TYPE typ1 AS ENUM ('a', 'b');
+
+statement ok
+CREATE MACRO mac1(x) AS x + 1;
+
+# snapshot the oids into a persisted table so they survive the restart via the WAL
+statement ok
+CREATE TABLE saved AS
+    SELECT 'table' AS kind, table_name AS name, table_oid AS oid FROM duckdb_tables()
+        WHERE database_name=current_database() AND table_name NOT IN ('saved')
+    UNION ALL SELECT 'view', view_name, view_oid FROM duckdb_views()
+        WHERE database_name=current_database() AND internal=false
+    UNION ALL SELECT 'sequence', sequence_name, sequence_oid FROM duckdb_sequences()
+        WHERE database_name=current_database()
+    UNION ALL SELECT 'type', type_name, type_oid FROM duckdb_types()
+        WHERE database_name=current_database() AND type_name='typ1'
+    UNION ALL SELECT 'schema', schema_name, oid FROM duckdb_schemas()
+        WHERE database_name=current_database() AND schema_name='sch1';
+
+# we should have snapshotted all 6 user entries
+query I
+SELECT COUNT(*) FROM saved;
+----
+6
+
+# restart forces recovery from the WAL (no checkpoint happened) - entries are re-created from the WAL
+restart
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+# every entry must keep the exact same oid it had before the restart
+query I
+SELECT COUNT(*) FROM (
+    SELECT 'table' AS kind, table_name AS name, table_oid AS oid FROM duckdb_tables()
+        WHERE database_name=current_database() AND table_name NOT IN ('saved')
+    UNION ALL SELECT 'view', view_name, view_oid FROM duckdb_views()
+        WHERE database_name=current_database() AND internal=false
+    UNION ALL SELECT 'sequence', sequence_name, sequence_oid FROM duckdb_sequences()
+        WHERE database_name=current_database()
+    UNION ALL SELECT 'type', type_name, type_oid FROM duckdb_types()
+        WHERE database_name=current_database() AND type_name='typ1'
+    UNION ALL SELECT 'schema', schema_name, oid FROM duckdb_schemas()
+        WHERE database_name=current_database() AND schema_name='sch1'
+) cur JOIN saved s ON cur.kind=s.kind AND cur.name=s.name WHERE cur.oid <> s.oid;
+----
+0
+
+# creating new entries after recovery must not collide with the persisted oids
+statement ok
+CREATE TABLE t_new(k INTEGER);
+
+statement ok
+CREATE SCHEMA sch_new;
+
+query I
+SELECT COUNT(*) FROM (
+    SELECT table_oid AS oid FROM duckdb_tables() WHERE database_name=current_database() AND table_name='t_new'
+    UNION ALL SELECT oid FROM duckdb_schemas() WHERE database_name=current_database() AND schema_name='sch_new'
+) WHERE oid IN (SELECT oid FROM saved);
+----
+0

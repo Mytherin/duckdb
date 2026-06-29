@@ -59,6 +59,13 @@
         "type": "QualifiedName",
         "version": "v2.0.0",
         "default": "QualifiedName()"
+      },
+      {
+        "id": 103,
+        "name": "oid",
+        "type": "optional_idx",
+        "version": "v2.0.0",
+        "default": "optional_idx()"
       }
     ]
   },
