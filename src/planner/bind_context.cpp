@@ -21,7 +21,7 @@
 
 namespace duckdb {
 
-BindContext::BindContext(Binder &binder) : binder(binder) {
+BindContext::BindContext(Binder &binder) : binder(binder), using_columns(binder.context) {
 }
 
 string MinimumUniqueAlias(const BindingAlias &alias, const BindingAlias &other) {
@@ -456,9 +456,9 @@ struct ExclusionListInfo {
 	}
 
 	vector<unique_ptr<ParsedExpression>> &new_select_list;
-	identifier_set_t excluded_columns;
+	IdentifierSet excluded_columns {IdentifierConstructor::NO_CLIENT_CONTEXT};
 	qualified_column_set_t excluded_qualified_columns;
-	identifier_set_t replaced_columns;
+	IdentifierSet replaced_columns {IdentifierConstructor::NO_CLIENT_CONTEXT};
 };
 
 bool CheckExclusionList(StarExpression &expr, const QualifiedColumnName &qualified_name, ExclusionListInfo &info) {
@@ -650,8 +650,8 @@ void BindContext::AddBinding(unique_ptr<Binding> binding) {
 void BindContext::AddBaseTable(TableIndex index, const Identifier &alias, const vector<Identifier> &names,
                                const vector<LogicalType> &types, vector<ColumnIndex> &bound_column_ids,
                                TableCatalogEntry &entry, virtual_column_map_t virtual_columns) {
-	AddBinding(
-	    make_uniq<TableBinding>(alias, types, names, bound_column_ids, &entry, index, std::move(virtual_columns)));
+	AddBinding(make_uniq<TableBinding>(binder.context, alias, types, names, bound_column_ids, &entry, index,
+	                                   std::move(virtual_columns)));
 }
 
 void BindContext::AddBaseTable(TableIndex index, const Identifier &alias, const vector<Identifier> &names,
@@ -668,18 +668,18 @@ void BindContext::AddBaseTable(TableIndex index, const Identifier &alias, const 
                                const vector<LogicalType> &types, vector<ColumnIndex> &bound_column_ids,
                                const Identifier &table_name) {
 	virtual_column_map_t virtual_columns;
-	AddBinding(make_uniq<TableBinding>(alias.empty() ? table_name : alias, types, names, bound_column_ids, nullptr,
-	                                   index, std::move(virtual_columns)));
+	AddBinding(make_uniq<TableBinding>(binder.context, alias.empty() ? table_name : alias, types, names,
+	                                   bound_column_ids, nullptr, index, std::move(virtual_columns)));
 }
 
 void BindContext::AddTableFunction(TableIndex index, const Identifier &alias, const vector<Identifier> &names,
                                    const vector<LogicalType> &types, vector<ColumnIndex> &bound_column_ids,
                                    optional_ptr<StandardEntry> entry, virtual_column_map_t virtual_columns) {
-	AddBinding(
-	    make_uniq<TableBinding>(alias, types, names, bound_column_ids, entry, index, std::move(virtual_columns)));
+	AddBinding(make_uniq<TableBinding>(binder.context, alias, types, names, bound_column_ids, entry, index,
+	                                   std::move(virtual_columns)));
 }
 
-static Identifier AddColumnNameToBinding(const Identifier &base_name, identifier_set_t &current_names) {
+static Identifier AddColumnNameToBinding(const Identifier &base_name, IdentifierSet &current_names) {
 	idx_t index = 1;
 	Identifier name = base_name;
 	while (current_names.find(name) != current_names.end()) {
@@ -696,7 +696,7 @@ vector<Identifier> BindContext::AliasColumnNames(const Identifier &table_name, c
 		throw BinderException("table \"%s\" has %lld columns available but %lld columns specified", table_name,
 		                      names.size(), column_aliases.size());
 	}
-	identifier_set_t current_names;
+	IdentifierSet current_names(IdentifierConstructor::NO_CLIENT_CONTEXT);
 	// use any provided column aliases first
 	for (idx_t i = 0; i < column_aliases.size(); i++) {
 		result.push_back(AddColumnNameToBinding(column_aliases[i], current_names));
@@ -715,7 +715,7 @@ void BindContext::AddSubquery(TableIndex index, const Identifier &alias, Subquer
 
 void BindContext::AddEntryBinding(TableIndex index, const Identifier &alias, const vector<Identifier> &names,
                                   const vector<LogicalType> &types, StandardEntry &entry) {
-	AddBinding(make_uniq<EntryBinding>(alias, types, names, index, entry));
+	AddBinding(make_uniq<EntryBinding>(binder.context, alias, types, names, index, entry));
 }
 
 void BindContext::AddView(TableIndex index, const Identifier &alias, SubqueryRef &ref, BoundStatement &subquery,
@@ -732,7 +732,7 @@ void BindContext::AddSubquery(TableIndex index, const Identifier &alias, TableFu
 
 void BindContext::AddGenericBinding(TableIndex index, const Identifier &alias, const vector<Identifier> &names,
                                     const vector<LogicalType> &types) {
-	AddBinding(make_uniq<Binding>(BindingType::BASE, BindingAlias(alias), types, names, index));
+	AddBinding(make_uniq<Binding>(binder.context, BindingType::BASE, BindingAlias(alias), types, names, index));
 }
 
 void BindContext::AddCTEBinding(unique_ptr<CTEBinding> binding) {
@@ -746,7 +746,7 @@ void BindContext::AddCTEBinding(unique_ptr<CTEBinding> binding) {
 
 void BindContext::AddCTEBinding(TableIndex index, BindingAlias alias_p, const vector<Identifier> &names,
                                 const vector<LogicalType> &types, CTEType cte_type) {
-	auto binding = make_uniq<CTEBinding>(std::move(alias_p), types, names, index, cte_type);
+	auto binding = make_uniq<CTEBinding>(binder.context, std::move(alias_p), types, names, index, cte_type);
 	AddCTEBinding(std::move(binding));
 }
 

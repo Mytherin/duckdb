@@ -192,7 +192,7 @@ unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnName(const ParsedExpr
 	return nullptr;
 }
 
-void ColumnQualifier::QualifyColumnNames(unique_ptr<ParsedExpression> &expr, vector<identifier_set_t> &lambda_params,
+void ColumnQualifier::QualifyColumnNames(unique_ptr<ParsedExpression> &expr, vector<IdentifierSet> &lambda_params,
                                          const bool within_function_expression) {
 	bool next_within_function_expression = false;
 	switch (expr->GetExpressionType()) {
@@ -304,8 +304,7 @@ optional_ptr<CatalogEntry> ColumnQualifier::QualifyFunction(FunctionExpression &
 	return func;
 }
 
-void ColumnQualifier::QualifyColumnNamesInLambda(FunctionExpression &function,
-                                                 vector<identifier_set_t> &lambda_params) {
+void ColumnQualifier::QualifyColumnNamesInLambda(FunctionExpression &function, vector<IdentifierSet> &lambda_params) {
 	for (auto &child : function.GetArgumentsMutable()) {
 		if (child.GetExpression().GetExpressionClass() != ExpressionClass::LAMBDA) {
 			// not a lambda expression
@@ -327,7 +326,7 @@ void ColumnQualifier::QualifyColumnNamesInLambda(FunctionExpression &function,
 		}
 
 		// push this level
-		lambda_params.emplace_back();
+		lambda_params.emplace_back(IdentifierConstructor::NO_CLIENT_CONTEXT);
 
 		// push the lambda parameter names
 		for (const auto &column_ref_expr : column_ref_expressions) {

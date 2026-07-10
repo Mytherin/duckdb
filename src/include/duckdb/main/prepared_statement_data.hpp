@@ -43,7 +43,7 @@ public:
 	StatementProperties properties;
 
 	//! The map of parameter index to the actual value entry
-	bound_parameter_map_t value_map;
+	bound_parameter_map_t value_map {IdentifierConstructor::NO_CLIENT_CONTEXT};
 	//! Whether we are creating a streaming result or not
 	QueryResultOutputType output_type;
 	//! Whether we are creating a buffer-managed result or not
@@ -52,11 +52,11 @@ public:
 public:
 	void CheckParameterCount(idx_t parameter_count);
 	//! Whether or not the prepared statement data requires the query to rebound for the given parameters
-	bool RequireRebind(ClientContext &context, optional_ptr<identifier_map_t<BoundParameterData>> values);
+	bool RequireRebind(ClientContext &context, optional_ptr<IdentifierMap<BoundParameterData>> values);
 	//! Fill in missing parameter values from user variables
-	void PopulateMissingParameterValues(ClientContext &context, identifier_map_t<BoundParameterData> &values) const;
+	void PopulateMissingParameterValues(ClientContext &context, IdentifierMap<BoundParameterData> &values) const;
 	//! Bind a set of values to the prepared statement data
-	DUCKDB_API void Bind(ClientContext &context, const identifier_map_t<BoundParameterData> &values);
+	DUCKDB_API void Bind(ClientContext &context, const IdentifierMap<BoundParameterData> &values);
 	//! Get the expected SQL Type of the bound parameter
 	DUCKDB_API LogicalType GetType(const Identifier &identifier);
 	//! Try to get the expected SQL Type of the bound parameter

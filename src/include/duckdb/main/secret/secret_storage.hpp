@@ -155,7 +155,7 @@ protected:
 	void RemoveSecret(const string &secret, OnEntryNotFound on_entry_not_found) override;
 
 	//! Set of persistent secrets that are lazily loaded
-	identifier_set_t persistent_secrets;
+	IdentifierSet persistent_secrets {IdentifierConstructor::NO_CLIENT_CONTEXT};
 	//! Path that is searched for secrets;
 	string secret_path;
 };

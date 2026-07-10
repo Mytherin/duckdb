@@ -75,7 +75,7 @@ void QueryResult::DeduplicateColumns(vector<string> &names) {
 }
 
 void QueryResult::DeduplicateColumns(vector<Identifier> &names) {
-	identifier_map_t<idx_t> name_map;
+	IdentifierMap<idx_t> name_map {IdentifierConstructor::NO_CLIENT_CONTEXT};
 	for (auto &column_name : names) {
 		if (name_map.find(column_name) == name_map.end()) {
 			// Name does not exist yet

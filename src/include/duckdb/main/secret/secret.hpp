@@ -54,7 +54,7 @@ public:
 	string secret_type;
 	Identifier provider;
 	create_secret_function_t function;
-	named_parameter_type_map_t named_parameters;
+	named_parameter_type_map_t named_parameters {IdentifierConstructor::NO_CLIENT_CONTEXT};
 };
 
 //! CreateSecretFunctionsSet contains multiple functions of a single type, identified by the provider. The provider
@@ -72,7 +72,7 @@ protected:
 	//! Create Secret Function type name
 	Identifier name;
 	//! Maps of provider -> function
-	identifier_map_t<CreateSecretFunction> functions;
+	IdentifierMap<CreateSecretFunction> functions {IdentifierConstructor::NO_CLIENT_CONTEXT};
 };
 
 //! Determines whether the secrets are allowed to be shown
@@ -243,7 +243,7 @@ public:
 	//! the map of key -> values that make up the secret
 	identifier_tree_t<Value> secret_map;
 	//! keys that are sensitive and should be redacted
-	identifier_set_t redact_keys;
+	IdentifierSet redact_keys {IdentifierConstructor::NO_CLIENT_CONTEXT};
 };
 
 // Helper class to fetch secret parameters in a cascading way. The idea being that in many cases there is a direct

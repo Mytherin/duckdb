@@ -107,7 +107,7 @@ void ParseGroupNameList(ClientContext &context, const string &function_name, Exp
 	if (children.empty()) {
 		throw BinderException("Group name list must be non-empty");
 	}
-	identifier_set_t name_set;
+	IdentifierSet name_set(context);
 	for (auto &child : children) {
 		if (child.IsNull()) {
 			throw BinderException("NULL group name in %s", function_name);

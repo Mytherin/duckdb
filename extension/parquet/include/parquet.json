@@ -153,7 +153,7 @@
       {
         "id": 100,
         "name": "ids",
-        "type": "identifier_map_t<FieldID>",
+        "type": "IdentifierMap<FieldID>",
         "serialize_property": "ids.operator*()",
         "deserialize_property": "ids.operator*()"
       }
@@ -193,7 +193,7 @@
       {
         "id": 100,
         "name": "types",
-        "type": "identifier_map_t<ShreddingType>",
+        "type": "IdentifierMap<ShreddingType>",
         "serialize_property": "types.operator*()",
         "deserialize_property": "types.operator*()"
       }

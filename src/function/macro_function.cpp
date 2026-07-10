@@ -44,7 +44,7 @@ string FormatMacroFunction(const MacroFunction &function, const Identifier &name
 MacroBindResult MacroFunction::BindMacroFunction(
     Binder &binder, const vector<unique_ptr<MacroFunction>> &functions, const Identifier &name,
     FunctionExpression &function_expr, vector<unique_ptr<ParsedExpression>> &positional_arguments,
-    InsertionOrderPreservingMap<unique_ptr<ParsedExpression>, Identifier, identifier_map_t<idx_t>> &named_arguments,
+    InsertionOrderPreservingMap<unique_ptr<ParsedExpression>, Identifier, IdentifierMap<idx_t>> &named_arguments,
     idx_t depth) {
 	ExpressionBinder expr_binder(binder, binder.context);
 	expr_binder.lambda_bindings = binder.lambda_bindings;
@@ -65,7 +65,7 @@ MacroBindResult MacroFunction::BindMacroFunction(
 
 	// Find argument types and separate positional and default arguments
 	vector<LogicalType> positional_arg_types;
-	InsertionOrderPreservingMap<LogicalType, Identifier, identifier_map_t<idx_t>> named_arg_types;
+	InsertionOrderPreservingMap<LogicalType, Identifier, IdentifierMap<idx_t>> named_arg_types;
 	for (auto &arg : function_expr.GetArgumentsMutable()) {
 		auto arg_copy = arg.GetExpression().Copy();
 		LogicalType arg_type = LogicalType::UNKNOWN;
@@ -256,8 +256,9 @@ MacroBindResult MacroFunction::BindMacroFunction(
 }
 
 unique_ptr<DummyBinding> MacroFunction::CreateDummyBinding(
-    const MacroFunction &macro_def, const Identifier &name, vector<unique_ptr<ParsedExpression>> &positional_arguments,
-    InsertionOrderPreservingMap<unique_ptr<ParsedExpression>, Identifier, identifier_map_t<idx_t>> &named_arguments) {
+    ClientContext &context, const MacroFunction &macro_def, const Identifier &name,
+    vector<unique_ptr<ParsedExpression>> &positional_arguments,
+    InsertionOrderPreservingMap<unique_ptr<ParsedExpression>, Identifier, IdentifierMap<idx_t>> &named_arguments) {
 	// create a MacroBinding to bind this macro's parameters to its arguments
 	vector<LogicalType> types = macro_def.types;
 	types.resize(macro_def.parameters.size(), LogicalType::UNKNOWN);
@@ -270,7 +271,7 @@ unique_ptr<DummyBinding> MacroFunction::CreateDummyBinding(
 		positional_arguments.push_back(std::move(kv.second)); // push defaults into positionals
 	}
 
-	auto res = make_uniq<DummyBinding>(types, names, name.GetIdentifierName());
+	auto res = make_uniq<DummyBinding>(context, types, names, name.GetIdentifierName());
 	res->arguments = &positional_arguments;
 	return res;
 }

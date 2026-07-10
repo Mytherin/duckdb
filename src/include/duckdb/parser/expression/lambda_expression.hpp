@@ -57,7 +57,7 @@ public:
 	//! Returns the error message for an invalid lambda parameter list
 	static string InvalidParametersErrorMessage();
 	//! Returns true, if the column_name is a lambda parameter name
-	static bool IsLambdaParameter(const vector<identifier_set_t> &lambda_params, const Identifier &column_name);
+	static bool IsLambdaParameter(const vector<IdentifierSet> &lambda_params, const Identifier &column_name);
 
 	string ToString() const override;
 	bool Equals(const ParsedExpression &other) const override;

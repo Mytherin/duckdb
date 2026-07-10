@@ -113,7 +113,7 @@ struct FunctionLocalState {
 
 struct FunctionParameters {
 	vector<Value> values;
-	named_parameter_map_t named_parameters;
+	named_parameter_map_t named_parameters {IdentifierConstructor::NO_CLIENT_CONTEXT};
 };
 
 class FunctionParameter {
@@ -251,7 +251,7 @@ public:
 
 	void Verify() const {
 		// Check for duplicate parameter names
-		identifier_set_t seen_names;
+		IdentifierSet seen_names {IdentifierConstructor::NO_CLIENT_CONTEXT};
 		for (const auto &param : parameters) {
 			if (seen_names.find(param.GetName()) != seen_names.end()) {
 				throw InvalidInputException("Duplicate parameter name: %s", param.GetName());
@@ -394,7 +394,7 @@ public:
 	LogicalType varargs;
 
 	//! The named parameters of the function
-	named_parameter_type_map_t named_parameters;
+	named_parameter_type_map_t named_parameters {IdentifierConstructor::NO_CLIENT_CONTEXT};
 
 public:
 	DUCKDB_API virtual string ToString() const;

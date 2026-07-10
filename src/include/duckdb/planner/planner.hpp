@@ -29,7 +29,7 @@ public:
 	unique_ptr<LogicalOperator> plan;
 	vector<Identifier> names;
 	vector<LogicalType> types;
-	identifier_map_t<BoundParameterData> parameter_data;
+	IdentifierMap<BoundParameterData> parameter_data;
 
 	shared_ptr<Binder> binder;
 	ClientContext &context;

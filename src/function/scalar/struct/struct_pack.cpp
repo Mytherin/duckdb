@@ -48,7 +48,7 @@ template <bool IS_STRUCT_PACK>
 static unique_ptr<FunctionData> StructPackBind(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	identifier_set_t name_collision_set;
+	IdentifierSet name_collision_set(input.GetClientContext());
 
 	// collect names and deconflict, construct return type
 	// note: zero arguments is allowed, producing an empty struct

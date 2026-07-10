@@ -122,7 +122,7 @@ private:
 	//! Lock for databases
 	mutex databases_lock;
 	//! The set of attached databases
-	identifier_map_t<shared_ptr<AttachedDatabase>> databases;
+	IdentifierMap<shared_ptr<AttachedDatabase>> databases {IdentifierConstructor::NO_CLIENT_CONTEXT};
 	//! The next object id handed out by the NextOid method
 	atomic<idx_t> next_oid;
 	//! The current query number

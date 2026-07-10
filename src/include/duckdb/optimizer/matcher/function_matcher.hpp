@@ -48,7 +48,7 @@ private:
 //! The ManyFunctionMatcher class matches a set of functions
 class ManyFunctionMatcher : public FunctionMatcher {
 public:
-	explicit ManyFunctionMatcher(identifier_set_t names_p) : names(std::move(names_p)) {
+	explicit ManyFunctionMatcher(IdentifierSet names_p) : names(std::move(names_p)) {
 	}
 
 	bool Match(const Identifier &name) override {
@@ -56,7 +56,7 @@ public:
 	}
 
 private:
-	identifier_set_t names;
+	IdentifierSet names {IdentifierConstructor::NO_CLIENT_CONTEXT};
 };
 
 } // namespace duckdb

@@ -55,7 +55,7 @@
       {
         "id": 100,
         "name": "map",
-        "type": "InsertionOrderPreservingMap<CommonTableExpressionInfo*, Identifier, identifier_map_t<idx_t>>"
+        "type": "InsertionOrderPreservingMap<CommonTableExpressionInfo*, Identifier, IdentifierMap<idx_t>>"
       }
     ],
     "pointer_type": "none"
@@ -943,7 +943,7 @@
       {
         "id": 135,
         "name": "sql_types_per_column",
-        "type": "identifier_map_t<idx_t>",
+        "type": "IdentifierMap<idx_t>",
         "property": "options.sql_types_per_column"
       },
       {

@@ -48,7 +48,7 @@ PEGTransformerFactory::TransformMacroDefinition(PEGTransformer &transformer,
 		return macro_definition_body;
 	}
 	bool default_value_found = false;
-	identifier_set_t parameter_names;
+	IdentifierSet parameter_names {IdentifierConstructor::NO_CLIENT_CONTEXT};
 	for (auto &parameter : *macro_parameters) {
 		D_ASSERT(!parameter.name.empty());
 		if (parameter_names.find(parameter.name) != parameter_names.end()) {

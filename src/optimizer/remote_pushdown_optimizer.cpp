@@ -80,7 +80,7 @@ void RemotePushdownOptimizer::FindRemoteCatalogsInSearchPath() {
 	// iterate over all catalogs mentioned in the search path and check if they are remote
 	auto search_path = client_data.catalog_search_path->Get();
 	// Deduplicate by catalog name.
-	identifier_set_t seen_remote_catalogs;
+	IdentifierSet seen_remote_catalogs {IdentifierConstructor::NO_CLIENT_CONTEXT};
 	for (auto &entry : search_path) {
 		auto catalog_entry = Catalog::GetCatalogEntry(binder.context, entry.GetCatalog());
 		if (!catalog_entry) {

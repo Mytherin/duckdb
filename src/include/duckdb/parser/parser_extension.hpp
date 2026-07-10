@@ -114,7 +114,7 @@ struct ParserExtensionPlanResult { // NOLINT: work-around bug in clang-tidy
 	//! Parameters to the function
 	vector<Value> parameters;
 	//! The set of databases that will be modified by this statement (empty for a read-only statement)
-	identifier_map_t<StatementProperties::ModificationInfo> modified_databases;
+	IdentifierMap<StatementProperties::ModificationInfo> modified_databases {IdentifierConstructor::NO_CLIENT_CONTEXT};
 	//! Whether or not the statement requires a valid transaction to be executed
 	bool requires_valid_transaction = true;
 	//! What type of result set the statement returns

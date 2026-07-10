@@ -252,7 +252,7 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 		if (ref.with_ordinality == OrdinalityType::WITH_ORDINALITY) {
 			// check if column name 'ordinality' already exists and if so, replace it iteratively until free name is
 			// found
-			identifier_set_t ci_return_names;
+			IdentifierSet ci_return_names(context);
 			idx_t ordinality_name_suffix = 0;
 			for (auto &n : return_names) {
 				ci_return_names.insert(n);
@@ -355,7 +355,7 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 }
 
 BoundStatement Binder::BindTableFunction(TableFunction &function, vector<Value> parameters) {
-	named_parameter_map_t named_parameters;
+	named_parameter_map_t named_parameters(context);
 	vector<LogicalType> input_table_types;
 	vector<Identifier> input_table_names;
 
@@ -416,7 +416,7 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 	// evaluate the input parameters to the function
 	vector<LogicalType> arguments;
 	vector<Value> parameters;
-	named_parameter_map_t named_parameters;
+	named_parameter_map_t named_parameters(context);
 	BoundStatement subquery;
 	ErrorData error;
 

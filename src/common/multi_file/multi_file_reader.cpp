@@ -708,7 +708,7 @@ void MultiFileOptions::AddBatchInfo(BindInfo &bind_info) const {
 
 void UnionByName::CombineUnionTypes(const vector<string> &col_names, const vector<LogicalType> &sql_types,
                                     vector<LogicalType> &union_col_types, vector<Identifier> &union_col_names,
-                                    identifier_map_t<idx_t> &union_names_map) {
+                                    IdentifierMap<idx_t> &union_names_map) {
 	D_ASSERT(col_names.size() == sql_types.size());
 
 	for (idx_t col = 0; col < col_names.size(); ++col) {

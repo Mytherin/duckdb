@@ -58,7 +58,7 @@ shared_ptr<Binder> Binder::CreateBinder(ClientContext &context, optional_ptr<Bin
 
 Binder::Binder(ClientContext &context, shared_ptr<Binder> parent_p, BinderType binder_type)
     : context(context), bind_context(*this), parent(std::move(parent_p)), binder_type(binder_type),
-      global_binder_state(parent ? parent->global_binder_state : make_shared_ptr<GlobalBinderState>()),
+      global_binder_state(parent ? parent->global_binder_state : make_shared_ptr<GlobalBinderState>(context)),
       entry_retriever(context), depth(parent ? parent->GetBinderDepth() : 1) {
 	IncreaseDepth();
 	if (parent) {
@@ -366,7 +366,7 @@ const unordered_set<string> &Binder::GetTableNames() {
 	return global_binder_state->table_names;
 }
 
-identifier_map_t<unique_ptr<TableRef>> &Binder::GetReplacementScans() {
+IdentifierMap<unique_ptr<TableRef>> &Binder::GetReplacementScans() {
 	return global_binder_state->replacement_scans;
 }
 

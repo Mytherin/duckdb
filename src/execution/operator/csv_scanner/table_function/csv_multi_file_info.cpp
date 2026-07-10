@@ -219,7 +219,7 @@ void CSVMultiFileInfo::FinalizeBindData(MultiFileBindData &multi_file_data) {
 	auto &options = csv_data.options;
 	if (!options.force_not_null_names.empty()) {
 		// Let's first check all column names match
-		identifier_set_t column_names;
+		IdentifierSet column_names {IdentifierConstructor::NO_CLIENT_CONTEXT};
 		for (auto &name : names) {
 			column_names.insert(name);
 		}

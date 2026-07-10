@@ -118,7 +118,7 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 	logical_index_set_t not_null_columns;
 	logical_index_set_t unique_columns;
 	logical_index_set_t pk_columns;
-	identifier_set_t multi_key_pks;
+	IdentifierSet multi_key_pks {IdentifierConstructor::NO_CLIENT_CONTEXT};
 	vector<string> extra_constraints;
 	for (auto &constraint : constraints) {
 		if (constraint->type == ConstraintType::NOT_NULL) {

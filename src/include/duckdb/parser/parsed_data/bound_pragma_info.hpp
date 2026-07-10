@@ -22,7 +22,7 @@ struct BoundPragmaInfo {
 	//! Parameter list (if any)
 	vector<Value> parameters;
 	//! Named parameter list (if any)
-	named_parameter_map_t named_parameters;
+	named_parameter_map_t named_parameters {IdentifierConstructor::NO_CLIENT_CONTEXT};
 };
 
 } // namespace duckdb

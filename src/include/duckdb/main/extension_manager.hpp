@@ -63,7 +63,7 @@ public:
 private:
 	DatabaseInstance &db;
 	mutex lock;
-	identifier_map_t<unique_ptr<ExtensionInfo>> loaded_extensions_info;
+	IdentifierMap<unique_ptr<ExtensionInfo>> loaded_extensions_info {IdentifierConstructor::NO_CLIENT_CONTEXT};
 	string extension_load_prefix;
 };
 

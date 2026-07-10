@@ -138,7 +138,7 @@ private:
 	//! Delete indexes matching the conflict target.
 	vector<optional_ptr<BoundIndex>> matching_delete_indexes;
 	//! All matching indexes by their name (unique identifier).
-	identifier_set_t index_names;
+	IdentifierSet index_names {IdentifierConstructor::NO_CLIENT_CONTEXT};
 
 	//! Registers all conflicting rows in a data chunk.
 	unordered_set<idx_t> conflict_rows;

@@ -4,8 +4,8 @@
 
 namespace duckdb {
 
-BoundParameterMap::BoundParameterMap(identifier_map_t<BoundParameterData> &parameter_data)
-    : parameter_data(parameter_data) {
+BoundParameterMap::BoundParameterMap(ClientContext &context, IdentifierMap<BoundParameterData> &parameter_data)
+    : parameters(context), parameter_data(parameter_data) {
 }
 
 LogicalType BoundParameterMap::GetReturnType(const Identifier &identifier) {
@@ -25,7 +25,7 @@ const bound_parameter_map_t &BoundParameterMap::GetParameters() {
 	return parameters;
 }
 
-const identifier_map_t<BoundParameterData> &BoundParameterMap::GetParameterData() {
+const IdentifierMap<BoundParameterData> &BoundParameterMap::GetParameterData() {
 	return parameter_data;
 }
 

@@ -12,7 +12,7 @@ namespace duckdb {
 
 unique_ptr<BoundPragmaInfo> Binder::BindPragma(PragmaInfo &info, QueryErrorContext error_context) {
 	vector<Value> params;
-	named_parameter_map_t named_parameters;
+	named_parameter_map_t named_parameters(context);
 
 	// resolve the parameters
 	ConstantBinder pragma_binder(*this, context, "PRAGMA value");

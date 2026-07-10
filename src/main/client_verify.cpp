@@ -28,7 +28,7 @@ struct PreparedStatementVerification {
 	void ConvertConstants(QueryNode &node);
 	void ConvertConstants(unique_ptr<ParsedExpression> &child);
 
-	identifier_map_t<unique_ptr<ParsedExpression>> values;
+	IdentifierMap<unique_ptr<ParsedExpression>> values {IdentifierConstructor::NO_CLIENT_CONTEXT};
 };
 
 void PreparedStatementVerification::ConvertConstants(QueryNode &node) {

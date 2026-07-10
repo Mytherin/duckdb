@@ -13,7 +13,7 @@
       {
         "id": 101,
         "name": "named_param_map",
-        "type": "identifier_map_t<idx_t>"
+        "type": "IdentifierMap<idx_t>"
       }
     ]
   },
@@ -114,7 +114,7 @@
       {
         "id": 107,
         "name": "exclude_columns",
-        "type": "identifier_set_t"
+        "type": "IdentifierSet"
       }
     ]
   }

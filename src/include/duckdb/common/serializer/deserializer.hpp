@@ -347,6 +347,36 @@ private:
 	}
 
 	template <typename T = void>
+	inline typename std::enable_if<is_identifier_map<T>::value, T>::type Read() {
+		using KEY_TYPE = typename is_identifier_map<T>::KEY_TYPE;
+		using VALUE_TYPE = typename is_identifier_map<T>::VALUE_TYPE;
+
+		T map(IdentifierConstructor::NO_CLIENT_CONTEXT);
+		auto size = OnListBegin();
+		for (idx_t i = 0; i < size; i++) {
+			OnObjectBegin();
+			auto key = ReadProperty<KEY_TYPE>(0, "key");
+			auto value = ReadProperty<VALUE_TYPE>(1, "value");
+			OnObjectEnd();
+			map[std::move(key)] = std::move(value);
+		}
+		OnListEnd();
+		return map;
+	}
+
+	template <typename T = void>
+	inline typename std::enable_if<is_identifier_set<T>::value, T>::type Read() {
+		using ELEMENT_TYPE = typename is_identifier_set<T>::ELEMENT_TYPE;
+		auto size = OnListBegin();
+		T set(IdentifierConstructor::NO_CLIENT_CONTEXT);
+		for (idx_t i = 0; i < size; i++) {
+			set.insert(Read<ELEMENT_TYPE>());
+		}
+		OnListEnd();
+		return set;
+	}
+
+	template <typename T = void>
 	inline typename std::enable_if<is_map<T>::value, T>::type Read() {
 		using KEY_TYPE = typename is_map<T>::KEY_TYPE;
 		using VALUE_TYPE = typename is_map<T>::VALUE_TYPE;

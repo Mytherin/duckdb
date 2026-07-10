@@ -10,6 +10,7 @@
 
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -18,6 +19,23 @@
 
 namespace duckdb {
 
+//! Helper to default-construct an index map. IdentifierMap requires an explicit constructor, so it is built with
+//! IdentifierConstructor::NO_CLIENT_CONTEXT here (case-insensitive); all other index maps use their default
+//! constructor.
+template <typename INDEX_MAP>
+struct InsertionOrderIndexMapConstructor {
+	static INDEX_MAP Construct() {
+		return INDEX_MAP();
+	}
+};
+
+template <typename T>
+struct InsertionOrderIndexMapConstructor<IdentifierMap<T>> {
+	static IdentifierMap<T> Construct() {
+		return IdentifierMap<T>(IdentifierConstructor::NO_CLIENT_CONTEXT);
+	}
+};
+
 template <typename V, typename KEY = string, typename INDEX_MAP = case_insensitive_map_t<idx_t>>
 class InsertionOrderPreservingMap {
 public:
@@ -25,7 +43,7 @@ public:
 	typedef KEY key_type;                     // NOLINT: matching name of std
 
 public:
-	InsertionOrderPreservingMap() {
+	InsertionOrderPreservingMap() : map_idx(InsertionOrderIndexMapConstructor<INDEX_MAP>::Construct()) {
 	}
 
 private:

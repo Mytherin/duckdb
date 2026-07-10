@@ -295,7 +295,8 @@ void AttachInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<Identifier>(200, "name", name);
 	serializer.WritePropertyWithDefault<string>(201, "path", path);
 	serializer.WritePropertyWithDefault<unordered_map<string, Value>>(202, "options", options);
-	serializer.WritePropertyWithDefault<OnCreateConflict>(203, "on_conflict", on_conflict, OnCreateConflict::ERROR_ON_CONFLICT);
+	serializer.WritePropertyWithDefault<OnCreateConflict>(203, "on_conflict", on_conflict,
+	                                                      OnCreateConflict::ERROR_ON_CONFLICT);
 }
 
 unique_ptr<ParseInfo> AttachInfo::Deserialize(Deserializer &deserializer) {
@@ -303,7 +304,8 @@ unique_ptr<ParseInfo> AttachInfo::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<Identifier>(200, "name", result->name);
 	deserializer.ReadPropertyWithDefault<string>(201, "path", result->path);
 	deserializer.ReadPropertyWithDefault<unordered_map<string, Value>>(202, "options", result->options);
-	deserializer.ReadPropertyWithExplicitDefault<OnCreateConflict>(203, "on_conflict", result->on_conflict, OnCreateConflict::ERROR_ON_CONFLICT);
+	deserializer.ReadPropertyWithExplicitDefault<OnCreateConflict>(203, "on_conflict", result->on_conflict,
+	                                                               OnCreateConflict::ERROR_ON_CONFLICT);
 	return std::move(result);
 }
 
@@ -453,7 +455,8 @@ unique_ptr<ParseInfo> DropInfo::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<bool>(205, "cascade", result->cascade);
 	deserializer.ReadPropertyWithDefault<bool>(206, "allow_drop_internal", result->allow_drop_internal);
 	deserializer.ReadPropertyWithDefault<unique_ptr<ExtraDropInfo>>(207, "extra_drop_info", result->extra_drop_info);
-	auto qualified_name = deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(208, "qualified_name", QualifiedName());
+	auto qualified_name =
+	    deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(208, "qualified_name", QualifiedName());
 	result->SetQualifiedName(std::move(catalog), std::move(schema), std::move(name));
 	if (!qualified_name.Path().empty()) {
 		result->qualified_name = std::move(qualified_name);
@@ -497,14 +500,16 @@ void PragmaInfo::Serialize(Serializer &serializer) const {
 	ParseInfo::Serialize(serializer);
 	serializer.WritePropertyWithDefault<Identifier>(200, "name", name);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(201, "parameters", parameters);
-	serializer.WritePropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(202, "named_parameters", named_parameters);
+	serializer.WritePropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(202, "named_parameters",
+	                                                                                          named_parameters);
 }
 
 unique_ptr<ParseInfo> PragmaInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<PragmaInfo>(new PragmaInfo());
 	deserializer.ReadPropertyWithDefault<Identifier>(200, "name", result->name);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(201, "parameters", result->parameters);
-	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(202, "named_parameters", result->named_parameters);
+	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(
+	    202, "named_parameters", result->named_parameters);
 	return std::move(result);
 }
 
@@ -600,15 +605,15 @@ unique_ptr<AlterViewInfo> RenameViewInfo::Deserialize(Deserializer &deserializer
 void ResetTableOptionsInfo::Serialize(Serializer &serializer) const {
 	AlterTableInfo::Serialize(serializer);
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
-		serializer.WritePropertyWithDefault<identifier_set_t>(400, "table_options", table_options);
+		serializer.WritePropertyWithDefault<IdentifierSet>(400, "table_options", table_options);
 	} else {
-		serializer.WriteProperty<identifier_set_t>(400, "table_options", table_options);
+		serializer.WriteProperty<IdentifierSet>(400, "table_options", table_options);
 	}
 }
 
 unique_ptr<AlterTableInfo> ResetTableOptionsInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<ResetTableOptionsInfo>(new ResetTableOptionsInfo());
-	deserializer.ReadPropertyWithDefault<identifier_set_t>(400, "table_options", result->table_options);
+	deserializer.ReadPropertyWithDefault<IdentifierSet>(400, "table_options", result->table_options);
 	return std::move(result);
 }
 
@@ -671,7 +676,8 @@ void SetPartitionedByInfo::Serialize(Serializer &serializer) const {
 
 unique_ptr<AlterTableInfo> SetPartitionedByInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<SetPartitionedByInfo>(new SetPartitionedByInfo());
-	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(400, "partition_keys", result->partition_keys);
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(400, "partition_keys",
+	                                                                           result->partition_keys);
 	return std::move(result);
 }
 
@@ -688,12 +694,14 @@ unique_ptr<AlterTableInfo> SetSortedByInfo::Deserialize(Deserializer &deserializ
 
 void SetTableOptionsInfo::Serialize(Serializer &serializer) const {
 	AlterTableInfo::Serialize(serializer);
-	serializer.WritePropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(400, "table_options", table_options);
+	serializer.WritePropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(400, "table_options",
+	                                                                                          table_options);
 }
 
 unique_ptr<AlterTableInfo> SetTableOptionsInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<SetTableOptionsInfo>(new SetTableOptionsInfo());
-	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(400, "table_options", result->table_options);
+	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(400, "table_options",
+	                                                                                           result->table_options);
 	return std::move(result);
 }
 
@@ -701,7 +709,8 @@ void TransactionInfo::Serialize(Serializer &serializer) const {
 	ParseInfo::Serialize(serializer);
 	serializer.WriteProperty<TransactionType>(200, "type", type);
 	serializer.WriteProperty<TransactionModifierType>(201, "modifier", modifier);
-	serializer.WritePropertyWithDefault<TransactionInvalidationPolicy>(202, "invalidation_policy", invalidation_policy, TransactionInvalidationPolicy::STANDARD_POLICY);
+	serializer.WritePropertyWithDefault<TransactionInvalidationPolicy>(202, "invalidation_policy", invalidation_policy,
+	                                                                   TransactionInvalidationPolicy::STANDARD_POLICY);
 	serializer.WritePropertyWithDefault<bool>(203, "auto_rollback", auto_rollback);
 }
 
@@ -709,7 +718,8 @@ unique_ptr<ParseInfo> TransactionInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<TransactionInfo>(new TransactionInfo());
 	deserializer.ReadProperty<TransactionType>(200, "type", result->type);
 	deserializer.ReadProperty<TransactionModifierType>(201, "modifier", result->modifier);
-	deserializer.ReadPropertyWithExplicitDefault<TransactionInvalidationPolicy>(202, "invalidation_policy", result->invalidation_policy, TransactionInvalidationPolicy::STANDARD_POLICY);
+	deserializer.ReadPropertyWithExplicitDefault<TransactionInvalidationPolicy>(
+	    202, "invalidation_policy", result->invalidation_policy, TransactionInvalidationPolicy::STANDARD_POLICY);
 	deserializer.ReadPropertyWithDefault<bool>(203, "auto_rollback", result->auto_rollback);
 	return std::move(result);
 }

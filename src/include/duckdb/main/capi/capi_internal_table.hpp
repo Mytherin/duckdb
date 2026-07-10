@@ -61,7 +61,7 @@ struct CTableInternalBindInfo {
 	ClientContext &context;
 
 	vector<Value> parameters;
-	named_parameter_map_t named_parameters;
+	named_parameter_map_t named_parameters {IdentifierConstructor::NO_CLIENT_CONTEXT};
 
 	vector<LogicalType> &return_types;
 	vector<string> &names;

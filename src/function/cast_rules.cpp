@@ -534,7 +534,7 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		int64_t cost = -1;
 		if (named_struct_cast) {
 			// Collect the target members in a map for easy lookup
-			identifier_map_t<idx_t> target_members;
+			IdentifierMap<idx_t> target_members {IdentifierConstructor::NO_CLIENT_CONTEXT};
 			for (idx_t target_idx = 0; target_idx < target_children.size(); target_idx++) {
 				auto &target_name = target_children[target_idx].first;
 				if (target_members.find(target_name) != target_members.end()) {

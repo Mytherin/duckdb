@@ -725,7 +725,7 @@ string SetTableOptionsInfo::ToString() const {
 ResetTableOptionsInfo::ResetTableOptionsInfo() : AlterTableInfo(AlterTableType::RESET_TABLE_OPTIONS) {
 }
 
-ResetTableOptionsInfo::ResetTableOptionsInfo(const AlterEntryData &data, identifier_set_t table_options)
+ResetTableOptionsInfo::ResetTableOptionsInfo(const AlterEntryData &data, IdentifierSet table_options)
     : AlterTableInfo(AlterTableType::RESET_TABLE_OPTIONS, data), table_options(std::move(table_options)) {
 }
 
@@ -733,7 +733,7 @@ ResetTableOptionsInfo::~ResetTableOptionsInfo() {
 }
 
 unique_ptr<AlterInfo> ResetTableOptionsInfo::Copy() const {
-	identifier_set_t table_options_copy;
+	IdentifierSet table_options_copy {IdentifierConstructor::NO_CLIENT_CONTEXT};
 	for (auto &option : table_options) {
 		table_options_copy.emplace(option);
 	}

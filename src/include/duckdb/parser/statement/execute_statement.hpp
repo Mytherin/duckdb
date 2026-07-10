@@ -21,7 +21,7 @@ public:
 	ExecuteStatement();
 
 	Identifier name;
-	identifier_map_t<unique_ptr<ParsedExpression>> named_values;
+	IdentifierMap<unique_ptr<ParsedExpression>> named_values {IdentifierConstructor::NO_CLIENT_CONTEXT};
 
 protected:
 	ExecuteStatement(const ExecuteStatement &other);

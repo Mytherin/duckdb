@@ -8,7 +8,7 @@ map<string, T> order_case_insensitive_map(const case_insensitive_map_t<T> &input
 }
 
 template <typename T>
-map<string, T> order_case_insensitive_map(const identifier_map_t<T> &input_map) {
+map<string, T> order_case_insensitive_map(const IdentifierMap<T> &input_map) {
 	map<string, T> result;
 	for (auto &entry : input_map) {
 		result[entry.first.GetIdentifierName()] = entry.second;

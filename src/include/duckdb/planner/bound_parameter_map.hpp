@@ -15,14 +15,15 @@
 
 namespace duckdb {
 
+class ClientContext;
 class ParameterExpression;
 class BoundParameterExpression;
 
-using bound_parameter_map_t = identifier_map_t<shared_ptr<BoundParameterData>>;
+using bound_parameter_map_t = IdentifierMap<shared_ptr<BoundParameterData>>;
 
 struct BoundParameterMap {
 public:
-	explicit BoundParameterMap(identifier_map_t<BoundParameterData> &parameter_data);
+	BoundParameterMap(ClientContext &context, IdentifierMap<BoundParameterData> &parameter_data);
 
 public:
 	LogicalType GetReturnType(const Identifier &identifier);
@@ -31,7 +32,7 @@ public:
 
 	const bound_parameter_map_t &GetParameters();
 
-	const identifier_map_t<BoundParameterData> &GetParameterData();
+	const IdentifierMap<BoundParameterData> &GetParameterData();
 
 	unique_ptr<BoundParameterExpression> BindParameterExpression(ParameterExpression &expr);
 
@@ -45,7 +46,7 @@ private:
 private:
 	bound_parameter_map_t parameters;
 	// Pre-provided parameter data if populated
-	identifier_map_t<BoundParameterData> &parameter_data;
+	IdentifierMap<BoundParameterData> &parameter_data;
 };
 
 } // namespace duckdb

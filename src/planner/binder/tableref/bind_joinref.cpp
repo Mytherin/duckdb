@@ -142,7 +142,7 @@ BindingAlias Binder::RetrieveUsingBinding(Binder &current_binder, optional_ptr<U
 
 static vector<Identifier> RemoveDuplicateUsingColumns(const vector<Identifier> &using_columns) {
 	vector<Identifier> result;
-	identifier_set_t handled_columns;
+	IdentifierSet handled_columns {IdentifierConstructor::NO_CLIENT_CONTEXT};
 	for (auto &using_column : using_columns) {
 		if (handled_columns.find(using_column) == handled_columns.end()) {
 			handled_columns.insert(using_column);
@@ -218,7 +218,7 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 	case JoinRefType::NATURAL: {
 		// natural join, figure out which column names are present in both sides of the join
 		// first bind the left hand side and get a list of all the tables and column names
-		identifier_set_t lhs_columns;
+		IdentifierSet lhs_columns(context);
 		auto &lhs_binding_list = left_binder.bind_context.GetBindingsList();
 		for (auto &binding : lhs_binding_list) {
 			for (auto &column_name : binding->GetColumnNames()) {

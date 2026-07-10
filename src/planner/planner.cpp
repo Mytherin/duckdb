@@ -25,7 +25,8 @@
 
 namespace duckdb {
 
-Planner::Planner(ClientContext &context) : binder(Binder::CreateBinder(context)), context(context) {
+Planner::Planner(ClientContext &context)
+    : parameter_data(context), binder(Binder::CreateBinder(context)), context(context), value_map(context) {
 }
 
 // Pre-decorrelation pass: replace LogicalTrigger with LogicalDependentJoin so the standard
@@ -79,7 +80,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	auto &profiler = QueryProfiler::Get(context);
 	auto parameter_count = statement.named_param_map.size();
 
-	BoundParameterMap bound_parameters(parameter_data);
+	BoundParameterMap bound_parameters(context, parameter_data);
 
 	// first bind the tables and columns to the catalog
 	bool parameters_resolved = true;
@@ -247,7 +248,7 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 
 		BinarySerializer::Serialize(*op, stream, options);
 		stream.Rewind();
-		bound_parameter_map_t parameters;
+		bound_parameter_map_t parameters(context);
 		auto new_plan = BinaryDeserializer::Deserialize<LogicalOperator>(stream, context, parameters);
 
 		if (map) {

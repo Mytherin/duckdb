@@ -240,10 +240,10 @@ void RemapStructFunction(DataChunk &args, ExpressionState &state, Vector &result
 struct RemapIndex {
 	idx_t index;
 	LogicalType type;
-	unique_ptr<identifier_map_t<RemapIndex>> child_map;
+	unique_ptr<IdentifierMap<RemapIndex>> child_map;
 
-	static identifier_map_t<RemapIndex> GetMap(const LogicalType &type) {
-		identifier_map_t<RemapIndex> result;
+	static IdentifierMap<RemapIndex> GetMap(const LogicalType &type) {
+		IdentifierMap<RemapIndex> result {IdentifierConstructor::NO_CLIENT_CONTEXT};
 		switch (type.id()) {
 		case LogicalTypeId::STRUCT: {
 			auto &children = StructType::GetChildTypes(type);
@@ -276,7 +276,7 @@ struct RemapIndex {
 		index.index = idx;
 		index.type = type;
 		if (IsRemappable(type)) {
-			index.child_map = make_uniq<identifier_map_t<RemapIndex>>(GetMap(type));
+			index.child_map = make_uniq<IdentifierMap<RemapIndex>>(GetMap(type));
 		}
 		return index;
 	}
@@ -286,11 +286,11 @@ struct RemapEntry {
 	optional_idx index;
 	optional_idx default_index;
 	LogicalType target_type;
-	unique_ptr<identifier_map_t<RemapEntry>> child_remaps;
+	unique_ptr<IdentifierMap<RemapEntry>> child_remaps;
 
 	static void PerformRemap(const Identifier &remap_target, const Value &remap_val,
-	                         identifier_map_t<RemapIndex> &source_map, identifier_map_t<RemapIndex> &target_map,
-	                         identifier_map_t<RemapEntry> &result, const LogicalType &parent_type) {
+	                         IdentifierMap<RemapIndex> &source_map, IdentifierMap<RemapIndex> &target_map,
+	                         IdentifierMap<RemapEntry> &result, const LogicalType &parent_type) {
 		string remap_source;
 		Value struct_val;
 		if (remap_val.type().id() == LogicalTypeId::VARCHAR) {
@@ -343,7 +343,7 @@ struct RemapEntry {
 					                      struct_val.ToString(), entry->second.type.ToString(),
 					                      target_entry->second.type.ToString());
 				}
-				remap.child_remaps = make_uniq<identifier_map_t<RemapEntry>>();
+				remap.child_remaps = make_uniq<IdentifierMap<RemapEntry>>(IdentifierConstructor::NO_CLIENT_CONTEXT);
 				auto &remap_types = StructType::GetChildTypes(struct_val.type());
 				auto &remap_values = StructValue::GetChildren(struct_val);
 				for (idx_t child_idx = 0; child_idx < remap_types.size(); child_idx++) {
@@ -356,7 +356,7 @@ struct RemapEntry {
 	}
 
 	static void HandleDefault(idx_t default_idx, const string &default_target, const LogicalType &default_type,
-	                          identifier_map_t<RemapIndex> &target_map, identifier_map_t<RemapEntry> &result) {
+	                          IdentifierMap<RemapIndex> &target_map, IdentifierMap<RemapEntry> &result) {
 		auto entry = target_map.find(Identifier(default_target));
 		if (entry == target_map.end()) {
 			throw BinderException("Default value %s not found for remap", default_target);
@@ -376,7 +376,8 @@ struct RemapEntry {
 			if (result_entry == result.end()) {
 				result.emplace(default_target, std::move(remap));
 				result_entry = result.find(Identifier(default_target));
-				result_entry->second.child_remaps = make_uniq<identifier_map_t<RemapEntry>>();
+				result_entry->second.child_remaps =
+				    make_uniq<IdentifierMap<RemapEntry>>(IdentifierConstructor::NO_CLIENT_CONTEXT);
 			} else {
 				// the entry exists - add the default index
 				result_entry->second.default_index = default_idx;
@@ -404,7 +405,7 @@ struct RemapEntry {
 	}
 
 	static vector<RemapColumnInfo> ConstructMapFromChildren(const child_list_t<LogicalType> &target_children,
-	                                                        const identifier_map_t<RemapEntry> &remap_map) {
+	                                                        const IdentifierMap<RemapEntry> &remap_map) {
 		vector<RemapColumnInfo> result;
 		for (idx_t target_idx = 0; target_idx < target_children.size(); target_idx++) {
 			auto &target_name = target_children[target_idx].first;
@@ -425,8 +426,7 @@ struct RemapEntry {
 		return result;
 	}
 
-	static vector<RemapColumnInfo> ConstructMap(const LogicalType &type,
-	                                            const identifier_map_t<RemapEntry> &remap_map) {
+	static vector<RemapColumnInfo> ConstructMap(const LogicalType &type, const IdentifierMap<RemapEntry> &remap_map) {
 		D_ASSERT(IsRemappable(type));
 		switch (type.id()) {
 		case LogicalTypeId::STRUCT: {
@@ -453,7 +453,7 @@ struct RemapEntry {
 	}
 
 	static child_list_t<LogicalType> RemapCastChildren(const child_list_t<LogicalType> &source_children,
-	                                                   const identifier_map_t<RemapEntry> &remap_map,
+	                                                   const IdentifierMap<RemapEntry> &remap_map,
 	                                                   const unordered_map<idx_t, string> &source_name_map) {
 		child_list_t<LogicalType> new_source_children;
 		for (idx_t source_idx = 0; source_idx < source_children.size(); source_idx++) {
@@ -479,7 +479,7 @@ struct RemapEntry {
 		return new_source_children;
 	}
 
-	static LogicalType RemapCast(const LogicalType &type, const identifier_map_t<RemapEntry> &remap_map) {
+	static LogicalType RemapCast(const LogicalType &type, const IdentifierMap<RemapEntry> &remap_map) {
 		unordered_map<idx_t, string> source_name_map;
 		for (auto &entry : remap_map) {
 			if (entry.second.index.IsValid()) {
@@ -567,7 +567,7 @@ unique_ptr<FunctionData> RemapStructBind(BindScalarFunctionInput &input) {
 	Value remap_val = ExpressionExecutor::EvaluateScalar(context, *arguments[2]);
 
 	// (recursively) generate the remap entries
-	identifier_map_t<RemapEntry> remap_map;
+	IdentifierMap<RemapEntry> remap_map {IdentifierConstructor::NO_CLIENT_CONTEXT};
 	if (!remap_val.IsNull()) {
 		auto &remap_types = StructType::GetChildTypes(arguments[2]->GetReturnType());
 		auto &remap_values = StructValue::GetChildren(remap_val);

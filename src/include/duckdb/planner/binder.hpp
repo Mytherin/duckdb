@@ -175,6 +175,9 @@ private:
 
 //! GlobalBinderState is state shared over the ENTIRE query, including subqueries, views, etc
 struct GlobalBinderState {
+	explicit GlobalBinderState(ClientContext &context) : replacement_scans(context) {
+	}
+
 	//! The count of bound_tables
 	idx_t bound_tables = 0;
 	//! Statement properties
@@ -184,7 +187,7 @@ struct GlobalBinderState {
 	//! Table names extracted for BindingMode::EXTRACT_NAMES or BindingMode::EXTRACT_QUALIFIED_NAMES.
 	unordered_set<string> table_names;
 	//! Replacement Scans extracted for BindingMode::EXTRACT_REPLACEMENT_SCANS
-	identifier_map_t<unique_ptr<TableRef>> replacement_scans;
+	IdentifierMap<unique_ptr<TableRef>> replacement_scans;
 	//! Using column sets
 	vector<unique_ptr<UsingColumnSet>> using_column_sets;
 	//! The set of parameter expressions bound by this binder
@@ -336,7 +339,7 @@ public:
 	void AddTableName(string table_name);
 	void AddReplacementScan(const Identifier &table_name, unique_ptr<TableRef> replacement);
 	const unordered_set<string> &GetTableNames();
-	identifier_map_t<unique_ptr<TableRef>> &GetReplacementScans();
+	IdentifierMap<unique_ptr<TableRef>> &GetReplacementScans();
 	CatalogEntryRetriever &EntryRetriever() {
 		return entry_retriever;
 	}

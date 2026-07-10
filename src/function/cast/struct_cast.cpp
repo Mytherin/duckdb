@@ -26,7 +26,7 @@ unique_ptr<BoundCastData> StructBoundCastData::BindStructToStructCast(BindCastIn
 		throw TypeMismatchException(input.query_location, source, target, "Cannot cast STRUCTs of different size");
 	}
 
-	InsertionOrderPreservingMap<idx_t, Identifier, identifier_map_t<idx_t>> target_children_map;
+	InsertionOrderPreservingMap<idx_t, Identifier, IdentifierMap<idx_t>> target_children_map;
 	if (!is_unnamed) {
 		for (idx_t i = 0; i < target_children.size(); i++) {
 			auto &name = target_children[i].first;

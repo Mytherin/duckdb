@@ -216,7 +216,7 @@ void LogicalOperator::Verify(ClientContext &context) {
 		// Rewind the stream
 		stream.Rewind();
 
-		bound_parameter_map_t parameters;
+		bound_parameter_map_t parameters(context);
 		auto deserialized_expression = BinaryDeserializer::Deserialize<Expression>(stream, context, parameters);
 
 		// FIXME: expressions might not be equal yet because of statistics propagation
@@ -274,7 +274,7 @@ unique_ptr<LogicalOperator> LogicalOperator::Copy(ClientContext &context) const 
 		                              error.RawMessage());
 	}
 	stream.Rewind();
-	bound_parameter_map_t parameters;
+	bound_parameter_map_t parameters(context);
 	auto op_copy = BinaryDeserializer::Deserialize<LogicalOperator>(stream, context, parameters);
 	return op_copy;
 }

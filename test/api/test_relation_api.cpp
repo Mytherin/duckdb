@@ -938,7 +938,7 @@ TEST_CASE("Test CSV Relation with union by name", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	named_parameter_map_t options;
+	named_parameter_map_t options {IdentifierConstructor::NO_CLIENT_CONTEXT};
 	options["union_by_name"] = Value(true);
 	duckdb::vector<string> paths {"data/csv/sample-0.csv", "data/csv/sample-0.csv"};
 	auto csv_scan = con.ReadCSV(paths, std::move(options));

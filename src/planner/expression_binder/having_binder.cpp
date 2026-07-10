@@ -79,7 +79,7 @@ BindResult HavingBinder::BindWindowExpression(WindowExpression &expr, idx_t dept
 
 void ExpressionBinder::QualifyColumnNames(HavingBinder &having_binder, unique_ptr<ParsedExpression> &expr) {
 	ColumnQualifier qualifier(having_binder.binder, having_binder.lambda_bindings, nullptr, having_binder);
-	vector<identifier_set_t> lambda_params;
+	vector<IdentifierSet> lambda_params;
 	qualifier.QualifyColumnNames(expr, lambda_params);
 }
 

@@ -27,7 +27,7 @@ public:
 
 	Identifier name;
 	vector<Value> parameters;
-	named_parameter_map_t named_parameters;
+	named_parameter_map_t named_parameters {IdentifierConstructor::NO_CLIENT_CONTEXT};
 	vector<ColumnDefinition> columns;
 	shared_ptr<Relation> input_relation;
 

@@ -66,7 +66,7 @@ private:
 	//! If a type can be cast to another
 	static bool CanWeCastIt(LogicalTypeId source, LogicalTypeId destination);
 	vector<CSVColumnInfo> columns;
-	identifier_map_t<idx_t> name_idx_map;
+	IdentifierMap<idx_t> name_idx_map {IdentifierConstructor::NO_CLIENT_CONTEXT};
 	string file_path;
 	idx_t rows_read = 0;
 	bool empty = false;

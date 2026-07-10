@@ -157,8 +157,8 @@ private:
 	unique_ptr<RemotePushdownState> owned_pushdown_state;
 	RemotePushdownState &pushdown_state;
 	//! Names/aliases of non-remote tables seen in the current FROM scope, used to detect correlated subqueries
-	identifier_set_t local_table_names;
+	IdentifierSet local_table_names {IdentifierConstructor::NO_CLIENT_CONTEXT};
 	//! CTE name to catalog pushdown result, populated as CTEs are analyzed (inner scopes restore on exit)
-	identifier_map_t<CatalogPushdownResult> cte_results;
+	IdentifierMap<CatalogPushdownResult> cte_results {IdentifierConstructor::NO_CLIENT_CONTEXT};
 };
 } // namespace duckdb

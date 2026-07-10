@@ -30,7 +30,7 @@ static unique_ptr<FunctionData> StructConcatBind(BindScalarFunctionInput &input)
 	}
 
 	child_list_t<LogicalType> combined_children;
-	identifier_set_t name_set;
+	IdentifierSet name_set(input.GetClientContext());
 
 	bool has_unnamed = false;
 

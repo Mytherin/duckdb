@@ -1269,7 +1269,7 @@ void DuckTableEntry::Rollback(CatalogEntry &prev_entry) {
 	// Find all index-based constraints that exist in rollback_table, but not in table.
 	// Then, remove them.
 
-	identifier_set_t names;
+	IdentifierSet names {IdentifierConstructor::NO_CLIENT_CONTEXT};
 	for (const auto &constraint : prev_table.GetConstraints()) {
 		if (constraint->type != ConstraintType::UNIQUE) {
 			continue;

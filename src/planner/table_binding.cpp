@@ -15,9 +15,10 @@
 
 namespace duckdb {
 
-Binding::Binding(BindingType binding_type, BindingAlias alias_p, vector<LogicalType> coltypes,
+Binding::Binding(ClientContext &context, BindingType binding_type, BindingAlias alias_p, vector<LogicalType> coltypes,
                  vector<Identifier> colnames, TableIndex index)
-    : binding_type(binding_type), alias(std::move(alias_p)), index(index), types(std::move(coltypes)) {
+    : binding_type(binding_type), alias(std::move(alias_p)), index(index), types(std::move(coltypes)),
+      name_map(context) {
 	names.reserve(colnames.size());
 	for (auto &colname : colnames) {
 		names.emplace_back(std::move(colname));
@@ -137,9 +138,10 @@ BindingAlias Binding::GetAlias(const Identifier &explicit_alias, optional_ptr<St
 	return BindingAlias(*entry);
 }
 
-EntryBinding::EntryBinding(const Identifier &alias, vector<LogicalType> types_p, vector<Identifier> names_p,
-                           TableIndex index, StandardEntry &entry)
-    : Binding(BindingType::CATALOG_ENTRY, GetAlias(alias, entry), std::move(types_p), std::move(names_p), index),
+EntryBinding::EntryBinding(ClientContext &context, const Identifier &alias, vector<LogicalType> types_p,
+                           vector<Identifier> names_p, TableIndex index, StandardEntry &entry)
+    : Binding(context, BindingType::CATALOG_ENTRY, GetAlias(alias, entry), std::move(types_p), std::move(names_p),
+              index),
       entry(entry) {
 }
 
@@ -147,10 +149,10 @@ optional_ptr<StandardEntry> EntryBinding::GetStandardEntry() {
 	return &entry;
 }
 
-TableBinding::TableBinding(const Identifier &alias, vector<LogicalType> types_p, vector<Identifier> names_p,
-                           vector<ColumnIndex> &bound_column_ids, optional_ptr<StandardEntry> entry, TableIndex index,
-                           virtual_column_map_t virtual_columns_p)
-    : Binding(BindingType::TABLE, GetAlias(alias, entry), std::move(types_p), std::move(names_p), index),
+TableBinding::TableBinding(ClientContext &context, const Identifier &alias, vector<LogicalType> types_p,
+                           vector<Identifier> names_p, vector<ColumnIndex> &bound_column_ids,
+                           optional_ptr<StandardEntry> entry, TableIndex index, virtual_column_map_t virtual_columns_p)
+    : Binding(context, BindingType::TABLE, GetAlias(alias, entry), std::move(types_p), std::move(names_p), index),
       bound_column_ids(bound_column_ids), entry(entry), virtual_columns(std::move(virtual_columns_p)) {
 	for (auto &ventry : virtual_columns) {
 		auto idx = ventry.first;
@@ -307,9 +309,10 @@ ErrorData TableBinding::ColumnNotFoundError(const Identifier &column_name) const
 	                                                           alias.GetAlias(), column_name, candidate_message));
 }
 
-DummyBinding::DummyBinding(vector<LogicalType> types, vector<Identifier> names, string dummy_name)
-    : Binding(BindingType::DUMMY, BindingAlias(Identifier(DummyBinding::DUMMY_NAME + dummy_name)), std::move(types),
-              std::move(names), TableIndex()),
+DummyBinding::DummyBinding(ClientContext &context, vector<LogicalType> types, vector<Identifier> names,
+                           string dummy_name)
+    : Binding(context, BindingType::DUMMY, BindingAlias(Identifier(DummyBinding::DUMMY_NAME + dummy_name)),
+              std::move(types), std::move(names), TableIndex()),
       dummy_name(std::move(dummy_name)) {
 }
 
@@ -345,14 +348,15 @@ unique_ptr<ParsedExpression> DummyBinding::ParamToArg(ColumnRefExpression &colre
 	return arg;
 }
 
-CTEBinding::CTEBinding(BindingAlias alias, vector<LogicalType> types, vector<Identifier> names, TableIndex index,
-                       CTEType cte_type)
-    : Binding(BindingType::CTE, std::move(alias), std::move(types), std::move(names), index), cte_type(cte_type),
-      reference_count(0) {
+CTEBinding::CTEBinding(ClientContext &context, BindingAlias alias, vector<LogicalType> types, vector<Identifier> names,
+                       TableIndex index, CTEType cte_type)
+    : Binding(context, BindingType::CTE, std::move(alias), std::move(types), std::move(names), index),
+      cte_type(cte_type), reference_count(0) {
 }
 
-CTEBinding::CTEBinding(BindingAlias alias_p, shared_ptr<CTEBindState> bind_state_p, TableIndex index)
-    : Binding(BindingType::CTE, std::move(alias_p), vector<LogicalType>(), vector<Identifier>(), index),
+CTEBinding::CTEBinding(ClientContext &context, BindingAlias alias_p, shared_ptr<CTEBindState> bind_state_p,
+                       TableIndex index)
+    : Binding(context, BindingType::CTE, std::move(alias_p), vector<LogicalType>(), vector<Identifier>(), index),
       cte_type(CTEType::CAN_BE_REFERENCED), reference_count(0), bind_state(std::move(bind_state_p)) {
 }
 

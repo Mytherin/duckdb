@@ -302,7 +302,7 @@ bool PEGTransformerFactory::ConstructConstantFromExpression(const ParsedExpressi
 	case ExpressionType::FUNCTION: {
 		auto &function = expr.Cast<FunctionExpression>();
 		if (function.FunctionName() == "struct_pack") {
-			identifier_set_t unique_names;
+			IdentifierSet unique_names {IdentifierConstructor::NO_CLIENT_CONTEXT};
 			child_list_t<Value> values;
 			values.reserve(function.GetArguments().size());
 			for (const auto &child : function.GetArguments()) {

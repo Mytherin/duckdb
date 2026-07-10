@@ -364,7 +364,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableCheckpoint(unique_ptr<Cr
 	return result;
 }
 
-static void ExpressionContainsGeneratedColumn(const ParsedExpression &root_expr, const identifier_set_t &gcols,
+static void ExpressionContainsGeneratedColumn(const ParsedExpression &root_expr, const IdentifierSet &gcols,
                                               bool &contains_gcol) {
 	ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(root_expr,
 	                                                               [&](const ColumnRefExpression &column_ref) {
@@ -377,7 +377,7 @@ static void ExpressionContainsGeneratedColumn(const ParsedExpression &root_expr,
 }
 
 static bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) {
-	identifier_set_t generated_columns;
+	IdentifierSet generated_columns {IdentifierConstructor::NO_CLIENT_CONTEXT};
 	for (auto &col : table_info.columns.Logical()) {
 		if (!col.Generated()) {
 			continue;

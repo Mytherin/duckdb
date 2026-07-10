@@ -17,7 +17,7 @@ namespace duckdb {
 
 constexpr const char *FieldID::DUCKDB_FIELD_ID;
 
-ChildFieldIDs::ChildFieldIDs() : ids(make_uniq<identifier_map_t<FieldID>>()) {
+ChildFieldIDs::ChildFieldIDs() : ids(make_uniq<IdentifierMap<FieldID>>(IdentifierConstructor::NO_CLIENT_CONTEXT)) {
 }
 
 ChildFieldIDs ChildFieldIDs::Copy() const {

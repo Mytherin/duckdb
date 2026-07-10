@@ -30,9 +30,11 @@ void CreateInfo::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<OnCreateConflict>(105, "on_conflict", on_conflict);
 	serializer.WritePropertyWithDefault<string>(106, "sql", sql);
 	serializer.WritePropertyWithDefault<Value>(107, "comment", comment, Value());
-	serializer.WritePropertyWithDefault<InsertionOrderPreservingMap<string>>(108, "tags", tags, InsertionOrderPreservingMap<string>());
+	serializer.WritePropertyWithDefault<InsertionOrderPreservingMap<string>>(108, "tags", tags,
+	                                                                         InsertionOrderPreservingMap<string>());
 	if (serializer.ShouldSerialize(StorageVersion::V0_10_3)) {
-		serializer.WritePropertyWithDefault<LogicalDependencyList>(109, "dependencies", dependencies, LogicalDependencyList());
+		serializer.WritePropertyWithDefault<LogicalDependencyList>(109, "dependencies", dependencies,
+		                                                           LogicalDependencyList());
 	}
 	serializer.WritePropertyWithDefault<Identifier>(110, "extension_name", extension_name);
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0) || (qualified_name.Path().size() > 3)) {
@@ -49,10 +51,13 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 	auto on_conflict = deserializer.ReadProperty<OnCreateConflict>(105, "on_conflict");
 	auto sql = deserializer.ReadPropertyWithDefault<string>(106, "sql");
 	auto comment = deserializer.ReadPropertyWithExplicitDefault<Value>(107, "comment", Value());
-	auto tags = deserializer.ReadPropertyWithExplicitDefault<InsertionOrderPreservingMap<string>>(108, "tags", InsertionOrderPreservingMap<string>());
-	auto dependencies = deserializer.ReadPropertyWithExplicitDefault<LogicalDependencyList>(109, "dependencies", LogicalDependencyList());
+	auto tags = deserializer.ReadPropertyWithExplicitDefault<InsertionOrderPreservingMap<string>>(
+	    108, "tags", InsertionOrderPreservingMap<string>());
+	auto dependencies = deserializer.ReadPropertyWithExplicitDefault<LogicalDependencyList>(109, "dependencies",
+	                                                                                        LogicalDependencyList());
 	auto extension_name = deserializer.ReadPropertyWithDefault<Identifier>(110, "extension_name");
-	auto qualified_name = deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(111, "qualified_name", QualifiedName());
+	auto qualified_name =
+	    deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(111, "qualified_name", QualifiedName());
 	deserializer.Set<CatalogType>(type);
 	unique_ptr<CreateInfo> result;
 	switch (type) {
@@ -108,7 +113,8 @@ void CreateIndexInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<Identifier>(201, "table", table);
 	/* [Deleted] (DeprecatedIndexType) "index_type" */
 	serializer.WriteProperty<IndexConstraintType>(203, "constraint_type", constraint_type);
-	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(204, "parsed_expressions", parsed_expressions);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(204, "parsed_expressions",
+	                                                                          parsed_expressions);
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(205, "scan_types", scan_types);
 	serializer.WritePropertyWithDefault<vector<Identifier>>(206, "names", names);
 	serializer.WritePropertyWithDefault<vector<column_t>>(207, "column_ids", column_ids);
@@ -122,7 +128,8 @@ unique_ptr<CreateInfo> CreateIndexInfo::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadPropertyWithDefault<Identifier>(201, "table", result->table);
 	deserializer.ReadDeletedProperty<DeprecatedIndexType>(202, "index_type");
 	deserializer.ReadProperty<IndexConstraintType>(203, "constraint_type", result->constraint_type);
-	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(204, "parsed_expressions", result->parsed_expressions);
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(204, "parsed_expressions",
+	                                                                           result->parsed_expressions);
 	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(205, "scan_types", result->scan_types);
 	deserializer.ReadPropertyWithDefault<vector<Identifier>>(206, "names", result->names);
 	deserializer.ReadPropertyWithDefault<vector<column_t>>(207, "column_ids", result->column_ids);
@@ -136,14 +143,17 @@ void CreateMacroInfo::Serialize(Serializer &serializer) const {
 	CreateInfo::Serialize(serializer);
 	serializer.WritePropertyWithDefault<Identifier>(200, "name", qualified_name.Name());
 	serializer.WritePropertyWithDefault<unique_ptr<MacroFunction>>(201, "function", macros[0]);
-	serializer.WritePropertyWithDefault<vector<unique_ptr<MacroFunction>>>(202, "extra_functions", GetAllButFirstFunction());
+	serializer.WritePropertyWithDefault<vector<unique_ptr<MacroFunction>>>(202, "extra_functions",
+	                                                                       GetAllButFirstFunction());
 }
 
 unique_ptr<CreateInfo> CreateMacroInfo::Deserialize(Deserializer &deserializer) {
 	auto name = deserializer.ReadPropertyWithDefault<Identifier>(200, "name");
 	auto function = deserializer.ReadPropertyWithDefault<unique_ptr<MacroFunction>>(201, "function");
-	auto extra_functions = deserializer.ReadPropertyWithDefault<vector<unique_ptr<MacroFunction>>>(202, "extra_functions");
-	auto result = duckdb::unique_ptr<CreateMacroInfo>(new CreateMacroInfo(deserializer.Get<CatalogType>(), std::move(function), std::move(extra_functions)));
+	auto extra_functions =
+	    deserializer.ReadPropertyWithDefault<vector<unique_ptr<MacroFunction>>>(202, "extra_functions");
+	auto result = duckdb::unique_ptr<CreateMacroInfo>(
+	    new CreateMacroInfo(deserializer.Get<CatalogType>(), std::move(function), std::move(extra_functions)));
 	result->SetName(std::move(name));
 	return std::move(result);
 }
@@ -202,9 +212,11 @@ unique_ptr<CreateInfo> CreateTableInfo::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadProperty<ColumnList>(201, "columns", result->columns);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Constraint>>>(202, "constraints", result->constraints);
 	deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(203, "query", result->query);
-	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(204, "partition_keys", result->partition_keys);
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(204, "partition_keys",
+	                                                                           result->partition_keys);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(205, "sort_keys", result->sort_keys);
-	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(206, "options", result->options);
+	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(206, "options",
+	                                                                                           result->options);
 	result->SetName(std::move(table));
 	return std::move(result);
 }
@@ -263,7 +275,9 @@ void CreateViewInfo::Serialize(Serializer &serializer) const {
 		serializer.WritePropertyWithDefault<vector<Value>>(205, "column_comments", GetColumnCommentsList());
 	}
 	if (serializer.ShouldSerialize(StorageVersion::V1_5_0)) {
-		serializer.WritePropertyWithDefault<identifier_map_t<Value>>(206, "column_comments_map", column_comments_map, identifier_map_t<Value>());
+		serializer.WritePropertyWithDefault<IdentifierMap<Value>>(
+		    206, "column_comments_map", column_comments_map,
+		    IdentifierMap<Value>(IdentifierConstructor::NO_CLIENT_CONTEXT));
 	}
 }
 
@@ -274,8 +288,10 @@ unique_ptr<CreateInfo> CreateViewInfo::Deserialize(Deserializer &deserializer) {
 	auto query = deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(203, "query");
 	auto names = deserializer.ReadPropertyWithDefault<vector<Identifier>>(204, "names");
 	auto column_comments = deserializer.ReadPropertyWithDefault<vector<Value>>(205, "column_comments");
-	auto column_comments_map = deserializer.ReadPropertyWithExplicitDefault<identifier_map_t<Value>>(206, "column_comments_map", identifier_map_t<Value>());
-	auto result = duckdb::unique_ptr<CreateViewInfo>(new CreateViewInfo(std::move(names), std::move(column_comments), std::move(column_comments_map)));
+	auto column_comments_map = deserializer.ReadPropertyWithExplicitDefault<IdentifierMap<Value>>(
+	    206, "column_comments_map", IdentifierMap<Value>(IdentifierConstructor::NO_CLIENT_CONTEXT));
+	auto result = duckdb::unique_ptr<CreateViewInfo>(
+	    new CreateViewInfo(std::move(names), std::move(column_comments), std::move(column_comments_map)));
 	result->aliases = std::move(aliases);
 	result->types = std::move(types);
 	result->query = std::move(query);

@@ -198,11 +198,11 @@ private:
 	//! Lock for types, functions, settings and storages
 	mutex manager_lock;
 	//! Secret functions;
-	identifier_map_t<CreateSecretFunctionSet> secret_functions;
+	IdentifierMap<CreateSecretFunctionSet> secret_functions {IdentifierConstructor::NO_CLIENT_CONTEXT};
 	//! Secret types;
-	identifier_map_t<SecretType> secret_types;
+	IdentifierMap<SecretType> secret_types {IdentifierConstructor::NO_CLIENT_CONTEXT};
 	//! Map of all registered SecretStorages
-	identifier_map_t<unique_ptr<SecretStorage>> secret_storages;
+	IdentifierMap<unique_ptr<SecretStorage>> secret_storages {IdentifierConstructor::NO_CLIENT_CONTEXT};
 	//! While false, secret manager settings can still be changed
 	atomic<bool> initialized {false};
 	//! Configuration for secret manager
@@ -214,7 +214,7 @@ private:
 //! The DefaultGenerator for persistent secrets. This is used to store lazy loaded secrets in the catalog
 class DefaultSecretGenerator : public DefaultGenerator {
 public:
-	DefaultSecretGenerator(Catalog &catalog, SecretManager &secret_manager, identifier_set_t &persistent_secrets);
+	DefaultSecretGenerator(Catalog &catalog, SecretManager &secret_manager, IdentifierSet &persistent_secrets);
 
 public:
 	unique_ptr<CatalogEntry> CreateDefaultEntry(CatalogTransaction transaction, const Identifier &entry_name) override;
@@ -229,7 +229,7 @@ protected:
 
 	SecretManager &secret_manager;
 	mutex lock;
-	identifier_set_t persistent_secrets;
+	IdentifierSet persistent_secrets {IdentifierConstructor::NO_CLIENT_CONTEXT};
 };
 
 } // namespace duckdb

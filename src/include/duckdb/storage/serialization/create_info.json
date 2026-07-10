@@ -269,8 +269,8 @@
       {
         "id": 206,
         "name": "column_comments_map",
-        "type": "identifier_map_t<Value>",
-        "default": "identifier_map_t<Value>()",
+        "type": "IdentifierMap<Value>",
+        "default": "IdentifierMap<Value>(IdentifierConstructor::NO_CLIENT_CONTEXT)",
         "version": "v1.5.0"
       }
     ],

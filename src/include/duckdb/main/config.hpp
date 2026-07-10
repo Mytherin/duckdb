@@ -142,7 +142,7 @@ struct DBConfigOptions {
 	//! Directories that are explicitly allowed, even if enable_external_access is false
 	set<string> allowed_directories;
 	//! Additional configuration options that are allowed to be changed even when the configuration is locked
-	identifier_set_t allowed_configs;
+	IdentifierSet allowed_configs {IdentifierConstructor::NO_CLIENT_CONTEXT};
 	//! The log configuration
 	LogConfig log_config = LogConfig();
 	//! Physical memory that the block allocator is allowed to use (this memory is never freed and cannot be reduced)

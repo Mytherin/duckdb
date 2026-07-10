@@ -43,7 +43,7 @@ static unique_ptr<FunctionData> StructInsertBind(BindScalarFunctionInput &input)
 		throw InvalidInputException("Can't insert nothing into a STRUCT");
 	}
 
-	identifier_set_t name_collision_set;
+	IdentifierSet name_collision_set(input.GetClientContext());
 	child_list_t<LogicalType> new_children;
 	auto &existing_children = StructType::GetChildTypes(arguments[0]->GetReturnType());
 

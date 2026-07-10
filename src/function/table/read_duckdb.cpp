@@ -125,7 +125,7 @@ string DuckDBFileReaderOptions::GetCandidates(const vector<reference<TableCatalo
 	if (tables.empty()) {
 		return string();
 	}
-	identifier_map_t<idx_t> table_names;
+	IdentifierMap<idx_t> table_names {IdentifierConstructor::NO_CLIENT_CONTEXT};
 	for (auto &table : tables) {
 		table_names[table.get().name]++;
 	}

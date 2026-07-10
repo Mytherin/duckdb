@@ -958,7 +958,7 @@ static void ResolveArguments(const SimpleFunction &function, vector<unique_ptr<E
 		arguments.resize(sig.GetParameterCount());
 	}
 
-	identifier_set_t seen_names;
+	IdentifierSet seen_names {IdentifierConstructor::NO_CLIENT_CONTEXT};
 
 	vector<unique_ptr<Expression>> trailing_kwargs;
 

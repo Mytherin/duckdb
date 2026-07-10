@@ -76,7 +76,7 @@ void SetOpAliasGatherer::GatherSetOpAliases(SetOperationType setop_type, const v
 	if (setop_type == SetOperationType::UNION_BY_NAME) {
 		auto &setop_names = stmt_names;
 		// for UNION BY NAME - create a new re-order index
-		identifier_map_t<idx_t> reorder_map;
+		IdentifierMap<idx_t> reorder_map {IdentifierConstructor::NO_CLIENT_CONTEXT};
 		for (idx_t col_idx = 0; col_idx < setop_names.size(); ++col_idx) {
 			reorder_map[setop_names[col_idx]] = reorder_idx[col_idx];
 		}
@@ -114,15 +114,15 @@ static void GatherAliases(BoundSetOperationNode &root, vector<BoundStatement> &c
 
 void Binder::BuildUnionByNameInfo(BoundSetOperationNode &result) {
 	D_ASSERT(result.setop_type == SetOperationType::UNION_BY_NAME);
-	vector<identifier_map_t<ProjectionIndex>> node_name_maps;
-	identifier_set_t global_name_set;
+	vector<IdentifierMap<ProjectionIndex>> node_name_maps;
+	IdentifierSet global_name_set(context);
 
 	// Build a name_map to use to check if a name exists
 	// We throw a binder exception if two same name in the SELECT list
 	D_ASSERT(result.names.empty());
 	for (auto &child : result.bound_children) {
 		auto &child_names = child.names;
-		identifier_map_t<ProjectionIndex> node_name_map;
+		IdentifierMap<ProjectionIndex> node_name_map(context);
 		for (idx_t i = 0; i < child_names.size(); ++i) {
 			auto &col_name = child_names[i];
 			if (node_name_map.find(col_name) != node_name_map.end()) {

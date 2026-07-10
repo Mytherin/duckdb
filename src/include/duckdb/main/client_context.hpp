@@ -59,7 +59,7 @@ class RegisteredStateManager;
 
 struct PendingQueryParameters {
 	//! Prepared statement parameters (if any)
-	optional_ptr<identifier_map_t<BoundParameterData>> parameters;
+	optional_ptr<IdentifierMap<BoundParameterData>> parameters;
 	//! Whether a stream/buffer-managed result should be allowed
 	QueryParameters query_parameters;
 };
@@ -148,10 +148,10 @@ public:
 
 	//! Create a pending query with a list of parameters
 	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(unique_ptr<SQLStatement> statement,
-	                                                       identifier_map_t<BoundParameterData> &values,
+	                                                       IdentifierMap<BoundParameterData> &values,
 	                                                       QueryParameters query_parameters);
 	DUCKDB_API unique_ptr<PendingQueryResult>
-	PendingQuery(const string &query, identifier_map_t<BoundParameterData> &values, QueryParameters query_parameters);
+	PendingQuery(const string &query, IdentifierMap<BoundParameterData> &values, QueryParameters query_parameters);
 	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const string &query, PendingQueryParameters parameters);
 
 	//! Destroy the client context
@@ -195,8 +195,7 @@ public:
 	//! It is possible that the prepared statement will be re-bound. This will generally happen if the catalog is
 	//! modified in between the prepared statement being bound and the prepared statement being run.
 	DUCKDB_API unique_ptr<QueryResult>
-	Execute(const string &query, shared_ptr<PreparedStatementData> &prepared,
-	        identifier_map_t<BoundParameterData> &values,
+	Execute(const string &query, shared_ptr<PreparedStatementData> &prepared, IdentifierMap<BoundParameterData> &values,
 	        QueryParameters query_parameters = QueryResultOutputType::ALLOW_STREAMING);
 	DUCKDB_API unique_ptr<QueryResult> Execute(const string &query, shared_ptr<PreparedStatementData> &prepared,
 	                                           const PendingQueryParameters &parameters);

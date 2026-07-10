@@ -84,7 +84,7 @@ vector<idx_t> ParseColumnsOrdered(const vector<Value> &set, const vector<Identif
 	}
 
 	// Maps option to bool indicating if its found and the index in the original set
-	identifier_map_t<pair<bool, idx_t>> option_map;
+	IdentifierMap<pair<bool, idx_t>> option_map {IdentifierConstructor::NO_CLIENT_CONTEXT};
 	for (idx_t i = 0; i < set.size(); i++) {
 		const auto [it, inserted] = option_map.emplace(make_pair(set[i].ToString(), make_pair(false, i)));
 		if (!inserted) {

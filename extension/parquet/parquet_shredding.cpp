@@ -10,7 +10,8 @@
 namespace duckdb {
 class ClientContext;
 
-ChildShreddingTypes::ChildShreddingTypes() : types(make_uniq<identifier_map_t<ShreddingType>>()) {
+ChildShreddingTypes::ChildShreddingTypes()
+    : types(make_uniq<IdentifierMap<ShreddingType>>(IdentifierConstructor::NO_CLIENT_CONTEXT)) {
 }
 
 ChildShreddingTypes ChildShreddingTypes::Copy() const {

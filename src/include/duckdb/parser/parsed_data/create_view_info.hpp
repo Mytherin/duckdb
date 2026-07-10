@@ -38,7 +38,7 @@ public:
 	//! Names of the query
 	vector<Identifier> names;
 	//! Comments on columns of the query. Note: vector can be empty when no comments are set
-	identifier_map_t<Value> column_comments_map;
+	IdentifierMap<Value> column_comments_map {IdentifierConstructor::NO_CLIENT_CONTEXT};
 	//! The SelectStatement of the view
 	unique_ptr<SelectStatement> query;
 	//! Whether or not to bind the view on create
@@ -61,7 +61,7 @@ public:
 	string ToString() const override;
 
 private:
-	CreateViewInfo(vector<Identifier> names, vector<Value> comments, identifier_map_t<Value> column_comments);
+	CreateViewInfo(vector<Identifier> names, vector<Value> comments, IdentifierMap<Value> column_comments);
 
 	vector<Value> GetColumnCommentsList() const;
 };

@@ -61,7 +61,7 @@ unique_ptr<BoundStatement> Binder::TryExpandTriggers(QueryNode &node, TableCatal
 	// Triggers without an OF list are unrestricted and always fire.
 	if (event_type == TriggerEventType::UPDATE_EVENT && node.type == QueryNodeType::UPDATE_QUERY_NODE) {
 		auto &update_node = node.Cast<UpdateQueryNode>();
-		identifier_set_t updated_columns;
+		IdentifierSet updated_columns(context);
 		if (update_node.set_info) {
 			updated_columns.insert(update_node.set_info->columns.begin(), update_node.set_info->columns.end());
 		}
@@ -105,7 +105,7 @@ static constexpr const char *TRIGGER_BODY_CTE_PREFIX = "__duckdb_trigger_body_";
 static constexpr const char *TRIGGER_BEFORE_BODY_CTE_PREFIX = "__duckdb_trigger_before_body_";
 
 static unique_ptr<CommonTableExpressionInfo> MakeTransitionTableAliasCTE(const Identifier &base_cte_name,
-                                                                         const identifier_set_t &exclude_columns) {
+                                                                         const IdentifierSet &exclude_columns) {
 	auto alias_cte = make_uniq<CommonTableExpressionInfo>();
 	auto alias_select = make_uniq<SelectNode>();
 	auto star = make_uniq<StarExpression>();
@@ -199,7 +199,7 @@ static vector<pair<column_t, Identifier>> ReferencedVirtualColumns(vector<unique
 	}
 	// A virtual column shadowed by a real column of the same name is not virtual here: RETURNING *
 	// already materialises the real column, and injecting would duplicate the name.
-	identifier_set_t real_names;
+	IdentifierSet real_names {IdentifierConstructor::NO_CLIENT_CONTEXT};
 	for (auto &col : table.GetColumns().Logical()) {
 		real_names.insert(col.Name());
 	}
@@ -225,7 +225,7 @@ static vector<pair<column_t, Identifier>> ReferencedVirtualColumns(vector<unique
 
 static void AddAfterTriggerCTEs(SelectNode &outer, const vector<const_reference<TriggerCatalogEntry>> &after_triggers,
                                 const Identifier &base_cte_name, const string &uuid_suffix,
-                                const identifier_set_t &injected_names) {
+                                const IdentifierSet &injected_names) {
 	for (idx_t i = 0; i < after_triggers.size(); i++) {
 		auto &trigger = after_triggers[i].get();
 		Identifier body_cte_name(string(TRIGGER_BODY_CTE_PREFIX) + to_string(i + 1) + "_" + uuid_suffix);
@@ -283,7 +283,7 @@ static unique_ptr<SelectNode> BuildTriggerChain(const QueryNode &node, const Tab
 	auto base_node = node.Copy();
 	auto &base_returning = GetDMLReturningList(*base_node);
 	base_returning.push_back(make_uniq<StarExpression>());
-	identifier_set_t injected_names;
+	IdentifierSet injected_names {IdentifierConstructor::NO_CLIENT_CONTEXT};
 	for (auto &vc : injected_virtuals) {
 		base_returning.push_back(make_uniq<ColumnRefExpression>(vc.second));
 		injected_names.insert(vc.second);

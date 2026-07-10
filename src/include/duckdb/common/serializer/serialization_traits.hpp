@@ -181,6 +181,21 @@ struct is_set<duckdb::set<Args...>> : std::true_type {
 };
 
 template <typename T>
+struct is_identifier_map : std::false_type {};
+template <typename T>
+struct is_identifier_map<duckdb::IdentifierMap<T>> : std::true_type {
+	typedef Identifier KEY_TYPE;
+	typedef T VALUE_TYPE;
+};
+
+template <typename T>
+struct is_identifier_set : std::false_type {};
+template <>
+struct is_identifier_set<duckdb::IdentifierSet> : std::true_type {
+	typedef Identifier ELEMENT_TYPE;
+};
+
+template <typename T>
 struct is_atomic : std::false_type {};
 
 template <typename T>
@@ -308,6 +323,26 @@ struct SerializationDefaultValue {
 
 	template <typename T = void>
 	static inline bool IsDefault(const typename std::enable_if<is_unordered_map<T>::value, T>::type &value) {
+		return value.empty();
+	}
+
+	template <typename T = void>
+	static inline typename std::enable_if<is_identifier_set<T>::value, T>::type GetDefault() {
+		return T(IdentifierConstructor::NO_CLIENT_CONTEXT);
+	}
+
+	template <typename T = void>
+	static inline bool IsDefault(const typename std::enable_if<is_identifier_set<T>::value, T>::type &value) {
+		return value.empty();
+	}
+
+	template <typename T = void>
+	static inline typename std::enable_if<is_identifier_map<T>::value, T>::type GetDefault() {
+		return T(IdentifierConstructor::NO_CLIENT_CONTEXT);
+	}
+
+	template <typename T = void>
+	static inline bool IsDefault(const typename std::enable_if<is_identifier_map<T>::value, T>::type &value) {
 		return value.empty();
 	}
 

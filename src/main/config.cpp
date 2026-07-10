@@ -605,7 +605,7 @@ void DBConfig::CheckLock(const String &name) {
 		// not locked
 		return;
 	}
-	identifier_set_t allowed_settings {"schema", "search_path"};
+	IdentifierSet allowed_settings(IdentifierConstructor::NO_CLIENT_CONTEXT, {"schema", "search_path"});
 	if (allowed_settings.find(Identifier(name.ToStdString())) != allowed_settings.end()) {
 		// we are always allowed to change these settings
 		return;
@@ -863,7 +863,8 @@ void DBConfig::AddAllowedConfig(const string &config_name) {
 	if (config_name.empty()) {
 		throw InvalidInputException("Cannot provide an empty string for allowed_configs");
 	}
-	duckdb::identifier_set_t always_disallowed_config {"allowed_configs", "lock_configuration"};
+	duckdb::IdentifierSet always_disallowed_config(IdentifierConstructor::NO_CLIENT_CONTEXT,
+	                                               {"allowed_configs", "lock_configuration"});
 	if (always_disallowed_config.find(Identifier(config_name)) != always_disallowed_config.end()) {
 		throw InvalidInputException("Cannot include '%s' in allowed_configs", config_name);
 	}

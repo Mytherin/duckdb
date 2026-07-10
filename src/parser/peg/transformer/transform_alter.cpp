@@ -391,7 +391,7 @@ PEGTransformerFactory::TransformSetOptions(PEGTransformer &transformer,
 unique_ptr<AlterTableInfo>
 PEGTransformerFactory::TransformResetOptions(PEGTransformer &transformer,
                                              case_insensitive_map_t<unique_ptr<ParsedExpression>> rel_option_list) {
-	identifier_set_t option_names;
+	IdentifierSet option_names {IdentifierConstructor::NO_CLIENT_CONTEXT};
 	for (auto &opt : rel_option_list) {
 		if (!opt.second) {
 			option_names.insert(Identifier(opt.first));

@@ -20,7 +20,8 @@ unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &deseria
 	auto expression_class = deserializer.ReadProperty<ExpressionClass>(100, "class");
 	auto type = deserializer.ReadProperty<ExpressionType>(101, "type");
 	auto alias = deserializer.ReadPropertyWithDefault<Identifier>(102, "alias");
-	auto query_location = deserializer.ReadPropertyWithExplicitDefault<optional_idx>(103, "query_location", optional_idx());
+	auto query_location =
+	    deserializer.ReadPropertyWithExplicitDefault<optional_idx>(103, "query_location", optional_idx());
 	deserializer.Set<ExpressionType>(type);
 	unique_ptr<ParsedExpression> result;
 	switch (expression_class) {
@@ -164,7 +165,8 @@ void ComparisonExpression::Serialize(Serializer &serializer) const {
 }
 
 unique_ptr<ParsedExpression> ComparisonExpression::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<ComparisonExpression>(new ComparisonExpression(deserializer.Get<ExpressionType>()));
+	auto result =
+	    duckdb::unique_ptr<ComparisonExpression>(new ComparisonExpression(deserializer.Get<ExpressionType>()));
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(200, "left", result->left);
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(201, "right", result->right);
 	return std::move(result);
@@ -176,7 +178,8 @@ void ConjunctionExpression::Serialize(Serializer &serializer) const {
 }
 
 unique_ptr<ParsedExpression> ConjunctionExpression::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<ConjunctionExpression>(new ConjunctionExpression(deserializer.Get<ExpressionType>()));
+	auto result =
+	    duckdb::unique_ptr<ConjunctionExpression>(new ConjunctionExpression(deserializer.Get<ExpressionType>()));
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(200, "children", result->children);
 	return std::move(result);
 }
@@ -206,7 +209,8 @@ void LambdaExpression::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "lhs", lhs);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(201, "expr", expr);
 	if (serializer.ShouldSerialize(StorageVersion::V1_3_0)) {
-		serializer.WritePropertyWithDefault<LambdaSyntaxType>(202, "syntax_type", syntax_type, LambdaSyntaxType::SINGLE_ARROW_STORAGE);
+		serializer.WritePropertyWithDefault<LambdaSyntaxType>(202, "syntax_type", syntax_type,
+		                                                      LambdaSyntaxType::SINGLE_ARROW_STORAGE);
 	}
 }
 
@@ -214,7 +218,8 @@ unique_ptr<ParsedExpression> LambdaExpression::Deserialize(Deserializer &deseria
 	auto result = duckdb::unique_ptr<LambdaExpression>(new LambdaExpression());
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(200, "lhs", result->lhs);
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(201, "expr", result->expr);
-	deserializer.ReadPropertyWithExplicitDefault<LambdaSyntaxType>(202, "syntax_type", result->syntax_type, LambdaSyntaxType::SINGLE_ARROW_STORAGE);
+	deserializer.ReadPropertyWithExplicitDefault<LambdaSyntaxType>(202, "syntax_type", result->syntax_type,
+	                                                               LambdaSyntaxType::SINGLE_ARROW_STORAGE);
 	return std::move(result);
 }
 
@@ -268,28 +273,35 @@ void StarExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
 	serializer.WritePropertyWithDefault<Identifier>(200, "relation_name", relation_name);
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
-		serializer.WritePropertyWithDefault<identifier_set_t>(201, "exclude_list", SerializedExcludeList());
+		serializer.WritePropertyWithDefault<IdentifierSet>(201, "exclude_list", SerializedExcludeList());
 	} else {
-		serializer.WriteProperty<identifier_set_t>(201, "exclude_list", SerializedExcludeList());
+		serializer.WriteProperty<IdentifierSet>(201, "exclude_list", SerializedExcludeList());
 	}
-	serializer.WritePropertyWithDefault<identifier_map_t<unique_ptr<ParsedExpression>>>(202, "replace_list", replace_list);
+	serializer.WritePropertyWithDefault<IdentifierMap<unique_ptr<ParsedExpression>>>(202, "replace_list", replace_list);
 	serializer.WritePropertyWithDefault<bool>(203, "columns", columns);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(204, "expr", expr);
 	/* [Deleted] (bool) "unpacked" */
-	serializer.WritePropertyWithDefault<qualified_column_set_t>(206, "qualified_exclude_list", SerializedQualifiedExcludeList(), qualified_column_set_t());
-	serializer.WritePropertyWithDefault<qualified_column_map_t<Identifier>>(207, "rename_list", rename_list, qualified_column_map_t<Identifier>());
+	serializer.WritePropertyWithDefault<qualified_column_set_t>(
+	    206, "qualified_exclude_list", SerializedQualifiedExcludeList(), qualified_column_set_t());
+	serializer.WritePropertyWithDefault<qualified_column_map_t<Identifier>>(207, "rename_list", rename_list,
+	                                                                        qualified_column_map_t<Identifier>());
 }
 
 unique_ptr<ParsedExpression> StarExpression::Deserialize(Deserializer &deserializer) {
 	auto relation_name = deserializer.ReadPropertyWithDefault<Identifier>(200, "relation_name");
-	auto exclude_list = deserializer.ReadPropertyWithDefault<identifier_set_t>(201, "exclude_list");
-	auto replace_list = deserializer.ReadPropertyWithDefault<identifier_map_t<unique_ptr<ParsedExpression>>>(202, "replace_list");
+	auto exclude_list = deserializer.ReadPropertyWithDefault<IdentifierSet>(201, "exclude_list");
+	auto replace_list =
+	    deserializer.ReadPropertyWithDefault<IdentifierMap<unique_ptr<ParsedExpression>>>(202, "replace_list");
 	auto columns = deserializer.ReadPropertyWithDefault<bool>(203, "columns");
 	auto expr = deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(204, "expr");
 	auto unpacked = deserializer.ReadPropertyWithExplicitDefault<bool>(205, "unpacked", false);
-	auto qualified_exclude_list = deserializer.ReadPropertyWithExplicitDefault<qualified_column_set_t>(206, "qualified_exclude_list", qualified_column_set_t());
-	auto rename_list = deserializer.ReadPropertyWithExplicitDefault<qualified_column_map_t<Identifier>>(207, "rename_list", qualified_column_map_t<Identifier>());
-	auto result = StarExpression::DeserializeStarExpression(std::move(relation_name), exclude_list, std::move(replace_list), columns, std::move(expr), unpacked, qualified_exclude_list, std::move(rename_list));
+	auto qualified_exclude_list = deserializer.ReadPropertyWithExplicitDefault<qualified_column_set_t>(
+	    206, "qualified_exclude_list", qualified_column_set_t());
+	auto rename_list = deserializer.ReadPropertyWithExplicitDefault<qualified_column_map_t<Identifier>>(
+	    207, "rename_list", qualified_column_map_t<Identifier>());
+	auto result = StarExpression::DeserializeStarExpression(std::move(relation_name), exclude_list,
+	                                                        std::move(replace_list), columns, std::move(expr), unpacked,
+	                                                        qualified_exclude_list, std::move(rename_list));
 	return result;
 }
 

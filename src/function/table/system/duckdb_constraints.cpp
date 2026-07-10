@@ -38,7 +38,7 @@ struct DuckDBConstraintsData : public GlobalTableFunctionState {
 	idx_t offset;
 	idx_t constraint_offset;
 	idx_t unique_constraint_offset;
-	identifier_set_t constraint_names;
+	IdentifierSet constraint_names {IdentifierConstructor::NO_CLIENT_CONTEXT};
 };
 
 static unique_ptr<FunctionData> DuckDBConstraintsBind(ClientContext &context, TableFunctionBindInput &input,

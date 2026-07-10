@@ -59,6 +59,10 @@ struct ClientConfig {
 	//! True by default
 	bool use_replacement_scans = true;
 
+	//! Whether identifiers (column names, table names, aliases, ...) are compared case-sensitively.
+	//! False by default (DuckDB's historical case-insensitive behavior).
+	bool case_sensitive_identifiers = false;
+
 	//! The maximum amount of memory to keep buffered in a streaming query result. Default: 1mb.
 	idx_t streaming_buffer_size = 1000000;
 
@@ -77,7 +81,7 @@ struct ClientConfig {
 	LocalUserSettings user_settings;
 
 	//! Variables set by the user
-	identifier_map_t<Value> user_variables;
+	IdentifierMap<Value> user_variables {IdentifierConstructor::NO_CLIENT_CONTEXT};
 
 	//! Function that is used to create the result collector for a materialized result.
 	get_result_collector_t get_result_collector = nullptr;

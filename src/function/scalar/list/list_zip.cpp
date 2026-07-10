@@ -151,7 +151,7 @@ static unique_ptr<FunctionData> ListZipBind(BindScalarFunctionInput &input) {
 		}
 	}
 
-	identifier_set_t struct_names;
+	IdentifierSet struct_names(input.GetClientContext());
 	for (idx_t i = 0; i < size; i++) {
 		auto &child = arguments[i];
 		switch (child->GetReturnType().id()) {

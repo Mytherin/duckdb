@@ -34,7 +34,7 @@ PEGTransformerFactory::TransformPragmaAssign(PEGTransformer &transformer, const 
 	// "PRAGMA table_info='integers'"
 	// "PRAGMA table_info('integers')"
 	// for compatibility, any pragmas that match the SQLite ones are parsed as calls
-	identifier_set_t sqlite_compat_pragmas {"table_info"};
+	IdentifierSet sqlite_compat_pragmas(IdentifierConstructor::NO_CLIENT_CONTEXT, {"table_info"});
 	if (sqlite_compat_pragmas.find(info.name) != sqlite_compat_pragmas.end()) {
 		return std::move(result);
 	}

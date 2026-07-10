@@ -672,7 +672,7 @@ void CSVReaderOptions::ParseOption(ClientContext &context, const string &key, co
 		// Parse into temporary lists first
 		vector<string> parsed_names;
 		vector<LogicalType> parsed_types;
-		identifier_map_t<idx_t> parsed_types_per_column;
+		IdentifierMap<idx_t> parsed_types_per_column(context);
 		for (idx_t i = 0; i < struct_children.size(); i++) {
 			auto &name = StructType::GetChildName(child_type, i);
 			auto &val = struct_children[i];
@@ -761,7 +761,7 @@ void CSVReaderOptions::ParseOption(ClientContext &context, const string &key, co
 
 		// Parse into temporary lists first
 		vector<string> sql_type_names;
-		identifier_map_t<idx_t> parsed_types_per_column;
+		IdentifierMap<idx_t> parsed_types_per_column(context);
 		if (child_type.id() == LogicalTypeId::STRUCT) {
 			auto &struct_children = StructValue::GetChildren(val);
 			D_ASSERT(StructType::GetChildCount(child_type) == struct_children.size());

@@ -123,7 +123,7 @@ vector<Value> CreateViewInfo::GetColumnCommentsList() const {
 }
 
 CreateViewInfo::CreateViewInfo(vector<Identifier> names_p, vector<Value> comments,
-                               identifier_map_t<Value> column_comments_p)
+                               IdentifierMap<Value> column_comments_p)
     : CreateInfo(CatalogType::VIEW_ENTRY, Identifier::InvalidSchema()), names(std::move(names_p)),
       column_comments_map(std::move(column_comments_p)) {
 	if (comments.empty()) {

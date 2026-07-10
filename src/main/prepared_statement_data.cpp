@@ -41,7 +41,7 @@ bool CheckCatalogIdentity(ClientContext &context, const Identifier &catalog_name
 	return StatementProperties::CatalogIdentity {current_catalog_oid, current_catalog_version} == catalog_identity;
 }
 
-static BoundParameterData GetParameterValue(ClientContext &context, const identifier_map_t<BoundParameterData> &values,
+static BoundParameterData GetParameterValue(ClientContext &context, const IdentifierMap<BoundParameterData> &values,
                                             const Identifier &identifier, bool allow_user_variables) {
 	auto lookup = values.find(identifier);
 	if (lookup != values.end()) {
@@ -54,8 +54,8 @@ static BoundParameterData GetParameterValue(ClientContext &context, const identi
 	throw BinderException("Could not find parameter with identifier %s", identifier);
 }
 
-static identifier_map_t<idx_t> GetExpectedParameters(const bound_parameter_map_t &value_map) {
-	identifier_map_t<idx_t> result;
+static IdentifierMap<idx_t> GetExpectedParameters(const bound_parameter_map_t &value_map) {
+	IdentifierMap<idx_t> result {IdentifierConstructor::NO_CLIENT_CONTEXT};
 	for (auto &entry : value_map) {
 		result[entry.first] = result.size();
 	}
@@ -66,7 +66,7 @@ static bool HasNamedParameters(const PreparedStatementData &data) {
 	return data.unbound_statement && !data.unbound_statement->named_param_map.empty();
 }
 
-static identifier_map_t<idx_t> GetExpectedParameters(const PreparedStatementData &data) {
+static IdentifierMap<idx_t> GetExpectedParameters(const PreparedStatementData &data) {
 	if (HasNamedParameters(data)) {
 		return data.unbound_statement->named_param_map;
 	}
@@ -74,7 +74,7 @@ static identifier_map_t<idx_t> GetExpectedParameters(const PreparedStatementData
 }
 
 void PreparedStatementData::PopulateMissingParameterValues(ClientContext &context,
-                                                           identifier_map_t<BoundParameterData> &values) const {
+                                                           IdentifierMap<BoundParameterData> &values) const {
 	const auto expected_parameters = GetExpectedParameters(*this);
 	const bool allow_user_variables = HasNamedParameters(*this);
 	auto verification_context = allow_user_variables ? &context : nullptr;
@@ -93,8 +93,8 @@ void PreparedStatementData::PopulateMissingParameterValues(ClientContext &contex
 }
 
 bool PreparedStatementData::RequireRebind(ClientContext &context,
-                                          optional_ptr<identifier_map_t<BoundParameterData>> values) {
-	identifier_map_t<BoundParameterData> empty_values;
+                                          optional_ptr<IdentifierMap<BoundParameterData>> values) {
+	IdentifierMap<BoundParameterData> empty_values(context);
 	auto &parameter_values = values ? *values : empty_values;
 	if (!unbound_statement) {
 		throw InternalException("Prepared statement without unbound statement");
@@ -134,7 +134,7 @@ bool PreparedStatementData::RequireRebind(ClientContext &context,
 	return false;
 }
 
-void PreparedStatementData::Bind(ClientContext &context, const identifier_map_t<BoundParameterData> &values) {
+void PreparedStatementData::Bind(ClientContext &context, const IdentifierMap<BoundParameterData> &values) {
 	// set parameters
 	D_ASSERT(!unbound_statement || unbound_statement->named_param_map.size() == properties.parameter_count);
 	if (unbound_statement || !value_map.empty()) {

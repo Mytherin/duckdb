@@ -48,7 +48,7 @@ public:
 
 	pragma_query_t query;
 	pragma_function_t function;
-	named_parameter_type_map_t named_parameters;
+	named_parameter_type_map_t named_parameters {IdentifierConstructor::NO_CLIENT_CONTEXT};
 
 private:
 	PragmaFunction(Identifier name, PragmaType pragma_type, pragma_query_t query, pragma_function_t function,

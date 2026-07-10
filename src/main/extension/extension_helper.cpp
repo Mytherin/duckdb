@@ -349,7 +349,7 @@ vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(ClientContext &c
 	DatabaseInstance &db = DatabaseInstance::GetDatabase(context);
 
 #ifndef WASM_LOADABLE_EXTENSIONS
-	identifier_set_t seen_extensions;
+	IdentifierSet seen_extensions(context);
 
 	// scan the install directory for installed extensions
 	auto ext_directory = ExtensionHelper::ExtensionDirectory(db, fs);

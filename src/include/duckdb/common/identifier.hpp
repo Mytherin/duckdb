@@ -15,6 +15,7 @@
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/vector.hpp"
 
+#include <initializer_list>
 #include <iosfwd>
 
 namespace duckdb {
@@ -79,6 +80,10 @@ public:
 
 	//! Case-insensitive hash of the identifier
 	DUCKDB_API hash_t Hash() const;
+	//! Case-sensitive hash of the identifier (used when identifier comparisons are configured to be case-sensitive)
+	DUCKDB_API hash_t HashCaseSensitive() const;
+	//! Case-sensitive equality of two identifiers
+	DUCKDB_API bool EqualsCaseSensitive(const Identifier &other) const;
 
 private:
 	string value;
@@ -142,16 +147,32 @@ inline string &operator+=(string &a, const Identifier &b) {
 	return a;
 }
 
+//! Case-sensitivity is configurable per ClientContext. The hash/equality functors carry a runtime flag so a single
+//! IdentifierMap/IdentifierSet instance compares either case-insensitively (the default) or case-sensitively.
 struct IdentifierHashFunction {
-	uint64_t operator()(const Identifier &id) const {
-		return id.Hash();
+	IdentifierHashFunction() : case_sensitive(false) {
 	}
+	explicit IdentifierHashFunction(bool case_sensitive_p) : case_sensitive(case_sensitive_p) {
+	}
+
+	uint64_t operator()(const Identifier &id) const {
+		return case_sensitive ? id.HashCaseSensitive() : id.Hash();
+	}
+
+	bool case_sensitive;
 };
 
 struct IdentifierEquality {
-	bool operator()(const Identifier &a, const Identifier &b) const {
-		return a == b;
+	IdentifierEquality() : case_sensitive(false) {
 	}
+	explicit IdentifierEquality(bool case_sensitive_p) : case_sensitive(case_sensitive_p) {
+	}
+
+	bool operator()(const Identifier &a, const Identifier &b) const {
+		return case_sensitive ? a.EqualsCaseSensitive(b) : (a == b);
+	}
+
+	bool case_sensitive;
 };
 
 struct IdentifierCompare {
@@ -160,10 +181,65 @@ struct IdentifierCompare {
 	}
 };
 
-template <typename T>
-using identifier_map_t = unordered_map<Identifier, T, IdentifierHashFunction, IdentifierEquality>;
+class ClientContext;
 
-using identifier_set_t = unordered_set<Identifier, IdentifierHashFunction, IdentifierEquality>;
+//! Tag selecting the constructor used when no ClientContext is available to determine case-sensitivity.
+//! Maps/sets constructed this way are always case-insensitive (preserving DuckDB's historical behavior).
+//! This should be a last resort - prefer constructing with a ClientContext wherever one is reachable.
+enum class IdentifierConstructor : uint8_t { NO_CLIENT_CONTEXT };
+
+//! Reads the identifier case-sensitivity setting from the ClientContext.
+DUCKDB_API bool IdentifierCaseSensitive(ClientContext &context);
+
+//! A case-sensitivity-aware hash map keyed by Identifier. Construction requires either a ClientContext (which
+//! determines case-sensitivity) or an explicit IdentifierConstructor::NO_CLIENT_CONTEXT tag.
+template <typename T>
+class IdentifierMap : public unordered_map<Identifier, T, IdentifierHashFunction, IdentifierEquality> {
+public:
+	using base_t = unordered_map<Identifier, T, IdentifierHashFunction, IdentifierEquality>;
+
+	explicit IdentifierMap(ClientContext &context) : IdentifierMap(IdentifierCaseSensitive(context)) {
+	}
+	explicit IdentifierMap(IdentifierConstructor) : IdentifierMap(false) {
+	}
+	//! Construct from a compile-time literal list (always case-insensitive). Used for static, well-known maps.
+	IdentifierMap(IdentifierConstructor, std::initializer_list<typename base_t::value_type> init)
+	    : base_t(init, 0, IdentifierHashFunction(false), IdentifierEquality(false)) {
+	}
+
+	//! Bring in the base assignment operators (notably assignment from an initializer_list, which the implicitly
+	//! declared derived assignment operators would otherwise hide). These preserve the existing case-sensitivity.
+	using base_t::operator=;
+
+private:
+	explicit IdentifierMap(bool case_sensitive)
+	    : base_t(0, IdentifierHashFunction(case_sensitive), IdentifierEquality(case_sensitive)) {
+	}
+};
+
+//! A case-sensitivity-aware hash set of Identifiers. Construction requires either a ClientContext (which determines
+//! case-sensitivity) or an explicit IdentifierConstructor::NO_CLIENT_CONTEXT tag.
+class IdentifierSet : public unordered_set<Identifier, IdentifierHashFunction, IdentifierEquality> {
+public:
+	using base_t = unordered_set<Identifier, IdentifierHashFunction, IdentifierEquality>;
+
+	DUCKDB_API explicit IdentifierSet(ClientContext &context);
+	explicit IdentifierSet(IdentifierConstructor) : IdentifierSet(false) {
+	}
+	//! Construct from a compile-time literal list (always case-insensitive). Used for static, well-known sets.
+	IdentifierSet(IdentifierConstructor, std::initializer_list<Identifier> init)
+	    : base_t(init, 0, IdentifierHashFunction(false), IdentifierEquality(false)) {
+	}
+
+	//! Bring in the base assignment operators (notably assignment from an initializer_list, which the implicitly
+	//! declared derived assignment operators would otherwise hide). These preserve the existing case-sensitivity.
+	using base_t::operator=;
+
+private:
+	explicit IdentifierSet(bool case_sensitive)
+	    : base_t(0, IdentifierHashFunction(case_sensitive), IdentifierEquality(case_sensitive)) {
+	}
+};
 
 template <typename T>
 using identifier_tree_t = map<Identifier, T, IdentifierCompare>;

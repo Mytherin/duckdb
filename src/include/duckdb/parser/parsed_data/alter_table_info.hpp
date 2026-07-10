@@ -523,10 +523,10 @@ private:
 // ResetOptionsInfo
 //===--------------------------------------------------------------------===//
 struct ResetTableOptionsInfo : public AlterTableInfo {
-	ResetTableOptionsInfo(const AlterEntryData &data, identifier_set_t table_options);
+	ResetTableOptionsInfo(const AlterEntryData &data, IdentifierSet table_options);
 	~ResetTableOptionsInfo() override;
 
-	identifier_set_t table_options;
+	IdentifierSet table_options {IdentifierConstructor::NO_CLIENT_CONTEXT};
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;

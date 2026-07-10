@@ -38,10 +38,10 @@ public:
 	qualified_column_set_t &ExcludeListMutable() {
 		return exclude_list;
 	}
-	const identifier_map_t<unique_ptr<ParsedExpression>> &ReplaceList() const {
+	const IdentifierMap<unique_ptr<ParsedExpression>> &ReplaceList() const {
 		return replace_list;
 	}
-	identifier_map_t<unique_ptr<ParsedExpression>> &ReplaceListMutable() {
+	IdentifierMap<unique_ptr<ParsedExpression>> &ReplaceListMutable() {
 		return replace_list;
 	}
 	const qualified_column_map_t<Identifier> &RenameList() const {
@@ -74,8 +74,8 @@ public:
 	unique_ptr<ParsedExpression> Copy() const override;
 
 	static unique_ptr<ParsedExpression>
-	DeserializeStarExpression(Identifier &&relation_name, const identifier_set_t &exclude_list,
-	                          identifier_map_t<unique_ptr<ParsedExpression>> &&replace_list, bool columns,
+	DeserializeStarExpression(Identifier &&relation_name, const IdentifierSet &exclude_list,
+	                          IdentifierMap<unique_ptr<ParsedExpression>> &&replace_list, bool columns,
 	                          unique_ptr<ParsedExpression> expr, bool unpacked,
 	                          const qualified_column_set_t &qualified_exclude_list,
 	                          qualified_column_map_t<Identifier> &&rename_list);
@@ -88,7 +88,7 @@ private:
 	//! List of columns to exclude from the STAR expression
 	qualified_column_set_t exclude_list;
 	//! List of columns to replace with another expression
-	identifier_map_t<unique_ptr<ParsedExpression>> replace_list;
+	IdentifierMap<unique_ptr<ParsedExpression>> replace_list {IdentifierConstructor::NO_CLIENT_CONTEXT};
 	//! List of columns to rename
 	qualified_column_map_t<Identifier> rename_list;
 	//! The expression to select the columns (regular expression or list)
@@ -98,9 +98,9 @@ private:
 
 public:
 	// these methods exist for backwards compatibility of (de)serialization
-	StarExpression(const identifier_set_t &exclude_list, qualified_column_set_t qualified_set);
+	StarExpression(const IdentifierSet &exclude_list, qualified_column_set_t qualified_set);
 
-	identifier_set_t SerializedExcludeList() const;
+	IdentifierSet SerializedExcludeList() const;
 	qualified_column_set_t SerializedQualifiedExcludeList() const;
 };
 } // namespace duckdb

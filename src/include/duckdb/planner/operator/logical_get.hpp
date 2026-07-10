@@ -45,7 +45,7 @@ public:
 	//! The set of input parameters for the table function
 	vector<Value> parameters;
 	//! The set of named input parameters for the table function
-	named_parameter_map_t named_parameters;
+	named_parameter_map_t named_parameters {IdentifierConstructor::NO_CLIENT_CONTEXT};
 	//! The set of named input table types for the table-in table-out function
 	vector<LogicalType> input_table_types;
 	//! The set of named input table names for the table-in table-out function

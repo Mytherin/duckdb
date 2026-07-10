@@ -376,7 +376,7 @@
       {
         "id": 201,
         "name": "exclude_list",
-        "type": "identifier_set_t",
+        "type": "IdentifierSet",
         "serialize_property": "SerializedExcludeList()",
         "required_until": "v2.0.0",
         "hash_skip": true
@@ -384,7 +384,7 @@
       {
         "id": 202,
         "name": "replace_list",
-        "type": "identifier_map_t<ParsedExpression*>",
+        "type": "IdentifierMap<ParsedExpression*>",
         "accessor_mut": "ReplaceListMutable()",
         "accessor": "ReplaceList()"
       },

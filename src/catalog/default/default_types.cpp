@@ -297,7 +297,7 @@ LogicalType BindStructType(BindLogicalTypeInput &input) {
 	// Named struct case
 	D_ASSERT(all_name);
 	child_list_t<LogicalType> children;
-	identifier_set_t name_collision_set;
+	IdentifierSet name_collision_set {IdentifierConstructor::NO_CLIENT_CONTEXT};
 
 	for (auto &arg : arguments) {
 		auto &child_name = arg.GetName();
@@ -355,7 +355,7 @@ LogicalType BindUnionType(BindLogicalTypeInput &input) {
 	}
 
 	child_list_t<LogicalType> children;
-	identifier_set_t name_collision_set;
+	IdentifierSet name_collision_set {IdentifierConstructor::NO_CLIENT_CONTEXT};
 
 	for (auto &arg : arguments) {
 		if (!arg.HasName()) {

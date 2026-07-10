@@ -38,7 +38,7 @@ void Binder::BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> 
 		}
 	}
 
-	identifier_set_t column_name_set;
+	IdentifierSet column_name_set(context);
 	vector<Identifier> non_generated_column_names;
 	for (auto &col_name : columns) {
 		if (column_name_set.count(col_name) > 0) {

@@ -27,7 +27,7 @@ class PreparedStatement {
 public:
 	//! Create a successfully prepared prepared statement object with the given name
 	DUCKDB_API PreparedStatement(shared_ptr<ClientContext> context, shared_ptr<PreparedStatementData> data,
-	                             string query, identifier_map_t<idx_t> named_param_map);
+	                             string query, IdentifierMap<idx_t> named_param_map);
 	//! Create a prepared statement that was not successfully prepared
 	DUCKDB_API explicit PreparedStatement(ErrorData error);
 
@@ -45,7 +45,7 @@ public:
 	//! The error message (if success = false)
 	ErrorData error;
 	//! The parameter mapping
-	identifier_map_t<idx_t> named_param_map;
+	IdentifierMap<idx_t> named_param_map {IdentifierConstructor::NO_CLIENT_CONTEXT};
 
 public:
 	//! Returns the stored error message
@@ -78,14 +78,14 @@ public:
 	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(vector<Value> &values, bool allow_stream_result = true);
 
 	//! Create a pending query result of the prepared statement with the given set named arguments
-	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(identifier_map_t<BoundParameterData> &named_values,
+	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(IdentifierMap<BoundParameterData> &named_values,
 	                                                       bool allow_stream_result = true);
 
 	//! Execute the prepared statement with the given set of values
 	DUCKDB_API unique_ptr<QueryResult> Execute(vector<Value> &values, bool allow_stream_result = true);
 
 	//! Execute the prepared statement with the given set of named+unnamed values
-	DUCKDB_API unique_ptr<QueryResult> Execute(identifier_map_t<BoundParameterData> &named_values,
+	DUCKDB_API unique_ptr<QueryResult> Execute(IdentifierMap<BoundParameterData> &named_values,
 	                                           bool allow_stream_result = true);
 
 	//! Execute the prepared statement with the given set of arguments
@@ -96,8 +96,7 @@ public:
 	}
 
 	template <class PAYLOAD>
-	static string ExcessValuesException(const identifier_map_t<idx_t> &parameters,
-	                                    const identifier_map_t<PAYLOAD> &values) {
+	static string ExcessValuesException(const IdentifierMap<idx_t> &parameters, const IdentifierMap<PAYLOAD> &values) {
 		// Too many values
 		set<string> excess_set;
 		for (auto &pair : values) {
@@ -123,10 +122,10 @@ public:
 	}
 
 	template <class PAYLOAD>
-	static string MissingValuesException(const identifier_map_t<idx_t> &parameters,
-	                                     const identifier_map_t<PAYLOAD> &values, ClientContext *context = nullptr) {
+	static string MissingValuesException(const IdentifierMap<idx_t> &parameters, const IdentifierMap<PAYLOAD> &values,
+	                                     ClientContext *context = nullptr) {
 		// Missing values
-		identifier_set_t missing_set;
+		IdentifierSet missing_set {IdentifierConstructor::NO_CLIENT_CONTEXT};
 		for (auto &pair : parameters) {
 			auto &name = pair.first;
 			if (!values.count(name)) {
@@ -147,7 +146,7 @@ public:
 	}
 
 	template <class PAYLOAD>
-	static void VerifyParameters(const identifier_map_t<PAYLOAD> &provided, const identifier_map_t<idx_t> &expected,
+	static void VerifyParameters(const IdentifierMap<PAYLOAD> &provided, const IdentifierMap<idx_t> &expected,
 	                             ClientContext *context = nullptr) {
 		for (auto &pair : provided) {
 			if (!expected.count(pair.first)) {

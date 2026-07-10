@@ -64,7 +64,7 @@ public:
 private:
 	vector<ColumnDefinition> columns;
 	//! A map of column name to column index
-	identifier_map_t<column_t> name_map;
+	IdentifierMap<column_t> name_map {IdentifierConstructor::NO_CLIENT_CONTEXT};
 	//! The set of physical columns
 	vector<idx_t> physical_columns;
 	//! Allow duplicate names or not

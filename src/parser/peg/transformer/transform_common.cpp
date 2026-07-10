@@ -340,7 +340,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformVariantType(PEGTran
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformUnionType(PEGTransformer &transformer,
                                           const child_list_t<LogicalType> &col_id_type_list) {
-	identifier_set_t union_names;
+	IdentifierSet union_names {IdentifierConstructor::NO_CLIENT_CONTEXT};
 	vector<unique_ptr<ParsedExpression>> union_children;
 	for (auto &colid : col_id_type_list) {
 		union_names.insert(colid.first);

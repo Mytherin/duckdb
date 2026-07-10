@@ -152,10 +152,10 @@ unique_ptr<LogicalOperator> Binder::ResolveInputProjection(LogicalInsert &insert
 }
 
 void DoUpdateSetQualify(unique_ptr<ParsedExpression> &expr, const string &table_name,
-                        vector<identifier_set_t> &lambda_params);
+                        vector<IdentifierSet> &lambda_params);
 
 void DoUpdateSetQualifyInLambda(FunctionExpression &function, const string &table_name,
-                                vector<identifier_set_t> &lambda_params) {
+                                vector<IdentifierSet> &lambda_params) {
 	for (auto &child : function.GetArgumentsMutable()) {
 		if (child.GetExpression().GetExpressionClass() != ExpressionClass::LAMBDA) {
 			DoUpdateSetQualify(child.GetExpressionMutable(), table_name, lambda_params);
@@ -180,7 +180,7 @@ void DoUpdateSetQualifyInLambda(FunctionExpression &function, const string &tabl
 		}
 
 		// Push the lambda parameter names of this level.
-		lambda_params.emplace_back();
+		lambda_params.emplace_back(IdentifierConstructor::NO_CLIENT_CONTEXT);
 		for (const auto &column_ref_expr : column_ref_expressions) {
 			const auto &column_ref = column_ref_expr.get().Cast<ColumnRefExpression>();
 			lambda_params.back().emplace(column_ref.GetName());
@@ -196,7 +196,7 @@ void DoUpdateSetQualifyInLambda(FunctionExpression &function, const string &tabl
 }
 
 void DoUpdateSetQualify(unique_ptr<ParsedExpression> &expr, const string &table_name,
-                        vector<identifier_set_t> &lambda_params) {
+                        vector<IdentifierSet> &lambda_params) {
 	// We avoid ambiguity with EXCLUDED columns by qualifying all column references.
 	switch (expr->GetExpressionClass()) {
 	case ExpressionClass::COLUMN_REF: {
@@ -285,7 +285,7 @@ void Binder::BindInsertColumnList(TableCatalogEntry &table, vector<Identifier> &
 		// insertion statement specifies column list
 
 		// create a mapping of (list index) -> (column index)
-		identifier_map_t<idx_t> column_name_map;
+		IdentifierMap<idx_t> column_name_map(context);
 		for (idx_t i = 0; i < columns.size(); i++) {
 			auto entry = column_name_map.insert(make_pair(columns[i], i));
 			if (!entry.second) {
@@ -322,7 +322,7 @@ void Binder::BindInsertColumnList(TableCatalogEntry &table, vector<Identifier> &
 	}
 }
 
-static identifier_set_t GetConflictColumnNames(const TableStorageInfo &storage_info, TableCatalogEntry &table) {
+static IdentifierSet GetConflictColumnNames(const TableStorageInfo &storage_info, TableCatalogEntry &table) {
 	unordered_set<column_t> conflict_column_ids;
 	for (auto &index : storage_info.index_info) {
 		if (!index.is_unique) {
@@ -332,7 +332,7 @@ static identifier_set_t GetConflictColumnNames(const TableStorageInfo &storage_i
 			conflict_column_ids.insert(col_id);
 		}
 	}
-	identifier_set_t conflict_column_names;
+	IdentifierSet conflict_column_names {IdentifierConstructor::NO_CLIENT_CONTEXT};
 	for (auto &col : table.GetColumns().Physical()) {
 		if (conflict_column_ids.count(col.Physical().index)) {
 			conflict_column_names.insert(col.Name());
@@ -419,7 +419,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 	} else {
 		// when on conflict columns are explicitly provided - use them directly
 		// first figure out if there is an index on the columns or not
-		identifier_map_t<idx_t> specified_columns;
+		IdentifierMap<idx_t> specified_columns(context);
 		for (idx_t i = 0; i < on_conflict_info.indexed_columns.size(); i++) {
 			specified_columns[on_conflict_info.indexed_columns[i]] = i;
 			auto column_index = table.GetColumnIndex(on_conflict_info.indexed_columns[i]);
@@ -493,7 +493,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 			// now push another subquery that adds the default columns
 			auto select_stmt = make_uniq<SelectStatement>();
 			auto select_node = make_uniq<SelectNode>();
-			identifier_set_t set_columns;
+			IdentifierSet set_columns(context);
 			for (auto &set_col : node.columns) {
 				set_columns.insert(set_col);
 			}
@@ -570,11 +570,11 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 		update_action->column_order = node.column_order;
 		if (on_conflict_info.set_info) {
 			for (auto &col : on_conflict_info.set_info->expressions) {
-				vector<identifier_set_t> lambda_params;
+				vector<IdentifierSet> lambda_params;
 				DoUpdateSetQualify(col, table_name, lambda_params);
 			}
 			if (on_conflict_info.set_info->condition) {
-				vector<identifier_set_t> lambda_params;
+				vector<IdentifierSet> lambda_params;
 				DoUpdateSetQualify(on_conflict_info.set_info->condition, table_name, lambda_params);
 				update_action->condition = std::move(on_conflict_info.set_info->condition);
 			}

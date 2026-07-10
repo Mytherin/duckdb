@@ -322,7 +322,7 @@ void JSONMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &
 		// JSON may contain columns such as "id" and "Id", which are duplicates for us due to case-insensitivity
 		// We rename them so we can parse the file anyway. Note that we can't change json_data.key_names,
 		// because the JSON reader gets columns by exact name, not position
-		identifier_map_t<idx_t> name_collision_count;
+		IdentifierMap<idx_t> name_collision_count(context);
 		for (auto &col_name : names) {
 			// Taken from CSV header_detection.cpp
 			while (name_collision_count.find(col_name) != name_collision_count.end()) {

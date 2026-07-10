@@ -112,19 +112,19 @@ unique_ptr<PendingQueryResult> Connection::PendingQuery(unique_ptr<SQLStatement>
 }
 
 unique_ptr<PendingQueryResult> Connection::PendingQuery(const string &query,
-                                                        identifier_map_t<BoundParameterData> &named_values,
+                                                        IdentifierMap<BoundParameterData> &named_values,
                                                         QueryParameters query_parameters) {
 	return context->PendingQuery(query, named_values, query_parameters);
 }
 
 unique_ptr<PendingQueryResult> Connection::PendingQuery(unique_ptr<SQLStatement> statement,
-                                                        identifier_map_t<BoundParameterData> &named_values,
+                                                        IdentifierMap<BoundParameterData> &named_values,
                                                         QueryParameters query_parameters) {
 	return context->PendingQuery(std::move(statement), named_values, query_parameters);
 }
 
-static identifier_map_t<BoundParameterData> ConvertParamListToMap(vector<Value> &param_list) {
-	identifier_map_t<BoundParameterData> named_values;
+static IdentifierMap<BoundParameterData> ConvertParamListToMap(vector<Value> &param_list) {
+	IdentifierMap<BoundParameterData> named_values {IdentifierConstructor::NO_CLIENT_CONTEXT};
 	for (idx_t i = 0; i < param_list.size(); i++) {
 		auto &val = param_list[i];
 		named_values[Identifier(std::to_string(i + 1))] = BoundParameterData(val);
@@ -240,7 +240,7 @@ shared_ptr<Relation> Connection::View(const Identifier &schema_name, const Ident
 
 shared_ptr<Relation> Connection::TableFunction(const string &fname) {
 	vector<Value> values;
-	named_parameter_map_t named_parameters;
+	named_parameter_map_t named_parameters(*context);
 	return TableFunction(fname, values, named_parameters);
 }
 
@@ -278,7 +278,7 @@ shared_ptr<Relation> Connection::Values(const string &values, const vector<strin
 }
 
 shared_ptr<Relation> Connection::ReadCSV(const string &csv_file) {
-	named_parameter_map_t options;
+	named_parameter_map_t options(*context);
 	return ReadCSV(csv_file, std::move(options));
 }
 
@@ -293,7 +293,7 @@ shared_ptr<Relation> Connection::ReadCSV(const string &csv_input, named_paramete
 
 shared_ptr<Relation> Connection::ReadCSV(const string &csv_file, const vector<string> &columns) {
 	// parse columns
-	named_parameter_map_t options;
+	named_parameter_map_t options(*context);
 	child_list_t<Value> column_list;
 	for (auto &column : columns) {
 		auto col_list = Parser::ParseColumnList(column, context->GetParserOptions());
@@ -310,7 +310,8 @@ shared_ptr<Relation> Connection::ReadCSV(const string &csv_file, const vector<st
 shared_ptr<Relation> Connection::ReadParquet(const string &parquet_file, bool binary_as_string) {
 	vector<Value> params;
 	params.emplace_back(parquet_file);
-	named_parameter_map_t named_parameters({{"binary_as_string", Value::BOOLEAN(binary_as_string)}});
+	named_parameter_map_t named_parameters(IdentifierConstructor::NO_CLIENT_CONTEXT,
+	                                       {{"binary_as_string", Value::BOOLEAN(binary_as_string)}});
 	return TableFunction("parquet_scan", params, named_parameters)->Alias(parquet_file);
 }
 

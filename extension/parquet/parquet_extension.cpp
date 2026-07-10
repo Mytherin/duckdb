@@ -225,7 +225,7 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 			    StringUtil::Lower(StringValue::Get(option.second[0])) == "auto") {
 				throw NotImplementedException("The 'auto' option is not yet implemented for 'shredding'");
 			} else {
-				identifier_set_t variant_names;
+				IdentifierSet variant_names(context);
 				for (idx_t col_idx = 0; col_idx < names.size(); col_idx++) {
 					if (sql_types[col_idx].id() != LogicalTypeId::VARIANT) {
 						continue;

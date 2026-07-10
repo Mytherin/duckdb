@@ -17,6 +17,7 @@
 
 namespace duckdb {
 
+class ClientContext;
 class ScalarMacroFunction;
 
 enum class MacroType : uint8_t { VOID_MACRO = 0, TABLE_MACRO = 1, SCALAR_MACRO = 2 };
@@ -40,7 +41,7 @@ public:
 	//! The parameters (ColumnRefExpression)
 	vector<unique_ptr<ParsedExpression>> parameters;
 	//! The default values of the parameters
-	InsertionOrderPreservingMap<unique_ptr<ParsedExpression>, Identifier, identifier_map_t<idx_t>> default_parameters;
+	InsertionOrderPreservingMap<unique_ptr<ParsedExpression>, Identifier, IdentifierMap<idx_t>> default_parameters;
 	//! The types of the parameters
 	vector<LogicalType> types;
 
@@ -58,13 +59,12 @@ public:
 	static MacroBindResult BindMacroFunction(
 	    Binder &binder, const vector<unique_ptr<MacroFunction>> &macro_functions, const Identifier &name,
 	    FunctionExpression &function_expr, vector<unique_ptr<ParsedExpression>> &positional_arguments,
-	    InsertionOrderPreservingMap<unique_ptr<ParsedExpression>, Identifier, identifier_map_t<idx_t>> &named_arguments,
+	    InsertionOrderPreservingMap<unique_ptr<ParsedExpression>, Identifier, IdentifierMap<idx_t>> &named_arguments,
 	    idx_t depth);
-	static unique_ptr<DummyBinding>
-	CreateDummyBinding(const MacroFunction &macro_def, const Identifier &name,
-	                   vector<unique_ptr<ParsedExpression>> &positional_arguments,
-	                   InsertionOrderPreservingMap<unique_ptr<ParsedExpression>, Identifier, identifier_map_t<idx_t>>
-	                       &named_arguments);
+	static unique_ptr<DummyBinding> CreateDummyBinding(
+	    ClientContext &context, const MacroFunction &macro_def, const Identifier &name,
+	    vector<unique_ptr<ParsedExpression>> &positional_arguments,
+	    InsertionOrderPreservingMap<unique_ptr<ParsedExpression>, Identifier, IdentifierMap<idx_t>> &named_arguments);
 
 	virtual string ToSQL() const;
 

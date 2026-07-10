@@ -286,11 +286,11 @@ public:
 	PEGTransformerState &state;
 	const case_insensitive_map_t<PEGRule> &grammar_rules;
 	const case_insensitive_map_t<AnyTransformFunction> &transform_functions;
-	identifier_map_t<idx_t> named_parameter_map;
+	IdentifierMap<idx_t> named_parameter_map {IdentifierConstructor::NO_CLIENT_CONTEXT};
 	idx_t prepared_statement_parameter_index = 0;
 	PreparedParamType last_param_type = PreparedParamType::INVALID;
 
-	identifier_map_t<unique_ptr<WindowExpression>> window_clauses;
+	IdentifierMap<unique_ptr<WindowExpression>> window_clauses {IdentifierConstructor::NO_CLIENT_CONTEXT};
 
 	vector<unique_ptr<CreatePivotEntry>> pivot_entries;
 	vector<reference<CommonTableExpressionMap>> stored_cte_map;

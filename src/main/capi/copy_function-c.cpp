@@ -650,7 +650,7 @@ unique_ptr<FunctionData> CCopyFromBind(ClientContext &context, CopyFromFunctionB
 	auto &tf_info = info.tf.function_info->Cast<CTableFunctionInfo>();
 	auto result = make_uniq<CTableBindData>(tf_info);
 
-	named_parameter_map_t named_parameters;
+	named_parameter_map_t named_parameters(context);
 
 	// Turn all options into named parameters
 	for (auto opt : info.info.options) {

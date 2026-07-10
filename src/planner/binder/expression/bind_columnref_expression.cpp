@@ -36,13 +36,13 @@ unique_ptr<ParsedExpression> ExpressionBinder::CreateStructPack(ColumnRefExpress
 void ExpressionBinder::QualifyColumnNames(Binder &binder, unique_ptr<ParsedExpression> &expr,
                                           optional_ptr<ColumnAliasBinder> alias_binder) {
 	ColumnQualifier qualifier(binder, nullptr, alias_binder);
-	vector<identifier_set_t> lambda_params;
+	vector<IdentifierSet> lambda_params;
 	qualifier.QualifyColumnNames(expr, lambda_params);
 }
 
 void ExpressionBinder::QualifyColumnNames(ExpressionBinder &expression_binder, unique_ptr<ParsedExpression> &expr) {
 	ColumnQualifier qualifier(expression_binder.binder, expression_binder.lambda_bindings);
-	vector<identifier_set_t> lambda_params;
+	vector<IdentifierSet> lambda_params;
 	qualifier.QualifyColumnNames(expr, lambda_params);
 }
 

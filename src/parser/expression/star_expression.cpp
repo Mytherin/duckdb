@@ -92,8 +92,8 @@ bool StarExpression::IsColumnsUnpacked(const ParsedExpression &a) {
 }
 
 unique_ptr<ParsedExpression>
-StarExpression::DeserializeStarExpression(Identifier &&relation_name, const identifier_set_t &exclude_list,
-                                          identifier_map_t<unique_ptr<ParsedExpression>> &&replace_list, bool columns,
+StarExpression::DeserializeStarExpression(Identifier &&relation_name, const IdentifierSet &exclude_list,
+                                          IdentifierMap<unique_ptr<ParsedExpression>> &&replace_list, bool columns,
                                           unique_ptr<ParsedExpression> expr, bool unpacked,
                                           const qualified_column_set_t &qualified_exclude_list,
                                           qualified_column_map_t<Identifier> &&rename_list) {
@@ -113,16 +113,16 @@ StarExpression::DeserializeStarExpression(Identifier &&relation_name, const iden
 	return std::move(result);
 }
 
-StarExpression::StarExpression(const identifier_set_t &exclude_list_p, qualified_column_set_t qualified_set)
+StarExpression::StarExpression(const IdentifierSet &exclude_list_p, qualified_column_set_t qualified_set)
     : ParsedExpression(ExpressionType::STAR, ExpressionClass::STAR), exclude_list(std::move(qualified_set)) {
 	for (auto &entry : exclude_list_p) {
 		exclude_list.insert(QualifiedColumnName(Identifier(entry)));
 	}
 }
 
-identifier_set_t StarExpression::SerializedExcludeList() const {
+IdentifierSet StarExpression::SerializedExcludeList() const {
 	// we serialize non-qualified elements in a separate list of only column names for backwards compatibility
-	identifier_set_t result;
+	IdentifierSet result {IdentifierConstructor::NO_CLIENT_CONTEXT};
 	for (auto &entry : exclude_list) {
 		if (!entry.IsQualified()) {
 			result.insert(entry.column);

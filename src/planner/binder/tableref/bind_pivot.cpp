@@ -60,7 +60,7 @@ static void ConstructPivots(PivotRef &ref, vector<PivotValueElement> &pivot_valu
 	}
 }
 
-static void ExtractPivotExpressions(ParsedExpression &root_expr, identifier_set_t &handled_columns,
+static void ExtractPivotExpressions(ParsedExpression &root_expr, IdentifierSet &handled_columns,
                                     optional_ptr<DummyBinding> macro_binding) {
 	ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(
 	    root_expr, [&](const ColumnRefExpression &child_colref) {
@@ -132,7 +132,7 @@ void ReplacePivotAggregateExpression(ClientContext &context, unique_ptr<ParsedEx
 }
 
 static unique_ptr<SelectNode> ConstructInitialGrouping(PivotRef &ref, vector<unique_ptr<ParsedExpression>> all_columns,
-                                                       const identifier_set_t &handled_columns) {
+                                                       const IdentifierSet &handled_columns) {
 	auto subquery = make_uniq<SelectNode>();
 	subquery->from_table = std::move(ref.source);
 	if (ref.groups.empty()) {
@@ -163,7 +163,7 @@ static unique_ptr<SelectNode> ConstructInitialGrouping(PivotRef &ref, vector<uni
 
 static unique_ptr<SelectNode> PivotFilteredAggregate(ClientContext &context, PivotRef &ref,
                                                      vector<unique_ptr<ParsedExpression>> all_columns,
-                                                     const identifier_set_t &handled_columns,
+                                                     const IdentifierSet &handled_columns,
                                                      vector<PivotValueElement> pivot_values) {
 	auto subquery = ConstructInitialGrouping(ref, std::move(all_columns), handled_columns);
 
@@ -218,7 +218,7 @@ struct PivotBindState {
 
 static unique_ptr<SelectNode> PivotInitialAggregate(ClientContext &context, PivotBindState &bind_state, PivotRef &ref,
                                                     vector<unique_ptr<ParsedExpression>> all_columns,
-                                                    const identifier_set_t &handled_columns) {
+                                                    const IdentifierSet &handled_columns) {
 	auto subquery_stage1 = ConstructInitialGrouping(ref, std::move(all_columns), handled_columns);
 
 	idx_t group_count = 0;
@@ -434,7 +434,7 @@ BoundStatement Binder::BindBoundPivot(PivotRef &ref) {
 
 	if (aggregates.size() < ref.bound_aggregate_names.size()) {
 		vector<string> unique_names;
-		identifier_set_t seen;
+		IdentifierSet seen(context);
 		for (auto &name : ref.bound_aggregate_names) {
 			if (seen.find(name) == seen.end()) {
 				unique_names.push_back(name.GetIdentifierName());
@@ -447,7 +447,7 @@ BoundStatement Binder::BindBoundPivot(PivotRef &ref) {
 			                        aggregates.size());
 		}
 
-		identifier_map_t<idx_t> name_to_position;
+		IdentifierMap<idx_t> name_to_position(context);
 		for (idx_t i = 0; i < unique_names.size(); i++) {
 			name_to_position[Identifier(unique_names[i])] = i;
 		}
@@ -585,7 +585,7 @@ static void BindPivotInList(unique_ptr<ParsedExpression> &expr, vector<Value> &v
 unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<ParsedExpression>> all_columns) {
 	// keep track of the columns by which we pivot/aggregate
 	// any columns which are not pivoted/aggregated on are added to the GROUP BY clause
-	identifier_set_t handled_columns;
+	IdentifierSet handled_columns(context);
 
 	vector<reference<FunctionExpression>> pivot_aggregates;
 	// parse the aggregate, and extract the referenced columns from the aggregate
@@ -839,8 +839,8 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 		throw BinderException(ref, "UNPIVOT clause must unpivot on at least one column - zero were provided");
 	}
 
-	identifier_set_t handled_columns;
-	identifier_map_t<Identifier> name_map;
+	IdentifierSet handled_columns(context);
+	IdentifierMap<Identifier> name_map(context);
 	for (auto &entry : unpivot_entries) {
 		for (auto &unpivot_expr : entry.expressions) {
 			vector<Identifier> result;

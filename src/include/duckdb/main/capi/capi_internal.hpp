@@ -49,7 +49,7 @@ struct CClientArrowOptionsWrapper {
 
 struct PreparedStatementWrapper {
 	//! Map of name -> values
-	identifier_map_t<BoundParameterData> values;
+	IdentifierMap<BoundParameterData> values {IdentifierConstructor::NO_CLIENT_CONTEXT};
 	unique_ptr<PreparedStatement> statement;
 	bool success = true;
 	ErrorData error_data;
