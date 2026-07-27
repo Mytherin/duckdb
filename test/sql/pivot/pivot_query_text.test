@@ -1,5 +1,5 @@
 # name: test/sql/pivot/pivot_query_text.test
-# description: PIVOT MultiStatement sub-statements should have their query field populated at construction
+# description: current_query() inside a PIVOT reports the query the user issued
 # group: [pivot]
 
 statement ok
@@ -12,11 +12,13 @@ statement ok
 CREATE TABLE captured AS
 PIVOT (SELECT c, v, current_query() AS q FROM t) ON c USING ANY_VALUE(q) ORDER BY v;
 
+# a PIVOT is rewritten into a multi-statement, but that multi-statement is executed as a single
+# query - so current_query() reports the original query text, not the rewritten sub-statement
 query III
 SELECT v,
-       regexp_replace(a, '__pivot_enum_[0-9a-f\-]+', '__pivot_enum_X') AS a,
-       regexp_replace(b, '__pivot_enum_[0-9a-f\-]+', '__pivot_enum_X') AS b
+       trim(regexp_replace(a, '\s+', ' ', 'g')) AS a,
+       trim(regexp_replace(b, '\s+', ' ', 'g')) AS b
 FROM captured ORDER BY v;
 ----
-1	CREATE TABLE captured AS SELECT * FROM (SELECT c, v, current_query() AS q FROM t) PIVOT (any_value(q) FOR (c) IN "__pivot_enum_X") ORDER BY v	NULL
-2	NULL	CREATE TABLE captured AS SELECT * FROM (SELECT c, v, current_query() AS q FROM t) PIVOT (any_value(q) FOR (c) IN "__pivot_enum_X") ORDER BY v
+1	CREATE TABLE captured AS PIVOT (SELECT c, v, current_query() AS q FROM t) ON c USING ANY_VALUE(q) ORDER BY v;	NULL
+2	NULL	CREATE TABLE captured AS PIVOT (SELECT c, v, current_query() AS q FROM t) ON c USING ANY_VALUE(q) ORDER BY v;

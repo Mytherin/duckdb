@@ -1,0 +1,42 @@
+# name: test/sql/transactions/statement-preprocessor/multistatement_does_not_leak_invalidation_policy.test
+# description: A failing multi-statement does not permanently change the transaction invalidation policy
+# group: [statement-preprocessor]
+
+statement ok
+SET default_transaction_invalidation_policy='SYNTACTIC_ERRORS_DO_NOT_INVALIDATE';
+
+statement ok
+CREATE OR REPLACE TABLE t AS SELECT range::INT AS id FROM range(10);
+
+statement ok
+BEGIN
+
+# the multi-statement fails part-way through - the transaction can no longer be continued, since the
+# statements of the body that already succeeded cannot be taken back individually
+statement error
+ALTER TABLE t ADD COLUMN d TIMESTAMP WITH TIME ZONE DEFAULT non_existent_function();
+----
+non_existent_function
+
+statement error
+FROM t;
+----
+TransactionContext Error: Current transaction is aborted (please ROLLBACK)
+
+statement ok
+ROLLBACK
+
+# the invalidation policy is unchanged: a binder error still does not invalidate the transaction
+statement ok
+BEGIN
+
+statement error
+SELECT nonexistent_column FROM t;
+----
+Binder Error: Referenced column "nonexistent_column" not found in FROM clause!
+
+statement ok
+FROM t;
+
+statement ok
+COMMIT

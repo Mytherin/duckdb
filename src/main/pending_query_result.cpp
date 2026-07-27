@@ -13,6 +13,12 @@ PendingQueryResult::PendingQueryResult(shared_ptr<ClientContext> context_p, Prep
       context(std::move(context_p)), allow_stream_result(allow_stream_result) {
 }
 
+PendingQueryResult::PendingQueryResult(shared_ptr<ClientContext> context_p, QueryResult &result)
+    : BaseQueryResult(QueryResultType::PENDING_RESULT, result.statement_type, result.properties, result.types,
+                      result.names),
+      context(std::move(context_p)), allow_stream_result(false) {
+}
+
 PendingQueryResult::PendingQueryResult(ErrorData error)
     : BaseQueryResult(QueryResultType::PENDING_RESULT, std::move(error)) {
 }

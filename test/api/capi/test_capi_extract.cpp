@@ -1,6 +1,7 @@
 #include "capi_tester.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/parser/statement/set_statement.hpp"
+#include "duckdb/parser/statement/multi_statement.hpp"
 
 using namespace duckdb;
 
@@ -95,17 +96,20 @@ TEST_CASE("Test extract statements for `ALTER TABLE ... ADD COLUMN ... DEFAULT` 
 	    tester.connection,
 	    "ALTER TABLE my_table ADD COLUMN my_column TIMESTAMP WITH TIME ZONE DEFAULT non_existent_function();", &stmts);
 
-	REQUIRE(size == 5);
+	// the ALTER materializes into a multi-statement, which is extracted (and executed) as a single unit
+	REQUIRE(size == 1);
 	REQUIRE(stmts != nullptr);
 	auto wrapper = (ExtractStatementsWrapper *)stmts;
 
-	REQUIRE(wrapper->statements[0]->query == "BEGIN;");
-	REQUIRE(wrapper->statements[1]->query ==
+	REQUIRE(wrapper->statements[0]->type == StatementType::MULTI_STATEMENT);
+	auto &multi = wrapper->statements[0]->Cast<MultiStatement>();
+	REQUIRE(multi.statements.size() == 3);
+	REQUIRE(multi.ResultStatementIndex() == 0);
+	REQUIRE(multi.statements[0]->query ==
 	        "ALTER TABLE my_table ADD COLUMN my_column TIMESTAMP WITH TIME ZONE DEFAULT NULL;");
-	REQUIRE(wrapper->statements[2]->query == "UPDATE my_table SET my_column = non_existent_function();");
-	REQUIRE(wrapper->statements[3]->query ==
+	REQUIRE(multi.statements[1]->query == "UPDATE my_table SET my_column = non_existent_function();");
+	REQUIRE(multi.statements[2]->query ==
 	        "ALTER TABLE my_table ALTER COLUMN my_column SET DEFAULT non_existent_function();");
-	REQUIRE(wrapper->statements[4]->query == "COMMIT;");
 
 	duckdb_destroy_extracted(&stmts);
 }

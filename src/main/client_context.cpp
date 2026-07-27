@@ -51,7 +51,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_execute.hpp"
 #include "duckdb/planner/planner.hpp"
-#include "duckdb/common/enums/current_transaction_state.hpp"
+#include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/planner/statement_preprocessor.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
@@ -97,6 +97,9 @@ public:
 	void SetOpenResult(BaseQueryResult &result) {
 		open_result = &result;
 	}
+	void ClearOpenResult() {
+		open_result = nullptr;
+	}
 	bool IsOpenResult(BaseQueryResult &result) {
 		return open_result == &result;
 	}
@@ -104,9 +107,67 @@ public:
 		return open_result != nullptr;
 	}
 
+	//! Hand over a result that has already been fully computed (multi-statement execution) - the query
+	//! has no more work to do, and the result is returned as-is when it is fetched
+	void SetMaterializedResult(unique_ptr<QueryResult> result) {
+		materialized_result = std::move(result);
+	}
+	bool HasMaterializedResult() const {
+		return materialized_result != nullptr;
+	}
+	unique_ptr<QueryResult> TakeMaterializedResult() {
+		return std::move(materialized_result);
+	}
+
+	//! Mark this query as one whose failure can no longer be recovered from within the transaction.
+	//! Set while executing a multi-statement: earlier statements of the body may already have been
+	//! applied, so the transaction cannot be continued after a failure.
+	void SetAllErrorsInvalidateTransaction() {
+		all_errors_invalidate_transaction = true;
+	}
+	bool AllErrorsInvalidateTransaction() const {
+		return all_errors_invalidate_transaction;
+	}
+
+	//! Whether the statement currently being executed is a statement of a multi-statement body. Such a
+	//! statement finishes without ending the query - the remaining statements run within the same query,
+	//! and a failure is propagated to whoever is running the body.
+	bool IsExecutingSubStatement() const {
+		return executing_sub_statement;
+	}
+	void SetExecutingSubStatement(bool executing) {
+		executing_sub_statement = executing;
+	}
+
 private:
 	//! The currently open result
 	BaseQueryResult *open_result = nullptr;
+	//! The result of the query, if it has already been fully materialized (multi-statement execution)
+	unique_ptr<QueryResult> materialized_result;
+	//! Whether or not any error must invalidate the transaction, regardless of the invalidation policy
+	bool all_errors_invalidate_transaction = false;
+	//! Whether the statement being executed is a statement of a multi-statement body
+	bool executing_sub_statement = false;
+};
+
+//! RAII wrapper that marks the statement being executed as a statement of a multi-statement body
+struct SubStatementGuard {
+	explicit SubStatementGuard(unique_ptr<ActiveQueryContext> &active_query_p)
+	    : active_query(active_query_p), previous(active_query_p->IsExecutingSubStatement()) {
+		active_query->SetExecutingSubStatement(true);
+	}
+	~SubStatementGuard() {
+		if (!active_query) {
+			return;
+		}
+		active_query->SetExecutingSubStatement(previous);
+		// the pending result of the statement does not outlive this scope - drop the reference to it,
+		// which is still set if the statement was abandoned because it failed
+		active_query->ClearOpenResult();
+	}
+
+	unique_ptr<ActiveQueryContext> &active_query;
+	bool previous;
 };
 
 //! RAII wrapper that ensures the active query is reset if an exception occurs during preparation
@@ -435,9 +496,32 @@ connection_t ClientContext::GetConnectionId() const {
 	return connection_id;
 }
 
+void ClientContext::FinishStatementInternal(ClientContextLock &lock, BaseQueryResult *result) {
+	if (!active_query->IsExecutingSubStatement()) {
+		// the statement was the query - end it
+		CleanupInternal(lock, result, false);
+		return;
+	}
+	// the statement was one statement of a multi-statement body: the query lives on, so only the
+	// per-statement state is reset to make room for the next statement
+	if (active_query->executor) {
+		active_query->executor->CancelTasks();
+	}
+	active_query->ClearOpenResult();
+	active_query->progress_bar.reset();
+	active_query->executor.reset();
+	active_query->prepared.reset();
+}
+
 unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lock, PendingQueryResult &pending) {
 	D_ASSERT(active_query);
 	D_ASSERT(active_query->IsOpenResult(pending));
+	if (active_query->HasMaterializedResult()) {
+		// the result was already materialized during multi-statement execution - hand it over directly
+		auto result = active_query->TakeMaterializedResult();
+		FinishStatementInternal(lock, result.get());
+		return result;
+	}
 	D_ASSERT(active_query->prepared);
 	auto &executor = GetExecutor();
 	auto &prepared = *active_query->prepared;
@@ -448,7 +532,7 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 	// we have a result collector - fetch the result directly from the result collector
 	result = executor.GetResult();
 	if (!create_stream_result) {
-		CleanupInternal(lock, result.get(), false);
+		FinishStatementInternal(lock, result.get());
 	} else {
 		active_query->SetOpenResult(*result);
 	}
@@ -727,6 +811,10 @@ void ClientContext::WaitForTask(ClientContextLock &lock, BaseQueryResult &result
 }
 
 bool ClientContext::ErrorInvalidatesTransaction(ExceptionType type) {
+	if (active_query && active_query->AllErrorsInvalidateTransaction()) {
+		// we are executing a multi-statement - any error invalidates the transaction
+		return true;
+	}
 	switch (transaction.GetInvalidationPolicy()) {
 	case TransactionInvalidationPolicy::STANDARD_POLICY:
 	case TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION:
@@ -740,6 +828,10 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
                                                           bool dry_run) {
 	D_ASSERT(active_query);
 	D_ASSERT(active_query->IsOpenResult(result));
+	if (active_query->HasMaterializedResult()) {
+		// the result has already been computed (multi-statement execution) - nothing left to execute
+		return PendingExecutionResult::EXECUTION_FINISHED;
+	}
 	bool invalidate_transaction = true;
 	try {
 		// Surface a pending interrupt even when this thread runs no task that reaches InterruptCheck.
@@ -780,7 +872,11 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 	} catch (...) { // LCOV_EXCL_START
 		result.SetError(ErrorData("Unhandled exception in ExecuteTaskInternal"));
 	} // LCOV_EXCL_STOP
-	EndQueryInternal(lock, false, invalidate_transaction, result.GetErrorObject());
+	if (!active_query->IsExecutingSubStatement()) {
+		EndQueryInternal(lock, false, invalidate_transaction, result.GetErrorObject());
+	}
+	// a statement of a multi-statement body leaves the query intact - the error is rethrown by the
+	// driver of the body, and the query is ended by whoever started it
 	return PendingExecutionResult::EXECUTION_ERROR;
 }
 
@@ -791,8 +887,8 @@ void ClientContext::InitialCleanup(ClientContextLock &lock) {
 }
 
 StatementIterator ClientContext::IterateStatements(const string &query) {
-	// The iterator yields ready-to-execute (engine-facing) statements: PRAGMA reparse,
-	// MULTI_STATEMENT unpack and transaction wrapping per peel — matches the eager API users expect.
+	// The iterator yields ready-to-execute (engine-facing) statements: PRAGMA reparse per peel —
+	// matches the eager API users expect.
 	// Callers that want raw parse-facing statements and drive their own preprocessing construct a
 	// ParseIterator directly (e.g. Query / ParseStatementsInternal below, which hold the lock).
 	return StatementIterator(ParseIterator(*this, query));
@@ -808,9 +904,7 @@ void ClientContext::PreprocessStatements(vector<unique_ptr<SQLStatement>> &buffe
 		lock = own_lock.get();
 	}
 	StatementPreprocessor preprocessor(*this);
-	const CurrentTransactionState transaction_state =
-	    transaction.HasActiveTransaction() ? IN_ACTIVE_TRANSACTION : NOT_IN_ACTIVE_TRANSACTION;
-	preprocessor.Preprocess(*lock, buffer, transaction_state);
+	preprocessor.Preprocess(*lock, buffer);
 }
 
 vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientContextLock &lock, const string &query) {
@@ -865,6 +959,10 @@ unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query) {
 
 unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &lock,
                                                              unique_ptr<SQLStatement> statement) {
+	if (statement->type == StatementType::MULTI_STATEMENT) {
+		// a multi-statement is executed as a sequence of statements - it has no single plan to prepare
+		throw NotImplementedException("Cannot prepare a statement that expands into multiple statements!");
+	}
 	auto named_param_map = statement->named_param_map;
 	auto statement_query = statement->query;
 	shared_ptr<PreparedStatementData> prepared_data;
@@ -997,9 +1095,77 @@ unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<P
 	return Execute(query, prepared, parameters);
 }
 
+//! Execute one statement of a multi-statement body to completion, returning its materialized result.
+//! This is the regular execution path, except that finishing the statement does not end the query -
+//! the remaining statements of the body run within the same query. Errors are thrown.
+unique_ptr<QueryResult> ClientContext::ExecuteSubStatement(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
+                                                           const PendingQueryParameters &parameters) {
+	D_ASSERT(active_query);
+	// the result of a statement within the body is either discarded or handed back materialized
+	PendingQueryParameters sub_parameters = parameters;
+	sub_parameters.query_parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+
+	auto query = statement->query;
+	SubStatementGuard guard(active_query);
+	auto pending = PendingStatementInternal(lock, query, std::move(statement), sub_parameters);
+	if (pending->HasError()) {
+		pending->GetErrorObject().Throw();
+	}
+	auto result = pending->ExecuteInternal(lock);
+	if (result->HasError()) {
+		// the body cannot continue past a failed statement
+		result->GetErrorObject().Throw();
+	}
+	return result;
+}
+
+unique_ptr<PendingQueryResult> ClientContext::PendingMultiStatementInternal(ClientContextLock &lock,
+                                                                            MultiStatement &multi,
+                                                                            const PendingQueryParameters &parameters) {
+	D_ASSERT(active_query);
+	auto &statements = multi.statements;
+	const auto result_idx = multi.ResultStatementIndex();
+	if (statements.empty()) {
+		throw InternalException("Cannot execute an empty multi-statement");
+	}
+	if (result_idx >= statements.size()) {
+		throw InternalException("MultiStatement result statement index %llu is out of range (%llu statements)",
+		                        result_idx, statements.size());
+	}
+	if (statements.size() > 1) {
+		// the body is executed as a single unit - a failure part-way through leaves the transaction in a
+		// state the user cannot continue from, so any error invalidates it
+		active_query->SetAllErrorsInvalidateTransaction();
+	}
+
+	// run the statements preceding the result statement, discarding their results
+	for (idx_t i = 0; i < result_idx; i++) {
+		ExecuteSubStatement(lock, std::move(statements[i]), parameters);
+	}
+	if (result_idx + 1 == statements.size()) {
+		// the result statement is the final statement - hand it to the regular execution path, so that
+		// its result is produced (and can be streamed) exactly as if it had been issued on its own
+		auto result_query = statements[result_idx]->query;
+		return PendingStatementInternal(lock, result_query, std::move(statements[result_idx]), parameters);
+	}
+	// statements follow the result statement - materialize its result, then run the remaining statements
+	auto result = ExecuteSubStatement(lock, std::move(statements[result_idx]), parameters);
+	for (idx_t i = result_idx + 1; i < statements.size(); i++) {
+		ExecuteSubStatement(lock, std::move(statements[i]), parameters);
+	}
+	D_ASSERT(!active_query->HasOpenResult());
+	auto pending_result = make_uniq<PendingQueryResult>(shared_from_this(), *result);
+	active_query->SetMaterializedResult(std::move(result));
+	active_query->SetOpenResult(*pending_result);
+	return pending_result;
+}
+
 unique_ptr<PendingQueryResult> ClientContext::PendingStatementInternal(ClientContextLock &lock, const string &query,
                                                                        unique_ptr<SQLStatement> statement,
                                                                        const PendingQueryParameters &parameters) {
+	if (statement->type == StatementType::MULTI_STATEMENT) {
+		return PendingMultiStatementInternal(lock, statement->Cast<MultiStatement>(), parameters);
+	}
 	// prepare the query for execution
 	if (!statement->named_param_map.empty() && parameters.parameters) {
 		PreparedStatement::VerifyParameters(*parameters.parameters, statement->named_param_map, this);
@@ -1154,9 +1320,6 @@ void ClientContext::LogQueryInternal(ClientContextLock &, const string &query) {
 unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement, QueryParameters parameters) {
 	auto pending_query = PendingQuery(std::move(statement), parameters);
 	if (pending_query->HasError()) {
-		if (transaction.HasActiveTransaction() && transaction.GetAutoRollback()) {
-			transaction.Rollback(pending_query->GetErrorObject());
-		}
 		return ErrorResult<MaterializedQueryResult>(pending_query->GetErrorObject());
 	}
 	return pending_query->Execute();
@@ -1208,9 +1371,9 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, QueryParameter
 	bool last_had_result = false;
 	while (has_current) {
 		// Get + preprocess the next engine-facing statement, reusing the lock we already hold. PRAGMA
-		// reparse / MULTI_STATEMENT unpacking happen inside GetStatementWithLock, which sees the
-		// transaction state left by the previously executed statement. A peel can preprocess to
-		// nothing, in which case statement is null and there is nothing to execute.
+		// reparse happens inside GetStatementWithLock, which sees the state left by the previously
+		// executed statement. A peel can preprocess to nothing, in which case statement is null and
+		// there is nothing to execute.
 		unique_ptr<SQLStatement> statement;
 		try {
 			statement = iterator.GetStatementWithLock(*lock);
@@ -1240,9 +1403,6 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, QueryParameter
 				current_result = ExecutePendingQueryInternal(*lock, *pending_query);
 			}
 			if (current_result->HasError()) {
-				if (transaction.HasActiveTransaction() && transaction.GetAutoRollback()) {
-					transaction.Rollback(current_result->GetErrorObject());
-				}
 				// Reset the interrupted flag, this was set by the task that found the error
 				// Next statements should not be bothered by that interruption
 				interrupt_state = ClientInterruptState::NOT_INTERRUPTED;

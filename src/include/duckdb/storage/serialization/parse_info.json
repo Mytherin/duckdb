@@ -796,7 +796,8 @@
       {
         "id": 203,
         "name": "auto_rollback",
-        "type": "bool"
+        "type": "bool",
+        "status": "deleted"
       }
     ]
   },

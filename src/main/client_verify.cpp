@@ -81,6 +81,10 @@ void ClientContext::StatementVerification(ClientContextLock &lock, const string 
 			// reparsing not supported for relation statements
 			return;
 		}
+		if (statement->type == StatementType::MULTI_STATEMENT) {
+			// a multi-statement reparses into multiple statements again - not supported
+			return;
+		}
 		Parser parser(GetParserOptions());
 		ErrorData error;
 		parser.ParseQuery(statement->ToString());
@@ -94,8 +98,6 @@ void ClientContext::StatementVerification(ClientContextLock &lock, const string 
 			auto &reparsed_transaction_stmt = parser.statements[0]->Cast<TransactionStatement>();
 			auto &previous_transaction_stmt = statement->Cast<TransactionStatement>();
 			reparsed_transaction_stmt.info->invalidation_policy = previous_transaction_stmt.info->invalidation_policy;
-			// re-apply auto rollback
-			reparsed_transaction_stmt.info->auto_rollback = statement->Cast<TransactionStatement>().info->auto_rollback;
 		}
 		statement = std::move(parser.statements[0]);
 	} else if (verification == DebugStatementVerification::SERIALIZE_STATEMENT) {
@@ -232,6 +234,10 @@ void ClientContext::StatementVerification(ClientContextLock &lock, const string 
 	} else if (verification == DebugStatementVerification::EXPLAIN_STATEMENT) {
 		if (statement->type == StatementType::EXPLAIN_STATEMENT) {
 			// don't explain explain...
+			return;
+		}
+		if (statement->type == StatementType::MULTI_STATEMENT) {
+			// a multi-statement cannot be planned as a whole, so it cannot be explained
 			return;
 		}
 		if (!statement->named_param_map.empty()) {

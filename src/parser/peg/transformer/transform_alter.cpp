@@ -144,7 +144,7 @@ void PEGTransformerFactory::AddToMultiStatement(const unique_ptr<MultiStatement>
 	auto alter_statement = make_uniq<AlterStatement>();
 	alter_statement->info = std::move(alter_info);
 	alter_statement->query = alter_statement->ToString();
-	multi_statement->statements.push_back(std::move(alter_statement));
+	multi_statement->AddStatement(std::move(alter_statement));
 }
 
 void PEGTransformerFactory::AddUpdateToMultiStatement(const unique_ptr<MultiStatement> &multi_statement,
@@ -164,7 +164,7 @@ void PEGTransformerFactory::AddUpdateToMultiStatement(const unique_ptr<MultiStat
 	node.set_info = std::move(set_info);
 
 	update_statement->query = update_statement->ToString() + ";";
-	multi_statement->statements.push_back(std::move(update_statement));
+	multi_statement->AddStatement(std::move(update_statement));
 }
 
 unique_ptr<MultiStatement> PEGTransformerFactory::TransformAndMaterializeAlter(
@@ -185,7 +185,9 @@ unique_ptr<MultiStatement> PEGTransformerFactory::TransformAndMaterializeAlter(
 	 */
 
 	// 1. `ALTER TABLE t ADD COLUMN col <type> DEFAULT NULL;`
+	// this is the statement the user wrote, so it also provides the result of the multi-statement
 	AddToMultiStatement(multi_statement, std::move(info_with_null_placeholder));
+	multi_statement->SetResultStatementIndex(0);
 
 	// 2. `UPDATE t SET u = <expression>;`
 	AddUpdateToMultiStatement(multi_statement, column_name, data, expression);

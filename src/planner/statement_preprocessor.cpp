@@ -13,122 +13,52 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/function/function_binder.hpp"
-#include "duckdb/parser/statement/transaction_statement.hpp"
-#include "duckdb/parser/expression/constant_expression.hpp"
-#include "duckdb/parser/statement/set_statement.hpp"
-#include "duckdb/common/enums/current_transaction_state.hpp"
 
 namespace duckdb {
-
-enum class PreprocessingTransactionHandling : uint8_t {
-	// Not in a transaction and should wrap in an implicit BEGIN/COMMIT
-	WRAP_IN_TRANSACTION,
-	// Already in an active transaction — set invalidation policy for multi-statement bodies
-	SET_INVALIDATION_POLICY,
-	// No transaction handling needed (single statement, or no transaction context applies)
-	NONE
-};
-
-void AddStatements(vector<unique_ptr<SQLStatement>> &body_statements,
-                   const PreprocessingTransactionHandling transaction_handling,
-                   vector<unique_ptr<SQLStatement>> &result_statements) {
-	if (transaction_handling == PreprocessingTransactionHandling::WRAP_IN_TRANSACTION) {
-		auto begin_info = make_uniq<TransactionInfo>(
-		    TransactionType::BEGIN_TRANSACTION, TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION, true);
-		auto begin_stmt = make_uniq<TransactionStatement>(std::move(begin_info));
-		begin_stmt->query = begin_stmt->ToString();
-		result_statements.push_back(std::move(begin_stmt));
-	} else if (transaction_handling == PreprocessingTransactionHandling::SET_INVALIDATION_POLICY) {
-		// Here we do a `SET current_transaction_invalidation_policy='ALL_ERRORS_INVALIDATE_TRANSACTION';`, for the
-		// current transaction, to make sure multistatements/pragmas are fully transactional, and invalidate even with
-		// minor errors such as binder, parser, etc.
-		auto set_stmt = make_uniq<SetVariableStatement>(
-		    "current_transaction_invalidation_policy",
-		    make_uniq<ConstantExpression>(Value("ALL_ERRORS_INVALIDATE_TRANSACTION")), SetScope::GLOBAL);
-		set_stmt->query = set_stmt->ToString();
-		result_statements.push_back(std::move(set_stmt));
-	}
-
-	// insert body_statements into result_statements
-	result_statements.insert(result_statements.end(), std::make_move_iterator(body_statements.begin()),
-	                         std::make_move_iterator(body_statements.end()));
-
-	if (transaction_handling == PreprocessingTransactionHandling::WRAP_IN_TRANSACTION) {
-		auto commit_info = make_uniq<TransactionInfo>(
-		    TransactionType::COMMIT, TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION, true);
-		auto commit_stmt = make_uniq<TransactionStatement>(std::move(commit_info));
-		commit_stmt->query = commit_stmt->ToString();
-		result_statements.push_back(std::move(commit_stmt));
-	} else if (transaction_handling == PreprocessingTransactionHandling::SET_INVALIDATION_POLICY) {
-		auto set_stmt =
-		    make_uniq<SetVariableStatement>("current_transaction_invalidation_policy",
-		                                    make_uniq<ConstantExpression>(Value("STANDARD_POLICY")), SetScope::GLOBAL);
-		set_stmt->query = set_stmt->ToString();
-		result_statements.push_back(std::move(set_stmt));
-	}
-}
 
 StatementPreprocessor::StatementPreprocessor(ClientContext &context) : context(context) {
 }
 
-PreprocessingTransactionHandling GetTransactionHandling(vector<unique_ptr<SQLStatement>> &body_statements,
-                                                        CurrentTransactionState full_transaction_state,
-                                                        bool skip_handling = false) {
-	if (body_statements.size() <= 1 || skip_handling) {
-		return PreprocessingTransactionHandling::NONE;
-	}
-	if (full_transaction_state == NOT_IN_ACTIVE_TRANSACTION) {
-		return PreprocessingTransactionHandling::WRAP_IN_TRANSACTION;
-	}
-	if (full_transaction_state == IN_ACTIVE_TRANSACTION) {
-		return PreprocessingTransactionHandling::SET_INVALIDATION_POLICY;
-	}
-	return PreprocessingTransactionHandling::NONE;
-}
-
-void UnpackMultiStatement(MultiStatement &multi_statement, const CurrentTransactionState current_transaction_state,
-                          vector<unique_ptr<SQLStatement>> &new_statements) {
-#ifdef DEBUG // MultiStatement should not contain transaction statements
-	for (auto &sub_statement : multi_statement.statements) {
-		D_ASSERT(sub_statement->type != StatementType::TRANSACTION_STATEMENT);
-	}
-#endif
-	bool has_select = false;
-	for (auto &stmt : multi_statement.statements) {
-		if (stmt->type == StatementType::SELECT_STATEMENT) {
-			// Pivot statements have select, and we don't want to wrap those in transactions.
-			has_select = true;
-		}
-	}
-	auto handling = GetTransactionHandling(multi_statement.statements, current_transaction_state, has_select);
-	AddStatements(multi_statement.statements, handling, new_statements);
-}
-
-vector<unique_ptr<SQLStatement>> StatementPreprocessor::TryReparsePragma(unique_ptr<SQLStatement> statement) const {
+unique_ptr<SQLStatement> StatementPreprocessor::TryReparsePragma(unique_ptr<SQLStatement> statement) const {
 	// Try reparsing
 	const auto info = statement->Cast<PragmaStatement>().info->Copy();
 	QueryErrorContext error_context(statement->stmt_location);
 	const auto binder = Binder::CreateBinder(context);
 	const auto bound_info = binder->BindPragma(*info, error_context);
-	if (bound_info->function.query) {
-		// Needs reparsing
-		FunctionParameters parameters {bound_info->parameters, bound_info->named_parameters};
-		const auto query_to_reparse = bound_info->function.query(context, parameters);
-		Parser parser(context.GetParserOptions());
-		parser.ParseQuery(query_to_reparse);
-		return std::move(parser.statements);
+	if (!bound_info->function.query) {
+		// No reparsing required
+		return statement;
 	}
-	vector<unique_ptr<SQLStatement>> res;
-	res.push_back(std::move(statement));
-	return res;
+	const FunctionParameters parameters {bound_info->parameters, bound_info->named_parameters};
+	const auto query_to_reparse = bound_info->function.query(context, parameters);
+	Parser parser(context.GetParserOptions());
+	parser.ParseQuery(query_to_reparse);
+	auto &reparsed = parser.statements;
+	if (reparsed.empty()) {
+		// the pragma expanded into nothing - swallow it
+		return nullptr;
+	}
+	if (reparsed.size() == 1) {
+		return std::move(reparsed[0]);
+	}
+	// The pragma expanded into multiple statements - execute them as a single multi-statement so that
+	// the entire expansion is executed as one transactional unit. The final statement provides the result.
+	auto multi_statement = make_uniq<MultiStatement>();
+	multi_statement->query = statement->query;
+	multi_statement->stmt_location = statement->stmt_location;
+	multi_statement->stmt_length = statement->stmt_length;
+	for (auto &stmt : reparsed) {
+		// the final statement provides the result
+		multi_statement->AddResultStatement(std::move(stmt));
+	}
+	return std::move(multi_statement);
 }
 
-void StatementPreprocessor::Preprocess(ClientContextLock &lock, vector<unique_ptr<SQLStatement>> &statements,
-                                       CurrentTransactionState transaction_context_state) {
+void StatementPreprocessor::Preprocess(ClientContextLock &lock, vector<unique_ptr<SQLStatement>> &statements) {
 	// Quick check: do we need preprocessing at all?
 	bool needs_preprocessing = false;
 	for (auto &stmt : statements) {
-		if (stmt->type == StatementType::PRAGMA_STATEMENT || stmt->type == StatementType::MULTI_STATEMENT) {
+		if (stmt->type == StatementType::PRAGMA_STATEMENT) {
 			needs_preprocessing = true;
 			break;
 		}
@@ -137,54 +67,24 @@ void StatementPreprocessor::Preprocess(ClientContextLock &lock, vector<unique_pt
 		return;
 	}
 
-	context.RunFunctionInTransactionInternal(lock,
-	                                         [&] { PreprocessInternal(lock, statements, transaction_context_state); });
+	context.RunFunctionInTransactionInternal(lock, [&] { PreprocessInternal(lock, statements); });
 }
 
-void StatementPreprocessor::PreprocessInternal(ClientContextLock &lock, vector<unique_ptr<SQLStatement>> &statements,
-                                               const CurrentTransactionState transaction_context_state) {
-	CurrentTransactionState chained_transaction_state = NOT_IN_ACTIVE_TRANSACTION;
+void StatementPreprocessor::PreprocessInternal(ClientContextLock &lock,
+                                               vector<unique_ptr<SQLStatement>> &statements) const {
 	vector<unique_ptr<SQLStatement>> new_statements;
-	for (idx_t i = 0; i < statements.size(); i++) {
-		auto query = statements[i]->query;
-		const CurrentTransactionState full_transaction_state =
-		    (transaction_context_state == IN_ACTIVE_TRANSACTION || chained_transaction_state == IN_ACTIVE_TRANSACTION)
-		        ? IN_ACTIVE_TRANSACTION
-		        : NOT_IN_ACTIVE_TRANSACTION;
-
-		switch (statements[i]->type) {
-		case StatementType::PRAGMA_STATEMENT: {
-			auto reparsed_statements = TryReparsePragma(std::move(statements[i]));
-			const auto handling = GetTransactionHandling(reparsed_statements, full_transaction_state);
-			AddStatements(reparsed_statements, handling, new_statements);
-			break;
+	for (auto &statement : statements) {
+		if (statement->type != StatementType::PRAGMA_STATEMENT) {
+			new_statements.push_back(std::move(statement));
+			continue;
 		}
-		case StatementType::MULTI_STATEMENT: {
-			auto &multi_statement = statements[i]->Cast<MultiStatement>();
-			UnpackMultiStatement(multi_statement, full_transaction_state, new_statements);
-			break;
+		auto reparsed = TryReparsePragma(std::move(statement));
+		if (!reparsed) {
+			continue;
 		}
-		case StatementType::TRANSACTION_STATEMENT: {
-			auto &transaction_stmt = statements[i]->Cast<TransactionStatement>();
-
-			if (transaction_stmt.info->type == TransactionType::BEGIN_TRANSACTION) {
-				new_statements.push_back(std::move(statements[i]));
-				chained_transaction_state = IN_ACTIVE_TRANSACTION;
-				break;
-			}
-			if (transaction_stmt.info->type == TransactionType::COMMIT ||
-			    transaction_stmt.info->type == TransactionType::ROLLBACK) {
-				chained_transaction_state = NOT_IN_ACTIVE_TRANSACTION;
-			}
-			new_statements.push_back(std::move(statements[i]));
-			break;
-		}
-		default: {
-			new_statements.push_back(std::move(statements[i]));
-		}
-		}
+		new_statements.push_back(std::move(reparsed));
 	}
-
 	statements = std::move(new_statements);
 }
+
 } // namespace duckdb

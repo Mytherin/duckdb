@@ -1,0 +1,50 @@
+# name: test/sql/transactions/statement-preprocessor/multistatement_respects_autocommit.test
+# description: A multi-statement is executed as a single unit within the surrounding auto-commit
+# group: [statement-preprocessor]
+
+statement ok
+CREATE OR REPLACE TABLE t AS SELECT range::INT AS id FROM range(10);
+
+# the multi-statement is executed within a single auto-commit transaction - it does not open a
+# transaction of its own, so a subsequent BEGIN is not rejected as a nested transaction
+statement ok
+ALTER TABLE t ADD COLUMN d DOUBLE DEFAULT random();
+
+statement ok
+BEGIN
+
+statement ok
+ALTER TABLE t ADD COLUMN e DOUBLE DEFAULT random();
+
+statement ok
+COMMIT
+
+query I
+SELECT count(*) FROM t WHERE d IS NOT NULL AND e IS NOT NULL;
+----
+10
+
+# auto-commit still applies while a multi-statement is running: a failure part-way through rolls
+# back the statements of the body that already succeeded
+statement error
+ALTER TABLE t ADD COLUMN f DOUBLE DEFAULT non_existent_function();
+----
+non_existent_function
+
+query I
+SELECT count(*) FROM duckdb_columns() WHERE table_name='t' AND column_name='f';
+----
+0
+
+# ... and the connection is not left inside a transaction afterwards
+statement ok
+BEGIN
+
+statement ok
+ROLLBACK
+
+# a multi-statement cannot be prepared - it has no single plan
+statement error
+PREPARE v1 AS ALTER TABLE t ADD COLUMN g DOUBLE DEFAULT random();
+----
+<REGEX>:.*MULTI_STATEMENT is not a preparable statement.*

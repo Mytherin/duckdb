@@ -704,7 +704,7 @@ void TransactionInfo::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<TransactionType>(200, "type", type);
 	serializer.WriteProperty<TransactionModifierType>(201, "modifier", modifier);
 	serializer.WritePropertyWithDefault<TransactionInvalidationPolicy>(202, "invalidation_policy", invalidation_policy, TransactionInvalidationPolicy::STANDARD_POLICY);
-	serializer.WritePropertyWithDefault<bool>(203, "auto_rollback", auto_rollback);
+	/* [Deleted] (bool) "auto_rollback" */
 }
 
 unique_ptr<ParseInfo> TransactionInfo::Deserialize(Deserializer &deserializer) {
@@ -712,7 +712,7 @@ unique_ptr<ParseInfo> TransactionInfo::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadProperty<TransactionType>(200, "type", result->type);
 	deserializer.ReadProperty<TransactionModifierType>(201, "modifier", result->modifier);
 	deserializer.ReadPropertyWithExplicitDefault<TransactionInvalidationPolicy>(202, "invalidation_policy", result->invalidation_policy, TransactionInvalidationPolicy::STANDARD_POLICY);
-	deserializer.ReadPropertyWithDefault<bool>(203, "auto_rollback", result->auto_rollback);
+	deserializer.ReadDeletedProperty<bool>(203, "auto_rollback");
 	return std::move(result);
 }
 
