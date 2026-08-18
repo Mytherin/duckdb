@@ -63,8 +63,13 @@ public:
 	//! Returns a reference to the system catalog
 	Catalog &GetSystemCatalog();
 
+	//! The default database is the first database that was attached and is still attached, unless the context has
+	//! set a different default catalog in its search path
 	static Identifier GetDefaultDatabase(ClientContext &context);
-	void SetDefaultDatabase(ClientContext &context, const Identifier &new_value);
+	//! As GetDefaultDatabase, but returns an empty identifier if no database is attached
+	static Identifier TryGetDefaultDatabase(ClientContext &context);
+	//! Whether or not any database is attached
+	bool HasDefaultDatabase();
 
 	//! Inserts a path to name mapping to the database paths map
 	InsertDatabasePathResult InsertDatabasePath(const AttachInfo &info, AttachOptions &options);
@@ -104,9 +109,6 @@ public:
 	idx_t NextOid() {
 		return next_oid++;
 	}
-	bool HasDefaultDatabase() {
-		return !default_database.empty();
-	}
 	//! Gets a list of all attached database paths
 	vector<string> GetAttachedDatabasePaths();
 
@@ -115,6 +117,7 @@ public:
 private:
 	optional_ptr<AttachedDatabase> FinalizeAttach(ClientContext &context, AttachInfo &info,
 	                                              shared_ptr<AttachedDatabase> database);
+	optional_ptr<AttachedDatabase> GetDefaultDatabaseInternal(const lock_guard<mutex> &);
 
 private:
 	DatabaseInstance &db;
@@ -132,8 +135,6 @@ private:
 	atomic<transaction_t> current_transaction_id;
 	//! Count of remote catalogs currently attached; used to skip the remote pushdown optimizer when zero
 	atomic<CheckedInteger<idx_t, InternalException>> remote_catalog_count;
-	//! The current default database
-	Identifier default_database;
 	//! Manager for ensuring we never open the same database file twice in the same program
 	shared_ptr<DatabaseFilePathManager> path_manager;
 

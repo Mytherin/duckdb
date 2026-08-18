@@ -206,10 +206,6 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 	auto &db = DatabaseInstance::GetDatabase(context);
 	auto attached_db = db.CreateAttachedDatabase(context, info, options);
 
-	if (default_database.empty()) {
-		default_database = attached_db->GetName();
-	}
-
 	//! Initialize the database.
 	if (options.is_main_database) {
 		attached_db->SetInitialDatabase();
@@ -329,10 +325,6 @@ void DatabaseManager::RenameDatabase(ClientContext &context, const Identifier &o
 		attached_db->SetName(new_name);
 		databases[new_name] = attached_db;
 	}
-
-	if (old_name == default_database) {
-		default_database = new_name;
-	}
 }
 
 shared_ptr<AttachedDatabase> DatabaseManager::DetachInternal(const Identifier &name) {
@@ -418,34 +410,45 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, 
 	}
 }
 
-Identifier DatabaseManager::GetDefaultDatabase(ClientContext &context) {
+optional_ptr<AttachedDatabase> DatabaseManager::GetDefaultDatabaseInternal(const lock_guard<mutex> &) {
+	// the default database is the database that was attached first - i.e. the one with the lowest oid
+	optional_ptr<AttachedDatabase> result;
+	for (auto &entry : databases) {
+		auto &attached_db = *entry.second;
+		if (!result || attached_db.oid < result->oid) {
+			result = attached_db;
+		}
+	}
+	return result;
+}
+
+bool DatabaseManager::HasDefaultDatabase() {
+	lock_guard<mutex> guard(databases_lock);
+	return GetDefaultDatabaseInternal(guard) != nullptr;
+}
+
+Identifier DatabaseManager::TryGetDefaultDatabase(ClientContext &context) {
 	auto &config = ClientData::Get(context);
 	auto &default_entry = config.catalog_search_path->GetDefault();
-	if (IsInvalidCatalog(default_entry.GetCatalog())) {
-		auto &result = DatabaseManager::Get(context).default_database;
-		if (result.empty()) {
-			throw InternalException("Calling DatabaseManager::GetDefaultDatabase with no default database set");
-		}
-		return result;
+	if (!IsInvalidCatalog(default_entry.GetCatalog())) {
+		return default_entry.GetCatalog();
 	}
-	return default_entry.GetCatalog();
+	auto &db_manager = DatabaseManager::Get(context);
+	lock_guard<mutex> guard(db_manager.databases_lock);
+	auto default_db = db_manager.GetDefaultDatabaseInternal(guard);
+	if (!default_db) {
+		return Identifier();
+	}
+	return default_db->GetName();
 }
 
-// LCOV_EXCL_START
-void DatabaseManager::SetDefaultDatabase(ClientContext &context, const Identifier &new_value) {
-	auto db_entry = GetDatabase(context, new_value);
-
-	if (!db_entry) {
-		throw InternalException("Database %s not found", new_value);
-	} else if (db_entry->IsTemporary()) {
-		throw InternalException("Cannot set the default database to a temporary database");
-	} else if (db_entry->IsSystem()) {
-		throw InternalException("Cannot set the default database to a system database");
+Identifier DatabaseManager::GetDefaultDatabase(ClientContext &context) {
+	auto result = TryGetDefaultDatabase(context);
+	if (result.empty()) {
+		throw InternalException("Calling DatabaseManager::GetDefaultDatabase with no databases attached");
 	}
-
-	default_database = new_value;
+	return result;
 }
-// LCOV_EXCL_STOP
 
 vector<shared_ptr<AttachedDatabase>> DatabaseManager::GetDatabases(ClientContext &context,
                                                                    const optional_idx max_db_count) {

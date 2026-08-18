@@ -1,0 +1,44 @@
+# name: test/sql/attach/attach_detach_default_database.test
+# description: Test that the default database is updated when the default database is detached
+# group: [attach]
+
+statement ok
+ATTACH '{TEST_DIR}/detach_default.db' AS db1
+
+statement ok
+USE db1
+
+# we can detach "memory" because this connection no longer uses it as the default database
+statement ok
+DETACH memory
+
+query I
+SELECT current_database()
+----
+db1
+
+# a connection that never ran USE falls back to the first attached database - which is now db1
+query I con2
+SELECT current_database()
+----
+db1
+
+statement ok con2
+CREATE TABLE unqualified_table(i INTEGER)
+
+query I con2
+SELECT database_name FROM duckdb_tables() WHERE table_name='unqualified_table'
+----
+db1
+
+# renaming the default database keeps it the default
+statement ok
+ATTACH '{TEST_DIR}/detach_default2.db' AS db2
+
+statement ok
+ALTER DATABASE db1 SET ALIAS TO db3
+
+query I con3
+SELECT current_database()
+----
+db3

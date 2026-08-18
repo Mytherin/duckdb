@@ -1,5 +1,6 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/checksum.hpp"
@@ -456,6 +457,10 @@ void WriteAheadLogReplayer::MergeIntoRecoveryWAL(Connection &con, const ReplaySt
 unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle> handle, WALReplayState replay_state) {
 	auto &database = storage_manager.GetAttached();
 	Connection con(database.GetDatabase());
+	// unqualified entries in the WAL always belong to the database we are replaying
+	ClientData::Get(*con.context)
+	    .catalog_search_path->Set(CatalogSearchEntry(database.GetName(), DEFAULT_SCHEMA),
+	                              CatalogSetPathType::SET_DIRECTLY);
 	auto wal_path = handle->GetPath();
 	BufferedFileReader reader(FileSystem::Get(database), std::move(handle));
 	if (reader.Finished()) {
