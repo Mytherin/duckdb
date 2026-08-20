@@ -106,8 +106,9 @@ SHOW TABLES FROM nonexistent_db
 ----
 Catalog Error: SHOW TABLES FROM: No catalog + schema named "db.nonexistent_db" found
 
-# Test non-existent schema
+# Test non-existent schema - "main" is not an attached database, so it is read as the outermost schema of a
+# (nested) schema path in the current catalog
 statement error
 SHOW TABLES FROM main.nonexistent_schema
 ----
-Catalog Error: SHOW TABLES FROM: No catalog + schema named "main.nonexistent_schema" found
+Catalog Error: SHOW TABLES FROM: No catalog + schema named "db.main.nonexistent_schema" found
