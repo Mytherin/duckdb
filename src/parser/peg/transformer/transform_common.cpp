@@ -303,9 +303,12 @@ QualifiedName PEGTransformerFactory::TransformSchemaReservedTypeName(PEGTransfor
 
 QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaTypeName(
     PEGTransformer &transformer, const Identifier &catalog_qualification,
-    const Identifier &reserved_schema_qualification, const Identifier &reserved_type_name) {
-	QualifiedName result(catalog_qualification, reserved_schema_qualification, reserved_type_name);
-	return result;
+    const vector<Identifier> &reserved_schema_qualification, const Identifier &reserved_type_name) {
+	// [catalog, schema...] - the schema qualification can be nested (e.g. "cat.s1.s2.type")
+	vector<Identifier> path;
+	path.push_back(catalog_qualification);
+	path.insert(path.end(), reserved_schema_qualification.begin(), reserved_schema_qualification.end());
+	return QualifiedName(std::move(path), reserved_type_name);
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformMapType(PEGTransformer &transformer,

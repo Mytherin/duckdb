@@ -421,11 +421,11 @@ SELECT nextval('"a"."seq');
 ----
 <REGEX>:.*Parser Error.*Unterminated quote.*
 
-# too many separators
+# the qualification is read as a (nested) schema path - the schema does not exist
 statement error
 SELECT nextval('a.b.c.d');
 ----
-<REGEX>:.*Parser Error.*too many entries found.*
+<REGEX>:.*schema "a.b.c" does not exist.*
 
 # start exceeds max value
 statement error

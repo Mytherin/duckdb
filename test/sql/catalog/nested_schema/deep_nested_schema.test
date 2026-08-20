@@ -1,0 +1,232 @@
+# name: test/sql/catalog/nested_schema/deep_nested_schema.test
+# description: Entries in schemas nested more than one level deep
+# group: [nested_schema]
+
+statement ok
+CREATE SCHEMA s1;
+
+statement ok
+CREATE SCHEMA s1.s2;
+
+statement ok
+CREATE SCHEMA s1.s2.s3;
+
+# TABLE
+
+statement ok
+CREATE TABLE s1.s2.s3.tbl(i INTEGER);
+
+statement ok
+INSERT INTO s1.s2.s3.tbl VALUES (1), (2), (3);
+
+query I
+SELECT * FROM s1.s2.s3.tbl ORDER BY i;
+----
+1
+2
+3
+
+# the catalog can be spelled out on top of the nested schema path
+query I
+SELECT * FROM memory.s1.s2.s3.tbl ORDER BY i;
+----
+1
+2
+3
+
+query I
+SELECT tbl.i FROM s1.s2.s3.tbl ORDER BY i LIMIT 1;
+----
+1
+
+statement ok
+UPDATE s1.s2.s3.tbl SET i = i * 10 WHERE i = 1;
+
+statement ok
+DELETE FROM s1.s2.s3.tbl WHERE i = 3;
+
+query I
+SELECT * FROM s1.s2.s3.tbl ORDER BY i;
+----
+2
+10
+
+query II
+SELECT schema_name, table_name FROM duckdb_tables() WHERE table_name = 'tbl';
+----
+s3	tbl
+
+# VIEW
+
+statement ok
+CREATE VIEW s1.s2.s3.v AS SELECT i * 2 AS x FROM s1.s2.s3.tbl;
+
+query I
+SELECT * FROM s1.s2.s3.v ORDER BY x;
+----
+4
+20
+
+# TYPE
+
+statement ok
+CREATE TYPE s1.s2.s3.mood AS ENUM ('happy', 'sad');
+
+query I
+SELECT 'sad'::s1.s2.s3.mood;
+----
+sad
+
+query I
+SELECT 'sad'::memory.s1.s2.s3.mood;
+----
+sad
+
+# MACRO
+
+statement ok
+CREATE MACRO s1.s2.s3.double(a) AS a * 2;
+
+query I
+SELECT s1.s2.s3.double(21);
+----
+42
+
+statement ok
+CREATE MACRO s1.s2.s3.tbl_macro() AS TABLE SELECT 42 AS x;
+
+query I
+SELECT * FROM s1.s2.s3.tbl_macro();
+----
+42
+
+# SEQUENCE
+
+statement ok
+CREATE SEQUENCE s1.s2.s3.seq START 5;
+
+query I
+SELECT nextval('s1.s2.s3.seq');
+----
+5
+
+query I
+SELECT nextval('memory.s1.s2.s3.seq');
+----
+6
+
+# INDEX
+
+statement ok
+CREATE INDEX idx ON s1.s2.s3.tbl(i);
+
+query II
+SELECT schema_name, index_name FROM duckdb_indexes();
+----
+s3	idx
+
+statement ok
+DROP INDEX s1.s2.s3.idx;
+
+# COMMENT ON
+
+statement ok
+COMMENT ON TABLE s1.s2.s3.tbl IS 'nested table';
+
+query I
+SELECT comment FROM duckdb_tables() WHERE table_name = 'tbl';
+----
+nested table
+
+statement ok
+COMMENT ON COLUMN s1.s2.s3.tbl.i IS 'nested column';
+
+query I
+SELECT comment FROM duckdb_columns() WHERE table_name = 'tbl' AND column_name = 'i';
+----
+nested column
+
+# a name that is deeper than the schema tree does not resolve
+
+statement error
+SELECT * FROM s1.s2.s3.nope.tbl;
+----
+<REGEX>:.*does not exist.*
+
+# DROP
+
+statement ok
+DROP VIEW s1.s2.s3.v;
+
+statement ok
+DROP SEQUENCE s1.s2.s3.seq;
+
+statement ok
+DROP MACRO s1.s2.s3.double;
+
+statement ok
+DROP MACRO TABLE s1.s2.s3.tbl_macro;
+
+statement ok
+DROP TYPE s1.s2.s3.mood;
+
+statement ok
+DROP TABLE s1.s2.s3.tbl;
+
+query I
+SELECT count(*) FROM duckdb_tables();
+----
+0
+
+# an even deeper schema path
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4;
+
+statement ok
+CREATE TABLE s1.s2.s3.s4.t(i INTEGER);
+
+statement ok
+INSERT INTO s1.s2.s3.s4.t VALUES (42);
+
+query I
+SELECT * FROM s1.s2.s3.s4.t;
+----
+42
+
+statement ok
+DROP SCHEMA s1 CASCADE;
+
+query I
+SELECT count(*) FROM duckdb_schemas() WHERE schema_name IN ('s1', 's2', 's3', 's4');
+----
+0
+
+# SHOW TABLES FROM a deeply nested schema
+
+statement ok
+CREATE SCHEMA d1;
+
+statement ok
+CREATE SCHEMA d1.d2;
+
+statement ok
+CREATE SCHEMA d1.d2.d3;
+
+statement ok
+CREATE TABLE d1.d2.d3.tbl(i INTEGER);
+
+query I
+SHOW TABLES FROM d1.d2.d3;
+----
+tbl
+
+query I
+SHOW TABLES FROM memory.d1.d2.d3;
+----
+tbl
+
+statement error
+SHOW TABLES FROM d1.d2.nope;
+----
+<REGEX>:.*No catalog \+ schema named.*

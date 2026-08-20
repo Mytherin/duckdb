@@ -168,6 +168,24 @@ BoundStatement Binder::BindShowTable(ShowRef &ref) {
 		      "ORDER BY all;";
 	} else if (lname == "\"tables\"") {
 		sql = PragmaShowTables();
+	} else if (ref.show_type == ShowType::SHOW_FROM && ref.qualified_name.Path().size() > 3) {
+		// the target is a nested schema path (e.g. "s1.s2.s3"), stored as the qualification with an empty entry name
+		auto &show_path = ref.qualified_name.Path();
+		vector<Identifier> schema_path(show_path.begin(), show_path.end() - 1);
+		auto innermost_schema = schema_path.back();
+		schema_path.pop_back();
+		// resolve the catalog: the leading component is the catalog when it names an attached database, and
+		// otherwise the outermost schema of the nested path
+		auto resolved = Binder::ResolveCatalog(context, QualifiedName(std::move(schema_path), innermost_schema));
+		auto &resolved_path = resolved.Path();
+		auto catalog_name = resolved_path.front();
+		vector<Identifier> nested_path(resolved_path.begin() + 1, resolved_path.end());
+		auto schema_entry = Catalog::GetSchema(context, catalog_name, nested_path, OnEntryNotFound::RETURN_NULL);
+		if (!schema_entry) {
+			throw CatalogException("SHOW TABLES FROM: No catalog + schema named \"%s\" found.", resolved.ToString());
+		}
+		sql =
+		    PragmaShowTables(catalog_name.GetIdentifierName(), innermost_schema.GetIdentifierName(), schema_entry->oid);
 	} else if (ref.show_type == ShowType::SHOW_FROM) {
 		auto catalog_name = ref.GetCatalogName();
 		auto schema_name = ref.GetSchemaName();

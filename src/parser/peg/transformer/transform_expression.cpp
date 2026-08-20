@@ -193,7 +193,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 
 		transformer.in_window_definition = true;
 		auto expr = std::move(*over_clause);
-		expr->SetQualifiedName(QualifiedName(qualified_function.Catalog(), qualified_function.Schema(), Identifier()));
+		expr->SetQualifiedName(qualified_function.WithName(Identifier()));
 		expr->SetFunctionName(lowercase_name);
 
 		for (auto &arg : function_children) {
@@ -326,10 +326,9 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 			throw ParserException("Unknown ordered aggregate %s.", qualified_function.Name());
 		}
 	}
-	auto result = make_uniq<FunctionExpression>(
-	    QualifiedName(qualified_function.Catalog(), qualified_function.Schema(), Identifier(lowercase_name)),
-	    std::move(function_children), std::move(filter_expr), std::move(order_modifier), distinct, false,
-	    export_clause);
+	auto result = make_uniq<FunctionExpression>(qualified_function.WithName(Identifier(lowercase_name)),
+	                                            std::move(function_children), std::move(filter_expr),
+	                                            std::move(order_modifier), distinct, false, export_clause);
 
 	return std::move(result);
 }
@@ -394,12 +393,14 @@ QualifiedName PEGTransformerFactory::TransformSchemaReservedFunctionName(PEGTran
 
 QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaFunctionName(
     PEGTransformer &transformer, const Identifier &catalog_qualification,
-    const optional<Identifier> &reserved_schema_qualification, const Identifier &reserved_function_name) {
+    const optional<vector<Identifier>> &reserved_schema_qualification, const Identifier &reserved_function_name) {
+	// the qualifiers are stored as a plain path - the binder decides which leading component (if any) is the catalog
+	vector<Identifier> path;
+	path.push_back(catalog_qualification);
 	if (reserved_schema_qualification) {
-		return QualifiedName(catalog_qualification, *reserved_schema_qualification, reserved_function_name);
-	} else {
-		return QualifiedName({catalog_qualification}, reserved_function_name);
+		path.insert(path.end(), reserved_schema_qualification->begin(), reserved_schema_qualification->end());
 	}
+	return QualifiedName(std::move(path), reserved_function_name);
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformArrayBoundedListExpression(

@@ -398,10 +398,16 @@ PEGTransformerFactory::TransformQualifiedSequenceNameInternal(PEGTransformer &tr
 		auto catalog_qualification_value = transformer.Transform<Identifier>(catalog_qualification_opt.GetResult());
 		catalog_qualification = catalog_qualification_value;
 	}
-	optional<Identifier> schema_qualification {};
+	optional<vector<Identifier>> schema_qualification {};
 	auto &schema_qualification_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (schema_qualification_opt.HasResult()) {
-		auto schema_qualification_value = transformer.Transform<Identifier>(schema_qualification_opt.GetResult());
+		vector<Identifier> schema_qualification_value;
+		auto &schema_qualification_value_repeat_1 = schema_qualification_opt.GetResult().Cast<RepeatParseResult>();
+		for (auto &schema_qualification_value_item_1 : schema_qualification_value_repeat_1.GetChildren()) {
+			auto schema_qualification_value_value_1 =
+			    transformer.Transform<Identifier>(schema_qualification_value_item_1.get());
+			schema_qualification_value.push_back(schema_qualification_value_value_1);
+		}
 		schema_qualification = schema_qualification_value;
 	}
 	auto sequence_name = list_pr.GetChild(2).Cast<IdentifierParseResult>().identifier;
@@ -1203,7 +1209,13 @@ PEGTransformerFactory::TransformCatalogReservedSchemaTypeNameInternal(PEGTransfo
                                                                       ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto catalog_qualification = transformer.Transform<Identifier>(list_pr.GetChild(0));
-	auto reserved_schema_qualification = transformer.Transform<Identifier>(list_pr.GetChild(1));
+	vector<Identifier> reserved_schema_qualification;
+	auto &reserved_schema_qualification_repeat = list_pr.GetChild(1).Cast<RepeatParseResult>();
+	for (auto &reserved_schema_qualification_item : reserved_schema_qualification_repeat.GetChildren()) {
+		auto reserved_schema_qualification_value =
+		    transformer.Transform<Identifier>(reserved_schema_qualification_item.get());
+		reserved_schema_qualification.push_back(reserved_schema_qualification_value);
+	}
 	auto reserved_type_name = list_pr.GetChild(2).Cast<IdentifierParseResult>().identifier;
 	auto result = TransformCatalogReservedSchemaTypeName(transformer, catalog_qualification,
 	                                                     reserved_schema_qualification, reserved_type_name);
@@ -2864,7 +2876,13 @@ PEGTransformerFactory::TransformCatalogReservedSchemaIdentifierInternal(PEGTrans
                                                                         ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto catalog_qualification = transformer.Transform<Identifier>(list_pr.GetChild(0));
-	auto reserved_schema_qualification = transformer.Transform<Identifier>(list_pr.GetChild(1));
+	vector<Identifier> reserved_schema_qualification;
+	auto &reserved_schema_qualification_repeat = list_pr.GetChild(1).Cast<RepeatParseResult>();
+	for (auto &reserved_schema_qualification_item : reserved_schema_qualification_repeat.GetChildren()) {
+		auto reserved_schema_qualification_value =
+		    transformer.Transform<Identifier>(reserved_schema_qualification_item.get());
+		reserved_schema_qualification.push_back(reserved_schema_qualification_value);
+	}
 	auto reserved_identifier_or_string_literal = transformer.Transform<Identifier>(list_pr.GetChild(2));
 	auto result = TransformCatalogReservedSchemaIdentifier(
 	    transformer, catalog_qualification, reserved_schema_qualification, reserved_identifier_or_string_literal);
@@ -4056,13 +4074,13 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDropTableFuncti
 		auto if_exists_value = transformer.Transform<bool>(if_exists_opt.GetResult());
 		if_exists = if_exists_value;
 	}
-	vector<Identifier> table_function_name;
-	auto table_function_name_items = ExtractParseResultsFromList(list_pr.GetChild(2));
-	for (auto &table_function_name_item : table_function_name_items) {
-		auto table_function_name_value = table_function_name_item.get().Cast<IdentifierParseResult>().identifier;
-		table_function_name.push_back(table_function_name_value);
+	vector<QualifiedName> qualified_table_function;
+	auto qualified_table_function_items = ExtractParseResultsFromList(list_pr.GetChild(2));
+	for (auto &qualified_table_function_item : qualified_table_function_items) {
+		auto qualified_table_function_value = transformer.Transform<QualifiedName>(qualified_table_function_item.get());
+		qualified_table_function.push_back(qualified_table_function_value);
 	}
-	auto result = TransformDropTableFunction(transformer, comment_macro_table, if_exists, table_function_name);
+	auto result = TransformDropTableFunction(transformer, comment_macro_table, if_exists, qualified_table_function);
 	return make_uniq<TypedTransformResult<unique_ptr<DropStatement>>>(std::move(result));
 }
 
@@ -4155,7 +4173,13 @@ PEGTransformerFactory::TransformCatalogReservedSchemaIndexInternal(PEGTransforme
                                                                    ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto catalog_qualification = transformer.Transform<Identifier>(list_pr.GetChild(0));
-	auto reserved_schema_qualification = transformer.Transform<Identifier>(list_pr.GetChild(1));
+	vector<Identifier> reserved_schema_qualification;
+	auto &reserved_schema_qualification_repeat = list_pr.GetChild(1).Cast<RepeatParseResult>();
+	for (auto &reserved_schema_qualification_item : reserved_schema_qualification_repeat.GetChildren()) {
+		auto reserved_schema_qualification_value =
+		    transformer.Transform<Identifier>(reserved_schema_qualification_item.get());
+		reserved_schema_qualification.push_back(reserved_schema_qualification_value);
+	}
 	auto reserved_index_name = list_pr.GetChild(2).Cast<IdentifierParseResult>().identifier;
 	auto result = TransformCatalogReservedSchemaIndex(transformer, catalog_qualification, reserved_schema_qualification,
 	                                                  reserved_index_name);
@@ -4597,11 +4621,18 @@ PEGTransformerFactory::TransformCatalogReservedSchemaFunctionNameInternal(PEGTra
                                                                           ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto catalog_qualification = transformer.Transform<Identifier>(list_pr.GetChild(0));
-	optional<Identifier> reserved_schema_qualification {};
+	optional<vector<Identifier>> reserved_schema_qualification {};
 	auto &reserved_schema_qualification_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (reserved_schema_qualification_opt.HasResult()) {
-		auto reserved_schema_qualification_value =
-		    transformer.Transform<Identifier>(reserved_schema_qualification_opt.GetResult());
+		vector<Identifier> reserved_schema_qualification_value;
+		auto &reserved_schema_qualification_value_repeat_1 =
+		    reserved_schema_qualification_opt.GetResult().Cast<RepeatParseResult>();
+		for (auto &reserved_schema_qualification_value_item_1 :
+		     reserved_schema_qualification_value_repeat_1.GetChildren()) {
+			auto reserved_schema_qualification_value_value_1 =
+			    transformer.Transform<Identifier>(reserved_schema_qualification_value_item_1.get());
+			reserved_schema_qualification_value.push_back(reserved_schema_qualification_value_value_1);
+		}
 		reserved_schema_qualification = reserved_schema_qualification_value;
 	}
 	auto reserved_function_name = list_pr.GetChild(2).Cast<IdentifierParseResult>().identifier;
@@ -8954,7 +8985,13 @@ PEGTransformerFactory::TransformCatalogReservedSchemaTableInternal(PEGTransforme
                                                                    ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto catalog_qualification = transformer.Transform<Identifier>(list_pr.GetChild(0));
-	auto reserved_schema_qualification = transformer.Transform<Identifier>(list_pr.GetChild(1));
+	vector<Identifier> reserved_schema_qualification;
+	auto &reserved_schema_qualification_repeat = list_pr.GetChild(1).Cast<RepeatParseResult>();
+	for (auto &reserved_schema_qualification_item : reserved_schema_qualification_repeat.GetChildren()) {
+		auto reserved_schema_qualification_value =
+		    transformer.Transform<Identifier>(reserved_schema_qualification_item.get());
+		reserved_schema_qualification.push_back(reserved_schema_qualification_value);
+	}
 	auto reserved_table_name = list_pr.GetChild(2).Cast<IdentifierParseResult>().identifier;
 	auto result = TransformCatalogReservedSchemaTable(transformer, catalog_qualification, reserved_schema_qualification,
 	                                                  reserved_table_name);
@@ -9038,10 +9075,16 @@ PEGTransformerFactory::TransformQualifiedTableFunctionInternal(PEGTransformer &t
 		auto catalog_qualification_value = transformer.Transform<Identifier>(catalog_qualification_opt.GetResult());
 		catalog_qualification = catalog_qualification_value;
 	}
-	optional<Identifier> schema_qualification {};
+	optional<vector<Identifier>> schema_qualification {};
 	auto &schema_qualification_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (schema_qualification_opt.HasResult()) {
-		auto schema_qualification_value = transformer.Transform<Identifier>(schema_qualification_opt.GetResult());
+		vector<Identifier> schema_qualification_value;
+		auto &schema_qualification_value_repeat_1 = schema_qualification_opt.GetResult().Cast<RepeatParseResult>();
+		for (auto &schema_qualification_value_item_1 : schema_qualification_value_repeat_1.GetChildren()) {
+			auto schema_qualification_value_value_1 =
+			    transformer.Transform<Identifier>(schema_qualification_value_item_1.get());
+			schema_qualification_value.push_back(schema_qualification_value_value_1);
+		}
 		schema_qualification = schema_qualification_value;
 	}
 	auto table_function_name = list_pr.GetChild(2).Cast<IdentifierParseResult>().identifier;

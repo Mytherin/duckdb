@@ -45,13 +45,13 @@ bool PEGTransformerFactory::TransformFunctionTypeFunction(PEGTransformer &transf
 unique_ptr<DropStatement>
 PEGTransformerFactory::TransformDropTableFunction(PEGTransformer &transformer, const CatalogType &comment_macro_table,
                                                   const optional<bool> &if_exists,
-                                                  const vector<Identifier> &table_function_name) {
+                                                  const vector<QualifiedName> &qualified_table_function) {
 	auto result = make_uniq<DropStatement>();
 	auto info = make_uniq<DropInfo>();
-	if (table_function_name.size() > 1) {
+	if (qualified_table_function.size() > 1) {
 		throw NotImplementedException("Can only drop one object at a time");
 	}
-	info->SetQualifiedName(QualifiedName(table_function_name[0]));
+	info->SetQualifiedName(qualified_table_function[0]);
 	info->type = comment_macro_table;
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	result->info = std::move(info);
@@ -123,9 +123,12 @@ QualifiedName PEGTransformerFactory::TransformSchemaReservedIndex(PEGTransformer
 
 QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaIndex(
     PEGTransformer &transformer, const Identifier &catalog_qualification,
-    const Identifier &reserved_schema_qualification, const Identifier &reserved_index_name) {
-	QualifiedName result(catalog_qualification, reserved_schema_qualification, reserved_index_name);
-	return result;
+    const vector<Identifier> &reserved_schema_qualification, const Identifier &reserved_index_name) {
+	// [catalog, schema...] - the schema qualification can be nested (e.g. "cat.s1.s2.idx")
+	vector<Identifier> path;
+	path.push_back(catalog_qualification);
+	path.insert(path.end(), reserved_schema_qualification.begin(), reserved_schema_qualification.end());
+	return QualifiedName(std::move(path), reserved_index_name);
 }
 
 unique_ptr<DropStatement>

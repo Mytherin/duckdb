@@ -4989,7 +4989,7 @@ public:
 	                                                                               ParseResult &parse_result);
 	static QualifiedName TransformQualifiedSequenceName(PEGTransformer &transformer,
 	                                                    const optional<Identifier> &catalog_qualification,
-	                                                    const optional<Identifier> &schema_qualification,
+	                                                    const optional<vector<Identifier>> &schema_qualification,
 	                                                    const Identifier &sequence_name);
 	static unique_ptr<TransformResultValue> TransformAlterSequenceOptionsInternal(PEGTransformer &transformer,
 	                                                                              ParseResult &parse_result);
@@ -5285,7 +5285,7 @@ public:
 	                                                                                       ParseResult &parse_result);
 	static QualifiedName TransformCatalogReservedSchemaTypeName(PEGTransformer &transformer,
 	                                                            const Identifier &catalog_qualification,
-	                                                            const Identifier &reserved_schema_qualification,
+	                                                            const vector<Identifier> &reserved_schema_qualification,
 	                                                            const Identifier &reserved_type_name);
 	static unique_ptr<TransformResultValue> TransformSchemaReservedTypeNameInternal(PEGTransformer &transformer,
 	                                                                                ParseResult &parse_result);
@@ -5851,7 +5851,7 @@ public:
 	TransformCatalogReservedSchemaIdentifierInternal(PEGTransformer &transformer, ParseResult &parse_result);
 	static QualifiedName
 	TransformCatalogReservedSchemaIdentifier(PEGTransformer &transformer, const Identifier &catalog_qualification,
-	                                         const Identifier &reserved_schema_qualification,
+	                                         const vector<Identifier> &reserved_schema_qualification,
 	                                         const Identifier &reserved_identifier_or_string_literal);
 	static unique_ptr<TransformResultValue> TransformIdentifierOrStringLiteralInternal(PEGTransformer &transformer,
 	                                                                                   ParseResult &parse_result);
@@ -6240,7 +6240,7 @@ public:
 	static unique_ptr<DropStatement> TransformDropTableFunction(PEGTransformer &transformer,
 	                                                            const CatalogType &comment_macro_table,
 	                                                            const optional<bool> &if_exists,
-	                                                            const vector<Identifier> &table_function_name);
+	                                                            const vector<QualifiedName> &qualified_table_function);
 	static unique_ptr<TransformResultValue> TransformDropFunctionInternal(PEGTransformer &transformer,
 	                                                                      ParseResult &parse_result);
 	static unique_ptr<DropStatement> TransformDropFunction(PEGTransformer &transformer, const bool &function_type_macro,
@@ -6268,7 +6268,7 @@ public:
 	                                                                                    ParseResult &parse_result);
 	static QualifiedName TransformCatalogReservedSchemaIndex(PEGTransformer &transformer,
 	                                                         const Identifier &catalog_qualification,
-	                                                         const Identifier &reserved_schema_qualification,
+	                                                         const vector<Identifier> &reserved_schema_qualification,
 	                                                         const Identifier &reserved_index_name);
 	static unique_ptr<TransformResultValue> TransformDropSequenceInternal(PEGTransformer &transformer,
 	                                                                      ParseResult &parse_result);
@@ -6411,7 +6411,7 @@ public:
 	TransformCatalogReservedSchemaFunctionNameInternal(PEGTransformer &transformer, ParseResult &parse_result);
 	static QualifiedName
 	TransformCatalogReservedSchemaFunctionName(PEGTransformer &transformer, const Identifier &catalog_qualification,
-	                                           const optional<Identifier> &reserved_schema_qualification,
+	                                           const optional<vector<Identifier>> &reserved_schema_qualification,
 	                                           const Identifier &reserved_function_name);
 	static unique_ptr<TransformResultValue> TransformSchemaReservedFunctionNameInternal(PEGTransformer &transformer,
 	                                                                                    ParseResult &parse_result);
@@ -7899,10 +7899,10 @@ public:
 	                                                             const Identifier &reserved_table_name);
 	static unique_ptr<TransformResultValue> TransformCatalogReservedSchemaTableInternal(PEGTransformer &transformer,
 	                                                                                    ParseResult &parse_result);
-	static unique_ptr<BaseTableRef> TransformCatalogReservedSchemaTable(PEGTransformer &transformer,
-	                                                                    const Identifier &catalog_qualification,
-	                                                                    const Identifier &reserved_schema_qualification,
-	                                                                    const Identifier &reserved_table_name);
+	static unique_ptr<BaseTableRef>
+	TransformCatalogReservedSchemaTable(PEGTransformer &transformer, const Identifier &catalog_qualification,
+	                                    const vector<Identifier> &reserved_schema_qualification,
+	                                    const Identifier &reserved_table_name);
 	static unique_ptr<TransformResultValue> TransformTableFunctionInternal(PEGTransformer &transformer,
 	                                                                       ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformTableFunctionLateralOptInternal(PEGTransformer &transformer,
@@ -7928,7 +7928,7 @@ public:
 	                                                                                ParseResult &parse_result);
 	static QualifiedName TransformQualifiedTableFunction(PEGTransformer &transformer,
 	                                                     const optional<Identifier> &catalog_qualification,
-	                                                     const optional<Identifier> &schema_qualification,
+	                                                     const optional<vector<Identifier>> &schema_qualification,
 	                                                     const Identifier &table_function_name);
 	static unique_ptr<TransformResultValue> TransformTableFunctionArgumentsInternal(PEGTransformer &transformer,
 	                                                                                ParseResult &parse_result);

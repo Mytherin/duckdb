@@ -14,17 +14,18 @@ CREATE TABLE s1.s2.t(i INTEGER);
 statement ok
 INSERT INTO s1.s2.t VALUES (1);
 
-# a dotted name is at most three components: a nested table cannot additionally be qualified with its catalog
+# a nested table can additionally be qualified with its catalog
 
-statement error
+query I
 SELECT * FROM memory.s1.s2.t;
 ----
-<REGEX>:.*syntax error.*
+1
 
-statement error
+statement ok
 CREATE TABLE memory.s1.s2.t2(i INTEGER);
-----
-<REGEX>:.*syntax error.*
+
+statement ok
+DROP TABLE memory.s1.s2.t2;
 
 # nested schemas cannot be used in the search path - the error says so explicitly
 

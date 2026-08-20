@@ -429,9 +429,12 @@ Identifier PEGTransformerFactory::TransformCatalogQualification(PEGTransformer &
 
 QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaIdentifier(
     PEGTransformer &transformer, const Identifier &catalog_qualification,
-    const Identifier &reserved_schema_qualification, const Identifier &reserved_identifier_or_string_literal) {
-	QualifiedName result(catalog_qualification, reserved_schema_qualification, reserved_identifier_or_string_literal);
-	return result;
+    const vector<Identifier> &reserved_schema_qualification, const Identifier &reserved_identifier_or_string_literal) {
+	// [catalog, schema...] - the schema qualification can be nested (e.g. "cat.s1.s2.name")
+	vector<Identifier> path;
+	path.push_back(catalog_qualification);
+	path.insert(path.end(), reserved_schema_qualification.begin(), reserved_schema_qualification.end());
+	return QualifiedName(std::move(path), reserved_identifier_or_string_literal);
 }
 
 QualifiedName PEGTransformerFactory::TransformSchemaReservedIdentifierOrStringLiteral(
@@ -1627,23 +1630,27 @@ unique_ptr<BaseTableRef> PEGTransformerFactory::TransformSchemaReservedTable(PEG
 
 unique_ptr<BaseTableRef> PEGTransformerFactory::TransformCatalogReservedSchemaTable(
     PEGTransformer &transformer, const Identifier &catalog_qualification,
-    const Identifier &reserved_schema_qualification, const Identifier &reserved_table_name) {
-	const auto description =
-	    TableDescription(QualifiedName(catalog_qualification, reserved_schema_qualification, reserved_table_name));
+    const vector<Identifier> &reserved_schema_qualification, const Identifier &reserved_table_name) {
+	// [catalog, schema...] - the schema qualification can be nested (e.g. "cat.s1.s2.tbl")
+	vector<Identifier> path;
+	path.push_back(catalog_qualification);
+	path.insert(path.end(), reserved_schema_qualification.begin(), reserved_schema_qualification.end());
+	const auto description = TableDescription(QualifiedName(std::move(path), reserved_table_name));
 	return make_uniq<BaseTableRef>(description);
 }
 
-QualifiedName PEGTransformerFactory::TransformQualifiedTableFunction(PEGTransformer &transformer,
-                                                                     const optional<Identifier> &catalog_qualification,
-                                                                     const optional<Identifier> &schema_qualification,
-                                                                     const Identifier &table_function_name) {
-	Identifier catalog = catalog_qualification ? *catalog_qualification : Identifier();
-	Identifier schema = schema_qualification ? *schema_qualification : Identifier();
-	if (!catalog.empty() && schema.empty()) {
-		schema = std::move(catalog);
-		catalog = Identifier();
+QualifiedName PEGTransformerFactory::TransformQualifiedTableFunction(
+    PEGTransformer &transformer, const optional<Identifier> &catalog_qualification,
+    const optional<vector<Identifier>> &schema_qualification, const Identifier &table_function_name) {
+	// the qualifiers are stored as a plain path - the binder decides which leading component (if any) is the catalog
+	vector<Identifier> path;
+	if (catalog_qualification) {
+		path.push_back(*catalog_qualification);
 	}
-	return QualifiedName(std::move(catalog), std::move(schema), table_function_name);
+	if (schema_qualification) {
+		path.insert(path.end(), schema_qualification->begin(), schema_qualification->end());
+	}
+	return QualifiedName(std::move(path), table_function_name);
 }
 
 vector<FunctionArgument>

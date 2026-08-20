@@ -114,6 +114,11 @@ void Binder::BindSchemaOrCatalog(Identifier &catalog, Identifier &schema) {
 }
 
 void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, QualifiedName &qualified_name) {
+	if (qualified_name.Path().size() > 2) {
+		// the name carries more than a single qualifier - there is no catalog/schema ambiguity to resolve, and
+		// rebuilding it from [catalog, schema, name] would drop the middle of a nested schema path
+		return;
+	}
 	auto catalog = qualified_name.Catalog();
 	auto schema = qualified_name.Schema();
 	BindSchemaOrCatalog(retriever, catalog, schema);

@@ -75,11 +75,14 @@ CALL register_external_resource_type('q@x', kind := 'catalog', create_function :
 ----
 <REGEX>:.*'create_function' is not a valid function name.*
 
-# Deeper than catalog.schema.name.
-statement error
-CALL register_external_resource_type('q@x', kind := 'catalog', create_function := 'a.b.c.d');
+# A name qualified with a nested schema path is valid.
+statement ok
+CALL register_external_resource_type('nested@x', kind := 'catalog', create_function := 'a.b.c.d');
+
+query T
+SELECT create_function FROM duckdb_external_resource_types() WHERE name = 'nested@x';
 ----
-<REGEX>:.*'create_function' is not a valid function name.*
+a.b.c.d
 
 # An unterminated quote fails to parse.
 statement error
@@ -105,7 +108,7 @@ CALL register_external_resource_type('q@x', kind := 'catalog', create_function :
 <REGEX>:.*'status_function' is not a valid function name.*
 
 statement error
-CALL register_external_resource_type('q@x', kind := 'catalog', create_function := 'c', destroy_function := 'a.b.c.d');
+CALL register_external_resource_type('q@x', kind := 'catalog', create_function := 'c', destroy_function := '"unterminated');
 ----
 <REGEX>:.*'destroy_function' is not a valid function name.*
 

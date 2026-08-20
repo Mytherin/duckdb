@@ -118,6 +118,9 @@ struct QualifiedName {
 	static QualifiedName Parse(const string &input);
 	static vector<Identifier> ParseComponents(const string &input);
 	string ToString(QualifiedNameToStringMode mode = QualifiedNameToStringMode::DEFAULT) const;
+	//! Render only the (possibly nested) catalog/schema qualification - every component is followed by a dot, so an
+	//! unqualified name renders as an empty string
+	string QualificationToString() const;
 
 	hash_t Hash() const;
 	bool operator==(const QualifiedName &rhs) const;

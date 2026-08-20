@@ -288,14 +288,10 @@ optional_ptr<CatalogEntry> ColumnQualifier::QualifyFunction(FunctionExpression &
 		return nullptr;
 	}
 	// the function exists in the system catalog - turn this into a dot call
+	// the qualification becomes the column reference, i.e. "tbl.x.lower()" becomes "lower(tbl.x)"
 	ErrorData error;
-	unique_ptr<ColumnRefExpression> colref;
-	if (function.GetQualifiedName().Catalog().empty()) {
-		colref = make_uniq<ColumnRefExpression>(function.GetQualifiedName().Schema());
-	} else {
-		colref =
-		    make_uniq<ColumnRefExpression>(function.GetQualifiedName().Schema(), function.GetQualifiedName().Catalog());
-	}
+	auto &qualification = function.GetQualifiedName().Path();
+	auto colref = make_uniq<ColumnRefExpression>(vector<Identifier>(qualification.begin(), qualification.end() - 1));
 	auto new_colref = QualifyColumnName(*colref, error);
 	if (!new_colref) {
 		new_colref = std::move(colref);

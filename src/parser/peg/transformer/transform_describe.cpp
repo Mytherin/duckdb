@@ -27,16 +27,9 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowTables(PEGTransformer 
                                                                  const QualifiedName &qualified_name) {
 	auto showref = make_uniq<ShowRef>();
 	showref->show_type = ShowType::SHOW_FROM;
-	if (!IsInvalidCatalog(qualified_name.Catalog())) {
-		throw ParserException("Expected \"SHOW TABLES FROM database\", \"SHOW TABLES FROM schema\", or "
-		                      "\"SHOW TABLES FROM database.schema\"");
-	}
-	if (IsInvalidSchema(qualified_name.Schema())) {
-		showref->SetSchemaName(qualified_name.Name());
-	} else {
-		showref->SetCatalogName(qualified_name.Schema());
-		showref->SetSchemaName(qualified_name.Name());
-	}
+	// the target is a (possibly nested) schema path, optionally prefixed with a catalog - it is stored as the
+	// qualification of the reference, with an empty entry name
+	showref->qualified_name = QualifiedName(qualified_name.Path(), Identifier());
 	auto select_node = make_uniq<SelectNode>();
 	select_node->select_list.push_back(make_uniq<StarExpression>());
 	select_node->from_table = std::move(showref);
