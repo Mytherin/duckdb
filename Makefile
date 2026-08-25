@@ -833,6 +833,7 @@ format-parser-grammar: $(FORMAT_SETUP_DEPS)
 	$(FORMAT_PYTHON) scripts/format.py src/parser/peg/transformer/transform_generated.cpp --fix --noconfirm
 	$(FORMAT_PYTHON) scripts/format.py src/parser/peg/transformer/transform_generated_trampoline.cpp --fix --noconfirm
 	$(FORMAT_PYTHON) scripts/format.py src/parser/peg/matcher.cpp --fix --noconfirm
+	$(FORMAT_PYTHON) scripts/format.py src/parser/peg/matcher_factory.cpp --fix --noconfirm
 
 .PHONY: parser-grammar-tools parser-grammar
 parser-grammar-tools: $(FORMAT_SETUP_DEPS)
@@ -906,8 +907,8 @@ generate-files-deps:
 	$(PYTHON) -m pip install --group api_spec/pyproject.toml:generate
 	$(PYTHON) -m pip install cxxheaderparser pcpp
 
-generate-files:
-	./scripts/capi_v1_regen.sh
+generate-files: $(FORMAT_SETUP_DEPS)
+	FORMAT_PYTHON="$(abspath $(FORMAT_PYTHON))" ./scripts/capi_v1_regen.sh
 	$(PYTHON) scripts/generate_functions.py
 	$(PYTHON) scripts/generate_metrics.py
 	$(PYTHON) scripts/generate_settings.py

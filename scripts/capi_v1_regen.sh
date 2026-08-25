@@ -5,6 +5,14 @@ set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
+if ! command -v capigen >/dev/null 2>&1; then
+	echo "error: capigen is not on PATH - run 'make generate-files-deps' to install the generator dependencies" >&2
+	exit 1
+fi
+
+# the formatter runs from the repository's format venv when make provides it (see the format_venv target)
+FORMAT_PYTHON="${FORMAT_PYTHON:-python3}"
+
 capigen c \
 	--spec-dir api_spec/v1 \
 	-o src/include/duckdb.h
@@ -15,6 +23,6 @@ capigen extension_header \
 	--internal-out src/include/duckdb/main/capi/extension_api.hpp \
 	-o src/include/duckdb_extension.h
 
-python3 scripts/format.py src/include/duckdb.h --fix --noconfirm
-python3 scripts/format.py src/include/duckdb_extension.h --fix --noconfirm
-python3 scripts/format.py src/include/duckdb/main/capi/extension_api.hpp --fix --noconfirm
+"$FORMAT_PYTHON" scripts/format.py src/include/duckdb.h --fix --noconfirm
+"$FORMAT_PYTHON" scripts/format.py src/include/duckdb_extension.h --fix --noconfirm
+"$FORMAT_PYTHON" scripts/format.py src/include/duckdb/main/capi/extension_api.hpp --fix --noconfirm
