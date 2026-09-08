@@ -185,6 +185,11 @@ TableFunction ReadCSVTableFunction::GetAutoFunction() {
 void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(MultiFileReader::CreateFunctionSet(ReadCSVTableFunction::GetFunction()));
 	set.AddFunction(MultiFileReader::CreateFunctionSet(ReadCSVTableFunction::GetAutoFunction()));
+	// the single-file CSV reader, and the multi-file reader that is built by wrapping it
+	TableFunctionSet single_file_set("read_single_csv_file");
+	single_file_set.AddFunction(ReadCSVTableFunction::GetSingleFileFunction());
+	set.AddFunction(std::move(single_file_set));
+	set.AddFunction(MultiFileReader::CreateFunctionSet(ReadCSVTableFunction::GetMultiFileFunction("read_csv_new")));
 }
 
 unique_ptr<TableRef> ReadCSVReplacement(ClientContext &context, ReplacementScanInput &input,

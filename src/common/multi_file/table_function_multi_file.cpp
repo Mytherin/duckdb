@@ -307,7 +307,8 @@ optional_idx TableFunctionMultiFileWrapper::MaxThreads(ClientContext &context, c
 
 void TableFunctionMultiFileWrapper::CombineSchemas(ClientContext &context,
                                                    const vector<shared_ptr<BaseUnionData>> &union_data,
-                                                   vector<LogicalType> &return_types, vector<Identifier> &names) {
+                                                   bool union_by_name, vector<LogicalType> &return_types,
+                                                   vector<Identifier> &names) {
 	schema_combined = true;
 	if (function.combine_schema) {
 		vector<reference<const FunctionData>> bind_data;
@@ -321,7 +322,7 @@ void TableFunctionMultiFileWrapper::CombineSchemas(ClientContext &context,
 			bind_data.emplace_back(*function_data);
 		}
 		if (have_all_bind_data) {
-			TableFunctionCombineSchemaInput input(bind_data);
+			TableFunctionCombineSchemaInput input(bind_data, union_by_name);
 			combined_bind_data = function.combine_schema(context, input, return_types, names);
 			if (combined_bind_data) {
 				// the function combined the schemas itself - every file is read using the resulting bind data
@@ -335,14 +336,17 @@ void TableFunctionMultiFileWrapper::CombineSchemas(ClientContext &context,
 		}
 	}
 	// fall back to combining the return types of the files
-	MultiFileReaderInterface::CombineSchemas(context, union_data, return_types, names);
+	MultiFileReaderInterface::CombineSchemas(context, union_data, union_by_name, return_types, names);
 	combined_names = names;
 	combined_types = return_types;
 	ReleaseBindData(union_data);
 }
 
 void TableFunctionMultiFileWrapper::FinalizeBindData(MultiFileBindData &multi_file_data) {
-	if (!schema_combined) {
+	if (!schema_combined || !combined_bind_data) {
+		// either the schema comes from a single file, or the schemas were combined by type. In the latter case every
+		// file is bound on its own and the column mapper reconciles it with the combined schema - only a schema the
+		// function combined itself can be used to read every file
 		return;
 	}
 	auto &data = multi_file_data.bind_data->Cast<TableFunctionMultiFileData>();

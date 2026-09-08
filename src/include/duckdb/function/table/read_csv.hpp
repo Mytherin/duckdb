@@ -116,6 +116,10 @@ struct CSVCopyFunction {
 struct ReadCSVTableFunction {
 	static TableFunction GetFunction();
 	static TableFunction GetAutoFunction();
+	//! The CSV reader that reads a single file - this is what the multi-file CSV reader wraps
+	static TableFunction GetSingleFileFunction();
+	//! The single-file CSV reader wrapped into a multi-file function
+	static TableFunction GetMultiFileFunction(Identifier name);
 	static void ReadCSVAddNamedParameters(TableFunction &table_function);
 	static void RegisterFunction(BuiltinFunctions &set);
 };

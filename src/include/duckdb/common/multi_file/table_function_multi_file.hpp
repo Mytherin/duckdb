@@ -179,7 +179,7 @@ public:
 	                        const MultiFileGlobalState &global_state, FileExpandResult expand_result) override;
 	void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<Identifier> &names,
 	                MultiFileBindData &bind_data) override;
-	void CombineSchemas(ClientContext &context, const vector<shared_ptr<BaseUnionData>> &union_data,
+	void CombineSchemas(ClientContext &context, const vector<shared_ptr<BaseUnionData>> &union_data, bool union_by_name,
 	                    vector<LogicalType> &return_types, vector<Identifier> &names) override;
 	void FinalizeBindData(MultiFileBindData &multi_file_data) override;
 	unique_ptr<GlobalTableFunctionState> InitializeGlobalState(ClientContext &context, MultiFileBindData &bind_data,

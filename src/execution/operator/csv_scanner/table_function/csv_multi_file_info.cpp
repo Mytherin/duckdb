@@ -286,7 +286,7 @@ unique_ptr<GlobalTableFunctionState> CSVMultiFileInfo::InitializeGlobalState(Cli
 		                             csv_data.options.rejects_table_name.GetValue())
 		    ->InitializeTable(context, csv_data);
 	}
-	return make_uniq<CSVGlobalState>(context, csv_data.options, bind_data.file_list->GetTotalFileCount(), bind_data);
+	return make_uniq<CSVGlobalState>(context, csv_data, bind_data.names, bind_data.file_list->GetTotalFileCount());
 }
 
 unique_ptr<LocalTableFunctionState> CSVMultiFileInfo::InitializeLocalState(ClientContext &,

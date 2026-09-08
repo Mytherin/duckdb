@@ -46,7 +46,7 @@ struct MultiFileReaderInterface {
 	//! Combine the schemas of a set of files that were bound individually into a single schema
 	//! The default implementation combines the return types of the files by name
 	virtual void CombineSchemas(ClientContext &context, const vector<shared_ptr<BaseUnionData>> &union_data,
-	                            vector<LogicalType> &return_types, vector<Identifier> &names);
+	                            bool union_by_name, vector<LogicalType> &return_types, vector<Identifier> &names);
 	virtual void FinalizeBindData(MultiFileBindData &multi_file_data);
 	virtual void GetBindInfo(const TableFunctionData &bind_data, BindInfo &info);
 	virtual optional_idx MaxThreads(const MultiFileBindData &bind_data_p, const MultiFileGlobalState &global_state,

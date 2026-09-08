@@ -188,12 +188,16 @@ struct TableFunctionInitInput {
 
 //! Input for combining the schemas of several files that were bound individually into one schema
 struct TableFunctionCombineSchemaInput {
-	explicit TableFunctionCombineSchemaInput(const vector<reference<const FunctionData>> &bind_data_p)
-	    : bind_data(bind_data_p) {
+	TableFunctionCombineSchemaInput(const vector<reference<const FunctionData>> &bind_data_p, bool union_by_name_p)
+	    : bind_data(bind_data_p), union_by_name(union_by_name_p) {
 	}
 
 	//! The bind data of each of the files whose schemas are being combined - in file order
 	const vector<reference<const FunctionData>> &bind_data;
+	//! Whether the schemas are combined because of union_by_name - the files are then expected to have different
+	//! columns, which are unified by name. Otherwise the files are expected to have the same columns, and the
+	//! schemas are combined to determine the schema of the scan more accurately
+	bool union_by_name;
 };
 
 struct TableFunctionInput {

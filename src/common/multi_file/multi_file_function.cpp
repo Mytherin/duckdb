@@ -42,7 +42,7 @@ optional_idx MultiFileReaderInterface::MaxThreads(ClientContext &context, const 
 }
 
 void MultiFileReaderInterface::CombineSchemas(ClientContext &context,
-                                              const vector<shared_ptr<BaseUnionData>> &union_data,
+                                              const vector<shared_ptr<BaseUnionData>> &union_data, bool union_by_name,
                                               vector<LogicalType> &return_types, vector<Identifier> &names) {
 	identifier_map_t<idx_t> union_names_map;
 	for (auto &data : union_data) {

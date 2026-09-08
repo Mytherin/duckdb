@@ -1,0 +1,124 @@
+# name: test/sql/copy/csv/read_single_csv_file.test
+# description: Test read_single_csv_file and the multi-file CSV reader that wraps it
+# group: [csv]
+
+# read_single_csv_file reads exactly one file
+query I
+SELECT count(*) FROM read_single_csv_file('data/csv/tpcds_14.csv')
+----
+19806
+
+# it does not accept a glob or a list of files
+statement error
+SELECT * FROM read_single_csv_file('data/csv/glob/a1/*.csv')
+----
+<REGEX>:.*IO Error.*
+
+statement error
+SELECT * FROM read_single_csv_file(['data/csv/glob/a1/a1.csv'])
+----
+<REGEX>:.*No function matches.*
+
+# projection pushdown - the columns come out in the order they are requested
+query II
+SELECT i_class_id, channel FROM read_single_csv_file('data/csv/tpcds_14.csv') LIMIT 2
+----
+13	store
+4	store
+
+# the options of read_csv are supported
+query I
+SELECT count(*) FROM read_single_csv_file('data/csv/tpcds_14.csv', header=false)
+----
+19807
+
+query I
+SELECT count(*) FROM read_single_csv_file('data/csv/tpcds_14.csv', skip=2)
+----
+19805
+
+query I
+SELECT typeof(channel) FROM read_single_csv_file('data/csv/tpcds_14.csv', all_varchar=true) LIMIT 1
+----
+VARCHAR
+
+# a file is scanned in parallel, and the rows come out in the order they appear in the file
+statement ok
+COPY (SELECT i AS id, 'value_' || i AS s FROM range(200000) t(i)) TO '{TEST_DIR}/ordered.csv' (FORMAT csv, HEADER)
+
+query I
+SELECT bool_and(id = rn) FROM (SELECT id, row_number() OVER () - 1 AS rn FROM read_single_csv_file('{TEST_DIR}/ordered.csv'))
+----
+true
+
+# a small buffer forces the scanner to load buffers while scanning
+query I
+SELECT count(*) FROM read_single_csv_file('data/csv/tpcds_14.csv', buffer_size=1024)
+----
+19806
+
+# ------------------------------------------------------------------------------------------------
+# read_csv_new - the multi file function wrapping read_single_csv_file
+# ------------------------------------------------------------------------------------------------
+
+query I
+SELECT count(*) FROM read_csv_new('data/csv/tpcds_14.csv')
+----
+19806
+
+# globs, lists of files and the filename column come from the multi file reader
+query I
+SELECT count(*) FROM read_csv_new('data/csv/glob/a1/*.csv')
+----
+3
+
+query I
+SELECT count(*) FROM read_csv_new(['data/csv/glob/a1/a1.csv', 'data/csv/glob/a2/a2.csv'])
+----
+6
+
+query I
+SELECT count(DISTINCT filename) FROM read_csv_new('data/csv/glob/a?/*.csv', filename=true)
+----
+3
+
+# union_by_name unifies the columns of files with different schemas
+query I
+SELECT count(*) FROM read_csv_new('data/csv/glob/*/*.csv', union_by_name=true)
+----
+12
+
+query III
+SELECT d, column0, i FROM read_csv_new('data/csv/glob/*/*.csv', union_by_name=true) ORDER BY ALL LIMIT 3
+----
+2019-06-05	NULL	NULL
+2019-06-15	NULL	NULL
+2019-06-25	NULL	NULL
+
+# the dialect of every file is sniffed, and reconciled with the schema of the scan
+query I
+SELECT count(*) FROM read_csv_new('data/csv/error/mismatch/*.csv', ignore_errors=true)
+----
+34968
+
+# rows that cannot be read are stored in the rejects table rather than failing the scan
+query I
+SELECT count(*) FROM read_csv_new('data/csv/error/mismatch/small1.csv', store_rejects=true)
+----
+5
+
+# ordering is preserved when a single file is scanned by several threads
+query I
+SELECT bool_and(id = rn) FROM (SELECT id, row_number() OVER () - 1 AS rn FROM read_csv_new('{TEST_DIR}/ordered.csv'))
+----
+true
+
+query I
+SELECT count(*) FROM read_csv_new('data/csv/tpcds_14.csv', buffer_size=1024)
+----
+19806
+
+statement error
+SELECT * FROM read_csv_new('data/csv/this_file_does_not_exist.csv')
+----
+<REGEX>:.*No files found.*

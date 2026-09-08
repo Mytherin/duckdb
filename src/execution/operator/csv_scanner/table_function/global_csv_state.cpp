@@ -11,9 +11,11 @@
 
 namespace duckdb {
 
-CSVGlobalState::CSVGlobalState(ClientContext &context_p, const CSVReaderOptions &options, idx_t total_file_count,
-                               const MultiFileBindData &bind_data)
-    : context(context_p), bind_data(bind_data), sniffer_mismatch_error(options.sniffer_user_mismatch_error) {
+CSVGlobalState::CSVGlobalState(ClientContext &context_p, ReadCSVData &csv_data_p,
+                               const vector<Identifier> &column_names_p, idx_t total_file_count)
+    : context(context_p), csv_data(csv_data_p), column_names(column_names_p),
+      sniffer_mismatch_error(csv_data_p.options.sniffer_user_mismatch_error) {
+	auto &options = csv_data.options;
 	// There are situations where we only support single threaded scanning
 	auto system_threads = context.db->NumberOfThreads();
 	bool many_csv_files = total_file_count > 1 && total_file_count > system_threads * 2;
@@ -106,7 +108,6 @@ void CSVGlobalState::FinishFile(CSVFileScan &scan) {
 		current_buffer_in_use.reset();
 	}
 	scan.Finish();
-	auto &csv_data = bind_data.bind_data->Cast<ReadCSVData>();
 	const bool ignore_or_store_errors =
 	    csv_data.options.ignore_errors.GetValue() || csv_data.options.store_rejects.GetValue();
 	if (!single_threaded && !ignore_or_store_errors) {
@@ -182,7 +183,6 @@ void FillScanErrorTable(InternalAppender &scan_appender, idx_t scan_idx, idx_t f
 }
 
 void CSVGlobalState::FillRejectsTable(CSVFileScan &scan) {
-	auto &csv_data = bind_data.bind_data->Cast<ReadCSVData>();
 	auto &options = csv_data.options;
 
 	if (!options.store_rejects.GetValue()) {
@@ -206,7 +206,8 @@ void CSVGlobalState::FillRejectsTable(CSVFileScan &scan) {
 		rejects_file_indexes.push_back(rejects->GetCurrentFileIndex(scan_idx));
 	}
 	const idx_t rejects_file_idx = rejects_file_indexes[file_idx];
-	scan.error_handler->FillRejectsTable(errors_appender, rejects_file_idx, scan_idx, scan, *rejects, bind_data, limit);
+	scan.error_handler->FillRejectsTable(errors_appender, rejects_file_idx, scan_idx, scan, *rejects, column_names,
+	                                     limit);
 	if (rejects->count != 0) {
 		rejects->count = 0;
 		FillScanErrorTable(scans_appender, scan_idx, rejects_file_idx, scan);

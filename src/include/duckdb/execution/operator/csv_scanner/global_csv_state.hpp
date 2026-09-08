@@ -46,8 +46,8 @@ struct CSVLocalState : public LocalTableFunctionState {
 //! CSV Global State is used in the CSV Reader Table Function, it controls what each thread
 struct CSVGlobalState : public GlobalTableFunctionState {
 public:
-	CSVGlobalState(ClientContext &context_p, const CSVReaderOptions &options, idx_t total_file_count,
-	               const MultiFileBindData &bind_data);
+	CSVGlobalState(ClientContext &context_p, ReadCSVData &csv_data, const vector<Identifier> &column_names,
+	               idx_t total_file_count);
 
 	~CSVGlobalState() override {
 	}
@@ -70,7 +70,9 @@ public:
 private:
 	//! Reference to the client context that created this scan
 	ClientContext &context;
-	const MultiFileBindData &bind_data;
+	ReadCSVData &csv_data;
+	//! The names of the columns that are read - used when filling the rejects table
+	const vector<Identifier> &column_names;
 
 	string sniffer_mismatch_error;
 
