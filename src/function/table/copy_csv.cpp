@@ -15,6 +15,7 @@
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/common/multi_file/table_function_multi_file.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -467,6 +468,14 @@ void CSVCopyFunction::RegisterFunction(BuiltinFunctions &set) {
 	info.extension = "csv";
 
 	set.AddFunction(info);
+
+	// the same COPY function, but reading through the multi-file wrapper around read_single_csv_file
+	auto new_info = info;
+	new_info.SetName("csv_new");
+	new_info.extension = string();
+	new_info.copy_from_bind = TableFunctionMultiFileWrapper::MultiFileBindCopy;
+	new_info.copy_from_function = ReadCSVTableFunction::GetMultiFileFunction("read_csv_new");
+	set.AddFunction(std::move(new_info));
 }
 
 } // namespace duckdb

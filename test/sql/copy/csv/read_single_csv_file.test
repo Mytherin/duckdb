@@ -101,6 +101,23 @@ SELECT count(*) FROM read_csv_new('data/csv/error/mismatch/*.csv', ignore_errors
 ----
 34968
 
+# which rows are skipped by ignore_errors does not depend on the columns that are projected - reading no column
+# of the file at all (only the filename) skips the same rows as reading all of them
+query I
+SELECT count(*) FROM read_csv_new('data/csv/error/mismatch/*.csv', ignore_errors=true, filename=true)
+----
+34968
+
+query I
+SELECT count(filename) FROM read_csv_new('data/csv/error/mismatch/*.csv', ignore_errors=true, filename=true)
+----
+34968
+
+query I
+SELECT count(*) FROM (SELECT * FROM read_csv_new('data/csv/error/mismatch/*.csv', ignore_errors=true, filename=true))
+----
+34968
+
 # rows that cannot be read are stored in the rejects table rather than failing the scan
 query I
 SELECT count(*) FROM read_csv_new('data/csv/error/mismatch/small1.csv', store_rejects=true)
@@ -122,3 +139,88 @@ statement error
 SELECT * FROM read_csv_new('data/csv/this_file_does_not_exist.csv')
 ----
 <REGEX>:.*No files found.*
+
+# ------------------------------------------------------------------------------------------------
+# the schema is determined by sniffing several files, capped by files_to_sniff
+# ------------------------------------------------------------------------------------------------
+
+statement ok
+COPY (SELECT 1 AS a, 'x' AS b) TO '{TEST_DIR}/sniff_f1.csv' (FORMAT csv, HEADER)
+
+statement ok
+COPY (SELECT 2 AS a, 'y' AS b) TO '{TEST_DIR}/sniff_f2.csv' (FORMAT csv, HEADER)
+
+statement ok
+COPY (SELECT 'notanumber' AS a, 'z' AS b) TO '{TEST_DIR}/sniff_f3.csv' (FORMAT csv, HEADER)
+
+# the third file widens the type of "a", which is only seen when several files are sniffed
+query I
+SELECT column_type FROM (DESCRIBE SELECT * FROM read_csv_new('{TEST_DIR}/sniff_*.csv')) WHERE column_name='a'
+----
+VARCHAR
+
+query II
+SELECT * FROM read_csv_new('{TEST_DIR}/sniff_*.csv') ORDER BY ALL
+----
+1	x
+2	y
+notanumber	z
+
+# sniffing can be limited to the first file, which then types "a" as a number
+query I
+SELECT column_type FROM (DESCRIBE SELECT * FROM read_csv_new('{TEST_DIR}/sniff_*.csv', files_to_sniff=1)) WHERE column_name='a'
+----
+BIGINT
+
+# -1 sniffs every file
+query I
+SELECT column_type FROM (DESCRIBE SELECT * FROM read_csv_new('{TEST_DIR}/sniff_*.csv', files_to_sniff=-1)) WHERE column_name='a'
+----
+VARCHAR
+
+statement error
+SELECT * FROM read_csv_new('{TEST_DIR}/sniff_*.csv', files_to_sniff=0)
+----
+<REGEX>:.*files_to_sniff.*
+
+# ------------------------------------------------------------------------------------------------
+# COPY ... FROM through the wrapper
+# ------------------------------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE copy_target(channel VARCHAR, i_brand_id BIGINT, i_class_id BIGINT, i_category_id BIGINT, sum_sales DOUBLE, number_sales BIGINT)
+
+statement ok
+COPY copy_target FROM 'data/csv/tpcds_14.csv' (FORMAT csv_new)
+
+query II
+SELECT count(*), sum(i_brand_id) FROM copy_target
+----
+19806	139973596298
+
+# the columns come from the target table - a subset of the file's columns works too
+statement ok
+CREATE TABLE copy_subset(channel VARCHAR)
+
+statement ok
+COPY copy_subset FROM 'data/csv/tpcds_14.csv' (FORMAT csv_new)
+
+query I
+SELECT count(*) FROM copy_subset
+----
+19806
+
+# COPY TO is shared with the regular CSV copy function, so a round trip works
+statement ok
+COPY (SELECT 1 AS id, 'x' AS s) TO '{TEST_DIR}/roundtrip.csv' (FORMAT csv_new, HEADER)
+
+statement ok
+CREATE TABLE copy_rt(id BIGINT, s VARCHAR)
+
+statement ok
+COPY copy_rt FROM '{TEST_DIR}/roundtrip.csv' (FORMAT csv_new, HEADER)
+
+query II
+SELECT * FROM copy_rt
+----
+1	x

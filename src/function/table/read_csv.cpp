@@ -189,7 +189,11 @@ void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunctionSet single_file_set("read_single_csv_file");
 	single_file_set.AddFunction(ReadCSVTableFunction::GetSingleFileFunction());
 	set.AddFunction(std::move(single_file_set));
-	set.AddFunction(MultiFileReader::CreateFunctionSet(ReadCSVTableFunction::GetMultiFileFunction("read_csv_new")));
+	auto multi_file_function = ReadCSVTableFunction::GetMultiFileFunction("read_csv_new");
+	multi_file_function.serialize = CSVReaderSerialize;
+	multi_file_function.deserialize = CSVReaderDeserialize;
+	multi_file_function.projection_expression_pushdown = PushdownProjectionExpression;
+	set.AddFunction(MultiFileReader::CreateFunctionSet(std::move(multi_file_function)));
 }
 
 unique_ptr<TableRef> ReadCSVReplacement(ClientContext &context, ReplacementScanInput &input,

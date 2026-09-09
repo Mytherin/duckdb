@@ -392,6 +392,11 @@ typedef bool (*table_function_pushdown_expression_t)(ClientContext &context, con
 //! returns an empty chunk. This lets the caller tell the units apart, so that units scanned in parallel can be put
 //! back in order
 typedef bool (*table_function_claim_scan_unit_t)(ClientContext &context, TableFunctionInput &input);
+//! Whether the scan of this function can be driven by read-ahead - the caller then claims units and schedules
+//! their I/O ahead of scanning them. Only meaningful together with table_function_claim_scan_unit_t
+typedef bool (*table_function_supports_read_ahead_t)(const FunctionData &bind_data);
+//! Schedules the I/O needed by the unit a local state has claimed, so it can be loaded before it is scanned
+typedef AsyncResult (*table_function_schedule_io_t)(ClientContext &context, TableFunctionInput &input);
 //! Called when a local state will not scan any more units - lets the function release the resources of the unit it
 //! scanned last. The counterpart of table_function_claim_scan_unit_t
 typedef void (*table_function_finish_scan_t)(ClientContext &context, TableFunctionInput &input);
@@ -529,6 +534,10 @@ public:
 	table_function_claim_scan_unit_t claim_scan_unit;
 	//! (Optional) called when a local state will not scan any more units - see table_function_finish_scan_t
 	table_function_finish_scan_t finish_scan;
+	//! (Optional) whether the scan can be driven by read-ahead - see table_function_supports_read_ahead_t
+	table_function_supports_read_ahead_t supports_read_ahead;
+	//! (Optional) schedules the I/O of a claimed unit - see table_function_schedule_io_t
+	table_function_schedule_io_t schedule_io;
 	//! (Optional) function for rendering the operator to a string in explain/profiling output (invoked pre-execution)
 	table_function_to_string_t to_string;
 	//! (Optional) return how much of the table we have scanned up to this point (% of the data)

@@ -69,6 +69,10 @@ static unique_ptr<FunctionData> ReadSingleCSVFileBind(ClientContext &context, Ta
 		// the schema of the scan was determined already - read this file using that schema. The dialect of this
 		// file is still sniffed when scanning, and reconciled with the schema of the scan
 		auto &source = input.expected_bind_data->Cast<ReadSingleCSVFileData>();
+		// read this file with the options the schema was determined with - the dialect that was sniffed there is
+		// the starting point for this file, whose own dialect is then sniffed and reconciled with "csv_schema"
+		result->options = source.options;
+		result->options.file_path = result->file.path;
 		result->csv_schema = source.csv_schema;
 		result->schema_from_other_file = true;
 		names = *input.expected_names;
@@ -172,10 +176,13 @@ static unique_ptr<FunctionData> ReadSingleCSVFileCombineSchema(ClientContext &co
 	return_types = best_schema.GetTypes();
 
 	auto result = make_uniq<ReadSingleCSVFileData>();
+	// the options that were sniffed on the first file are the starting point for every file of the scan. The
+	// columns are not set on them - they are carried by the CSV schema, which each file is reconciled with
 	result->options = first_file->options;
-	result->options.name_list = names;
-	result->options.sql_type_list = return_types;
 	result->options.dialect_options.num_cols = names.size();
+	// the buffer manager of the first file is kept, like the multi-file sniffer does - it tells the scan whether
+	// the files can be read ahead, and the first file does not need to be opened again
+	result->buffer_manager = first_file->buffer_manager;
 	result->csv_schema = best_schema;
 	result->csv_names = names;
 	result->csv_types = return_types;
@@ -219,6 +226,14 @@ static unique_ptr<GlobalTableFunctionState> ReadSingleCSVFileInitGlobal(ClientCo
 		file_scan.column_ids.push_back(MultiFileLocalColumnId(col_id));
 	}
 	file_scan.file_list_idx = 0;
+	// the dialect sniffer may have settled on different types for this file - the scan produces the types the bind
+	// promised, and the scanner converts to them while parsing
+	auto &file_types = file_scan.GetTypes();
+	for (idx_t col_id = 0; col_id < file_types.size() && col_id < csv_data.csv_types.size(); col_id++) {
+		if (file_types[col_id] != csv_data.csv_types[col_id]) {
+			file_scan.cast_map[col_id] = csv_data.csv_types[col_id];
+		}
+	}
 	file_scan.InitializeFileNamesTypes();
 	file_scan.SetStart();
 
@@ -258,6 +273,22 @@ static bool ReadSingleCSVFileClaimScanUnit(ClientContext &context, TableFunction
 	// our caller hands out the parts of the file, so we must not claim the next one ourselves
 	lstate.claimed_externally = true;
 	return ClaimNextPart(gstate, lstate);
+}
+
+//! The CSV scanner can be read ahead when the buffers of the file can be addressed individually
+static bool ReadSingleCSVFileSupportsReadAhead(const FunctionData &bind_data) {
+	auto &csv_data = bind_data.Cast<ReadSingleCSVFileData>();
+	return csv_data.buffer_manager && csv_data.buffer_manager->file_handle &&
+	       csv_data.buffer_manager->file_handle->HasKnownBufferRanges();
+}
+
+//! Load the buffers of the claimed part of the file that are not in memory yet
+static AsyncResult ReadSingleCSVFileScheduleIO(ClientContext &context, TableFunctionInput &input) {
+	auto &lstate = input.local_state->Cast<ReadSingleCSVFileLocalState>();
+	if (lstate.state.claim_state != CSVLocalState::ClaimState::PENDING) {
+		return SourceResultType::HAVE_MORE_OUTPUT;
+	}
+	return AsyncResult::FromTasks(CSVCollectClaimIOTasks(lstate.state), TaskSchedulerType::ASYNC);
 }
 
 //! Release the part of the file this thread was reading
@@ -334,6 +365,8 @@ TableFunction ReadCSVTableFunction::GetSingleFileFunction() {
 	read_csv.combine_schema = ReadSingleCSVFileCombineSchema;
 	read_csv.claim_scan_unit = ReadSingleCSVFileClaimScanUnit;
 	read_csv.finish_scan = ReadSingleCSVFileFinishScan;
+	read_csv.supports_read_ahead = ReadSingleCSVFileSupportsReadAhead;
+	read_csv.schedule_io = ReadSingleCSVFileScheduleIO;
 	read_csv.table_scan_progress = ReadSingleCSVFileProgress;
 	read_csv.cardinality = ReadSingleCSVFileCardinality;
 	read_csv.projection_pushdown = true;
@@ -346,6 +379,9 @@ TableFunction ReadCSVTableFunction::GetMultiFileFunction(Identifier name) {
 	TableFunctionMultiFileSettings settings;
 	settings.glob_input = FileGlobInput(FileGlobOptions::FALLBACK_GLOB, "csv");
 	settings.reader_type = "CSV";
+	// like read_csv, the schema is determined by combining the schemas of up to "files_to_sniff" files
+	settings.maximum_sample_files = 10;
+	settings.sample_files_parameter = "files_to_sniff";
 	return TableFunctionMultiFileWrapper::CreateFunction(GetSingleFileFunction(), std::move(name), std::move(settings));
 }
 

@@ -48,6 +48,8 @@ struct MultiFileOptions {
 	DUCKDB_API LogicalType GetHiveLogicalType(const string &hive_partition_column) const;
 	DUCKDB_API Value GetHivePartitionValue(const string &base, const string &entry, ClientContext &context) const;
 	DUCKDB_API bool AnySet() const;
+	//! Set "maximum_sample_files" from an option value - a positive count, or -1 for all files
+	DUCKDB_API void SetMaximumSampleFiles(const Identifier &key, const Value &val);
 	//! Whether the global schema is a union of the schemas of several files - individual files are then allowed to
 	//! be missing columns that are present in the global schema
 	bool SchemaIsUnion() const {

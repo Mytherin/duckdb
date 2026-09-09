@@ -166,6 +166,16 @@ bool TableFunctionFileReader::TryInitializeScan(ClientContext &context, GlobalTa
 	return true;
 }
 
+AsyncResult TableFunctionFileReader::ScheduleIO(ClientContext &context, GlobalTableFunctionState &,
+                                                LocalTableFunctionState &lstate_p) {
+	if (!function.schedule_io) {
+		return SourceResultType::HAVE_MORE_OUTPUT;
+	}
+	auto &lstate = lstate_p.Cast<TableFunctionMultiFileLocalState>();
+	TableFunctionInput input(bind_data.get(), lstate.local_state.get(), global_state.get());
+	return function.schedule_io(context, input);
+}
+
 AsyncResult TableFunctionFileReader::Scan(ClientContext &context, GlobalTableFunctionState &,
                                           LocalTableFunctionState &lstate_p, DataChunk &chunk) {
 	auto &lstate = lstate_p.Cast<TableFunctionMultiFileLocalState>();
@@ -240,7 +250,11 @@ bool TableFunctionMultiFileWrapper::ParseNamedParameter(const Identifier &key, c
 }
 
 bool TableFunctionMultiFileWrapper::ParseOption(ClientContext &context, const Identifier &key, const Value &val,
-                                                MultiFileOptions &, BaseFileReaderOptions &options_p) {
+                                                MultiFileOptions &file_options, BaseFileReaderOptions &options_p) {
+	if (!settings.sample_files_parameter.empty() && key == settings.sample_files_parameter) {
+		// this parameter of the wrapped function sets how many files are sampled to determine the schema
+		file_options.SetMaximumSampleFiles(key, val);
+	}
 	return ParseNamedParameter(key, val, options_p.Cast<TableFunctionFileReaderOptions>());
 }
 
@@ -396,6 +410,18 @@ TableFunctionMultiFileWrapper::InitializeGlobalState(ClientContext &, MultiFileB
 unique_ptr<LocalTableFunctionState> TableFunctionMultiFileWrapper::InitializeLocalState(ClientContext &context,
                                                                                         GlobalTableFunctionState &) {
 	return make_uniq<TableFunctionMultiFileLocalState>(context);
+}
+
+bool TableFunctionMultiFileWrapper::SupportsReadAhead(const MultiFileBindData &bind_data) const {
+	if (!function.supports_read_ahead || !function.schedule_io) {
+		return false;
+	}
+	auto &data = bind_data.bind_data->Cast<TableFunctionMultiFileData>();
+	if (!data.options.schema_bind_data) {
+		// we do not have the bind of a file of this scan to ask
+		return false;
+	}
+	return function.supports_read_ahead(*data.options.schema_bind_data);
 }
 
 void TableFunctionMultiFileWrapper::FinishReading(ClientContext &context, GlobalTableFunctionState &,

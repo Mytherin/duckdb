@@ -8,6 +8,7 @@
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_multi_file_info.hpp"
+#include "duckdb/parallel/callback_async_task.hpp"
 
 namespace duckdb {
 
@@ -22,6 +23,42 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, ReadCSVData &csv_data_p
 	single_threaded = many_csv_files || !options.parallel;
 	scanner_idx = 0;
 	initialized = false;
+}
+
+// A task that loads the buffer on the async pool, sized for the read-ahead I/O budget
+static unique_ptr<AsyncTask> BufferLoadTask(const shared_ptr<CSVBufferManager> &manager, const idx_t buffer_idx) {
+	const idx_t io_size =
+	    manager->HasKnownBufferRanges() ? manager->KnownBufferSize(buffer_idx) : manager->GetBufferSize();
+	return make_uniq<CallbackAsyncTask>([manager, buffer_idx] { manager->GetBuffer(buffer_idx); }, io_size);
+}
+
+// Adds a load task when the buffer is not in memory
+static void TryPushBufferLoadTask(const shared_ptr<CSVBufferManager> &manager, const idx_t buffer_idx,
+                                  vector<unique_ptr<AsyncTask>> &io_tasks) {
+	shared_ptr<CSVBufferHandle> buffer_handle;
+	if (manager->GetBufferResidency(buffer_idx, buffer_handle) == CSVBufferResidency::NEEDS_LOAD) {
+		io_tasks.push_back(BufferLoadTask(manager, buffer_idx));
+	}
+}
+
+//! I/O tasks for the buffers of the claim's decode start that are not in memory
+vector<unique_ptr<AsyncTask>> CSVCollectClaimIOTasks(CSVLocalState &lstate) {
+	auto &manager = lstate.file_scan->buffer_manager;
+	const idx_t start_buffer_idx = lstate.iterator.GetBufferIdx();
+	vector<unique_ptr<AsyncTask>> io_tasks;
+	if (manager->HasKnownBufferRanges() && start_buffer_idx >= manager->KnownBufferCount()) {
+		// the claim starts past the last buffer (e.g. skipping the header consumed the whole file)
+		return io_tasks;
+	}
+	TryPushBufferLoadTask(manager, start_buffer_idx, io_tasks);
+	if (lstate.iterator.IsBoundarySet() &&
+	    (!manager->HasKnownBufferRanges() ||
+	     lstate.iterator.GetEndPos() >= manager->KnownBufferSize(start_buffer_idx))) {
+		// a boundary reaching the end of its buffer also touches the next one, for straddling values
+		// and first-line detection
+		TryPushBufferLoadTask(manager, start_buffer_idx + 1, io_tasks);
+	}
+	return io_tasks;
 }
 
 void CSVGlobalState::FinishTask(CSVFileScan &scan) {

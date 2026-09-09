@@ -46,6 +46,8 @@ struct TableFunctionMultiFileSettings {
 	string reader_type;
 	//! How many files are sampled by default to determine the schema
 	idx_t maximum_sample_files = 1;
+	//! The named parameter of the wrapped function that sets how many files are sampled (if it has one)
+	Identifier sample_files_parameter;
 };
 
 //! The function info of a multi-file wrapper - holds the single-file function that is wrapped
@@ -87,6 +89,8 @@ public:
 	void AddVirtualColumn(column_t virtual_column_id) override;
 	void PrepareReader(ClientContext &context, GlobalTableFunctionState &gstate) override;
 	bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
+	                       LocalTableFunctionState &lstate) override;
+	AsyncResult ScheduleIO(ClientContext &context, GlobalTableFunctionState &gstate,
 	                       LocalTableFunctionState &lstate) override;
 	AsyncResult Scan(ClientContext &context, GlobalTableFunctionState &gstate, LocalTableFunctionState &lstate,
 	                 DataChunk &chunk) override;
@@ -188,6 +192,7 @@ public:
 	                                                         GlobalTableFunctionState &global_state) override;
 	void FinishReading(ClientContext &context, GlobalTableFunctionState &global_state,
 	                   LocalTableFunctionState &local_state) override;
+	bool SupportsReadAhead(const MultiFileBindData &bind_data) const override;
 	shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
 	                                        BaseUnionData &union_data, const MultiFileBindData &bind_data) override;
 	shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
