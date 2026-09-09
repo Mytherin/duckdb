@@ -10,7 +10,7 @@
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/execution/operator/csv_scanner/csv_multi_file_info.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_schema_discovery.hpp"
 #include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
@@ -462,20 +462,12 @@ void CSVCopyFunction::RegisterFunction(BuiltinFunctions &set) {
 	info.flush_batch = WriteCSVFlushBatch;
 	info.file_size_bytes = WriteCSVFileSizeBytes;
 
-	info.copy_from_bind = MultiFileFunction<CSVMultiFileInfo>::MultiFileBindCopy;
+	info.copy_from_bind = TableFunctionMultiFileWrapper::MultiFileBindCopy;
 	info.copy_from_function = ReadCSVTableFunction::GetFunction();
 
 	info.extension = "csv";
 
 	set.AddFunction(info);
-
-	// the same COPY function, but reading through the multi-file wrapper around read_single_csv_file
-	auto new_info = info;
-	new_info.SetName("csv_new");
-	new_info.extension = string();
-	new_info.copy_from_bind = TableFunctionMultiFileWrapper::MultiFileBindCopy;
-	new_info.copy_from_function = ReadCSVTableFunction::GetMultiFileFunction("read_csv_new");
-	set.AddFunction(std::move(new_info));
 }
 
 } // namespace duckdb

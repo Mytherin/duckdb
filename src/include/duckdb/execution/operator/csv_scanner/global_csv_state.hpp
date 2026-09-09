@@ -86,8 +86,6 @@ private:
 
 	//! We hold information on the current scanner boundary
 	CSVIterator current_boundary;
-
-	vector<idx_t> rejects_file_indexes;
 };
 
 //! The I/O tasks needed by the part of the file a local state has claimed, for the buffers that are not in memory

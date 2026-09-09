@@ -48,6 +48,9 @@ struct TableFunctionMultiFileSettings {
 	idx_t maximum_sample_files = 1;
 	//! The named parameter of the wrapped function that sets how many files are sampled (if it has one)
 	Identifier sample_files_parameter;
+	//! Whether the schemas of the sampled files are combined into a union of their columns - files are then allowed
+	//! to be missing columns of the combined schema
+	bool sampled_schema_is_union = true;
 };
 
 //! The function info of a multi-file wrapper - holds the single-file function that is wrapped
@@ -84,6 +87,7 @@ public:
 
 public:
 	string GetReaderType() const override;
+	bool UseCastMap() const override;
 	shared_ptr<BaseUnionData> GetUnionData(idx_t file_idx) override;
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const Identifier &name) override;
 	void AddVirtualColumn(column_t virtual_column_id) override;
@@ -101,7 +105,8 @@ public:
 	void FinishScan(ClientContext &context, LocalTableFunctionState &local_state);
 	//! Bind the wrapped table function over this file - this sets up the columns of the reader.
 	//! When the schema of the scan is known upfront, the file is bound against that schema
-	void BindFunction(ClientContext &context, const TableFunctionFileReaderOptions &options);
+	void BindFunction(ClientContext &context, const TableFunctionFileReaderOptions &options,
+	                  const MultiFileOptions &file_options);
 	//! The cardinality of this file (if the wrapped function can provide one)
 	optional_idx GetCardinality() const {
 		return cardinality;

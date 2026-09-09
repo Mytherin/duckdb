@@ -25,6 +25,7 @@
 namespace duckdb {
 enum class TablePartitionInfo : uint8_t;
 struct PartitionStatistics;
+struct MultiFileOptions;
 
 //! Controls how a table function manages parallelism.
 enum class TableFunctionParallelism : uint8_t {
@@ -135,6 +136,10 @@ struct TableFunctionBindInput {
 	//! function. This lets the bind read the file exactly the way the schema was determined, rather than deriving
 	//! that from the names and types alone
 	optional_ptr<const FunctionData> expected_bind_data;
+	//! (Optional) The options of the multi-file scan this file is part of. They tell the bind how its file is
+	//! combined with the other files of the scan - e.g. whether their columns are unified by name, in which case a
+	//! type that could not be determined should be reported as SQLNULL so the other files can determine it
+	optional_ptr<const MultiFileOptions> multi_file_options;
 
 	bool HasExpectedSchema() const {
 		return expected_names && expected_types;
@@ -171,6 +176,12 @@ struct TableFunctionInitInput {
 	optional_ptr<TableFilterSet> filters;
 	optional_ptr<SampleOptions> sample_options;
 	optional_ptr<const PhysicalOperator> op;
+	//! (Optional) The types the columns above must be produced as, when they differ from the types the function
+	//! bound to. Only set for functions that declare "supports_cast_map" - the function converts to these types
+	//! while reading, rather than having the conversion applied to its output
+	optional_ptr<const unordered_map<column_t, LogicalType>> cast_map;
+	//! (Optional) When the caller reads several files with this function, the index of the file this scan reads
+	optional_idx file_index;
 
 	bool CanRemoveFilterColumns() const {
 		if (projection_ids.empty()) {
@@ -400,9 +411,10 @@ typedef AsyncResult (*table_function_schedule_io_t)(ClientContext &context, Tabl
 //! Called when a local state will not scan any more units - lets the function release the resources of the unit it
 //! scanned last. The counterpart of table_function_claim_scan_unit_t
 typedef void (*table_function_finish_scan_t)(ClientContext &context, TableFunctionInput &input);
-//! Combines the schemas of several individually bound files into one. Returns the bind data describing the combined
-//! schema, which is handed to the bind of every file that is read - or nullptr if the schemas could not be combined,
-//! in which case the caller falls back to combining the return types
+//! Combines the schemas of several individually bound files into one. The names and types are pre-filled with the
+//! schemas of the files combined by name - the function can replace or adjust them. Returns the bind data describing
+//! the combined schema, which is then handed to the bind of every file that is read - or nullptr when the files must
+//! be bound individually and reconciled with the combined schema by the caller
 typedef unique_ptr<FunctionData> (*table_function_combine_schema_t)(ClientContext &context,
                                                                     TableFunctionCombineSchemaInput &input,
                                                                     vector<LogicalType> &return_types,
@@ -578,6 +590,10 @@ public:
 	//! Whether or not the table function supports projection pushdown. If not supported a projection will be added
 	//! that filters out unused columns.
 	bool projection_pushdown;
+	//! Whether the function can produce columns as a different type than it bound them - see
+	//! TableFunctionInitInput::cast_map. A function that reads one file of a multi-file scan uses this to report the
+	//! schema of its own file, and still produce the types of the scan
+	bool supports_cast_map;
 	//! Whether or not the table function supports filter pushdown. If not supported a filter will be added
 	//! that applies the table filter directly.
 	bool filter_pushdown;

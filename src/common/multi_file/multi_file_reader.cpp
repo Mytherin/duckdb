@@ -907,16 +907,27 @@ void MultiFileOptions::SetMaximumSampleFiles(const Identifier &key, const Value 
 	if (val.IsNull()) {
 		throw BinderException("Cannot use NULL as argument to key %s", key);
 	}
-	auto sample_files = val.DefaultCastAs(LogicalType::BIGINT).GetValue<int64_t>();
-	if (sample_files == -1) {
-		maximum_sample_files = NumericLimits<idx_t>::Maximum();
-	} else if (sample_files > 0) {
-		maximum_sample_files = NumericCast<idx_t>(sample_files);
-	} else {
+	if (!TrySetMaximumSampleFiles(val)) {
 		throw BinderException("\"%s\" parameter must be positive, or -1 to remove the limit on the number of files "
 		                      "used to determine the schema.",
 		                      key);
 	}
+}
+
+bool MultiFileOptions::TrySetMaximumSampleFiles(const Value &val) {
+	if (val.IsNull()) {
+		return false;
+	}
+	auto sample_files = val.DefaultCastAs(LogicalType::BIGINT).GetValue<int64_t>();
+	if (sample_files == -1) {
+		maximum_sample_files = NumericLimits<idx_t>::Maximum();
+		return true;
+	}
+	if (sample_files <= 0) {
+		return false;
+	}
+	maximum_sample_files = NumericCast<idx_t>(sample_files);
+	return true;
 }
 
 bool MultiFileOptions::AnySet() const {

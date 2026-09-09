@@ -7,7 +7,7 @@
 #include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/client_data.hpp"
-#include "duckdb/execution/operator/csv_scanner/csv_multi_file_info.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_schema_discovery.hpp"
 #include "duckdb/parallel/callback_async_task.hpp"
 
 namespace duckdb {
@@ -235,14 +235,9 @@ void CSVGlobalState::FillRejectsTable(CSVFileScan &scan) {
 	InternalAppender scans_appender(context, scans_table);
 	idx_t scan_idx = context.transaction.GetActiveQuery();
 
-	// get the file indexes for the rejects table
-	// we store these so that they are deterministic (i.e. file index 0 always gets the lowest rejects index)
-	// otherwise parallelism can result in out-of-order file indexes
-	auto file_idx = scan.GetFileIndex();
-	for (idx_t i = rejects_file_indexes.size(); i <= file_idx; i++) {
-		rejects_file_indexes.push_back(rejects->GetCurrentFileIndex(scan_idx));
-	}
-	const idx_t rejects_file_idx = rejects_file_indexes[file_idx];
+	// the index of the file within the scan identifies it in the rejects tables - using it rather than the order in
+	// which the files finish keeps the indexes deterministic when the files are read in parallel
+	const idx_t rejects_file_idx = scan.GetFileIndex();
 	scan.error_handler->FillRejectsTable(errors_appender, rejects_file_idx, scan_idx, scan, *rejects, column_names,
 	                                     limit);
 	if (rejects->count != 0) {
