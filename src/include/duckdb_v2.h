@@ -1152,6 +1152,153 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_cast_function_destroy(duckdb_v2_cast_func
 /* --- Struct definitions for cast --- */
 
 /* ============================================================================
+ * MODULE: column statistics
+ * ============================================================================ */
+
+/* --- Enums for column statistics --- */
+
+/* --- Struct forward declarations for column statistics --- */
+
+/* --- Types for column statistics --- */
+
+/*!
+ * An owned opaque handle to the statistics of a column of one type. Created with
+ * `duckdb_v2_column_statistics_create()`, narrowed with the setters (e.g. `duckdb_v2_column_statistics_set_min()`), and
+ * destroyed with `duckdb_v2_column_statistics_destroy()`.
+ */
+typedef struct _duckdb_v2_column_statistics {
+	void *internal_ptr;
+} * duckdb_v2_column_statistics_handle;
+
+/* --- Constants for column statistics --- */
+
+/* --- Function pointer typedefs for column statistics --- */
+
+/* --- Functions for column statistics --- */
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Creates statistics of a column of the given type that know nothing about its values: they may be anything, and may be
+ * NULL.
+ *
+ * Bounds can be set for the numeric types (including DECIMAL), the date and time types, and for VARCHAR and BLOB. For
+ * the other types only whether the column can hold NULLs or values can be set. The caller owns the returned handle and
+ * must destroy it with `duckdb_v2_column_statistics_destroy()`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param type The type of the column. Borrowed.
+ * @param statistics On success, receives the new statistics. Owned by the caller; destroy via
+ * `duckdb_v2_column_statistics_destroy()`.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_column_statistics_create(duckdb_v2_logical_type_handle type,
+                                                                duckdb_v2_column_statistics_handle *statistics,
+                                                                duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets a lower bound on the values of the column: no value is less than it. A NULL value is NULL rather than a bound,
+ * and leaves the lower bound unknown.
+ *
+ * The value is cast to the type of the statistics. Fails with `ERROR_INPUT_INVALID` when the type has no bounds (see
+ * `duckdb_v2_column_statistics_create()`), or the value does not cast to it. A VARCHAR or BLOB bound may be a truncated
+ * form of the true minimum, e.g. a prefix of it.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param statistics The statistics to narrow.
+ * @param value The lower bound. Borrowed and copied.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_column_statistics_set_min(duckdb_v2_column_statistics_handle statistics,
+                                                                 duckdb_v2_value_handle value,
+                                                                 duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets an upper bound on the values of the column: no value is greater than it. A NULL value is NULL rather than a
+ * bound, and leaves the upper bound unknown.
+ *
+ * The value is cast to the type of the statistics. Fails with `ERROR_INPUT_INVALID` when the type has no bounds (see
+ * `duckdb_v2_column_statistics_create()`), or the value does not cast to it.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param statistics The statistics to narrow.
+ * @param value The upper bound. Borrowed and copied.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_column_statistics_set_max(duckdb_v2_column_statistics_handle statistics,
+                                                                 duckdb_v2_value_handle value,
+                                                                 duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets whether the column can hold NULLs. True unless set.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param statistics The statistics to narrow.
+ * @param can_have_null Whether the column can hold NULLs.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_column_statistics_set_can_have_null(
+    duckdb_v2_column_statistics_handle statistics, bool can_have_null, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets whether the column can hold values other than NULL. True unless set: setting it to false says that every row of
+ * the column is NULL.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param statistics The statistics to narrow.
+ * @param can_have_valid Whether the column can hold values other than NULL.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_column_statistics_set_can_have_valid(
+    duckdb_v2_column_statistics_handle statistics, bool can_have_valid, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Destroys the statistics, releasing their resources.
+ *
+ * Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on return to prevent
+ * double-destruction.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param statistics The statistics to destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_column_statistics_destroy(duckdb_v2_column_statistics_handle *statistics);
+#endif
+
+/* --- Struct definitions for column statistics --- */
+
+/* ============================================================================
  * MODULE: column_data_collection
  * ============================================================================ */
 
@@ -5430,6 +5577,15 @@ typedef struct _duckdb_v2_copy_to_bind_info {
 } * duckdb_v2_copy_to_bind_info_handle;
 
 /*!
+ * A borrowed opaque handle to the arguments supplied to a copy function when a `COPY ... TO` statement is bound, before
+ * its bind callback runs. The "cast" callback receives this handle and can use it to choose the types the columns are
+ * written as.
+ */
+typedef struct _duckdb_v2_copy_to_cast_info {
+	void *internal_ptr;
+} * duckdb_v2_copy_to_cast_info_handle;
+
+/*!
  * A borrowed opaque handle to the arguments supplied to a copy function during the "batch size" phase of a `COPY ...
  * TO` statement. The "batch size" callback receives this handle and must use it to report how many rows a batch should
  * carry.
@@ -5533,6 +5689,9 @@ typedef struct _duckdb_v2_copy_from_progress_info {
 /* --- Function pointer typedefs for copy --- */
 
 typedef void (*duckdb_v2_copy_to_bind_callback_fn)(duckdb_v2_copy_to_bind_info_handle info,
+                                                   duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err);
+
+typedef void (*duckdb_v2_copy_to_cast_callback_fn)(duckdb_v2_copy_to_cast_info_handle info,
                                                    duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err);
 
 typedef void (*duckdb_v2_copy_to_batch_size_callback_fn)(duckdb_v2_copy_to_batch_size_info_handle info,
@@ -6999,6 +7158,196 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_copy_to_statistics_set_row_count(duckdb_v
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_copy_to_statistics_set_file_size(duckdb_v2_copy_to_statistics_info_handle info,
                                                                         idx_t file_size_bytes,
                                                                         duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the file extension of the files the function writes, e.g. "parquet".
+ *
+ * Optional. With a file extension, a `COPY ... TO` statement that writes to a path with that extension selects the
+ * function without a `FORMAT` option, e.g. `COPY t TO 'out.parquet'`. The extension is given without a leading dot, and
+ * is borrowed and copied.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param function The function to set the file extension of.
+ * @param extension The file extension, without a leading dot. Borrowed and copied.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_copy_function_set_file_extension(duckdb_v2_copy_function_handle function,
+                                                                        duckdb_v2_str *extension,
+                                                                        duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Makes the `COPY ... FROM` side of the function read through a registered multi-file function, instead of through the
+ * `COPY ... FROM` callbacks.
+ *
+ * The statement then reads the way the multi-file function does: its path may be a glob or a list of files, it accepts
+ * the options of the multi-file function (e.g. `union_by_name`) and the named parameters of the single-file function it
+ * wraps, and every file is read as the columns of the target table. The multi-file function must be registered with
+ * `duckdb_v2_connection_register_multi_file_function()` or `duckdb_v2_extension_register_multi_file_function()` before
+ * the copy function is registered. This replaces the `COPY ... FROM` callbacks: a function sets either this or those.
+ * The name is borrowed and copied.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param function The function to configure.
+ * @param name The name of the registered multi-file function. Borrowed and copied.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_copy_from_set_multi_file_function(duckdb_v2_copy_function_handle function,
+                                                                         duckdb_v2_str *name,
+                                                                         duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the optional cast callback of the `COPY ... TO` side.
+ *
+ * The cast callback is invoked once per `COPY ... TO` statement while it is bound, before the bind callback. It sees
+ * the types of the columns being written, and can choose another type for any of them with
+ * `duckdb_v2_copy_to_cast_set_column_type()` - e.g. a type the file format can represent, for one it cannot. The engine
+ * then casts the column to that type before its rows reach the function, so the bind callback and every batch see the
+ * chosen types only. A value that does not cast fails the statement.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param function The function to set the callback of.
+ * @param callback The callback to set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_copy_to_set_cast_callback(duckdb_v2_copy_function_handle function,
+                                                                 duckdb_v2_copy_to_cast_callback_fn callback,
+                                                                 duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Retrieves the user data set on the copy function via `duckdb_v2_copy_function_set_user_data()`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param info The cast info handle.
+ * @param data Receives the user data pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_copy_to_cast_get_user_data(duckdb_v2_copy_to_cast_info_handle info, void **data,
+                                                                  duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Retrieves how many columns the statement writes.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param info The cast info handle.
+ * @param count Receives the number of columns.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_copy_to_cast_get_column_count(duckdb_v2_copy_to_cast_info_handle info,
+                                                                     idx_t *count, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Retrieves the name of the column at the given index. Fails if the index is out of bounds. The name is borrowed from
+ * the statement, valid for the duration of the callback.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param info The cast info handle.
+ * @param index The index of the column to get the name of.
+ * @param name Receives a borrowed view of the column name.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_copy_to_cast_get_column_name(duckdb_v2_copy_to_cast_info_handle info,
+                                                                    idx_t index, duckdb_v2_identifier_t *name,
+                                                                    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Retrieves the type of the column at the given index, as the statement produces it.
+ *
+ * Fails if the index is out of bounds. The returned type is owned by the caller and must be destroyed via
+ * `duckdb_v2_logical_type_destroy()`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param info The cast info handle.
+ * @param index The index of the column to get the type of.
+ * @param type Receives the column type. Owned by the caller; destroy via `duckdb_v2_logical_type_destroy()`.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_copy_to_cast_get_column_type(duckdb_v2_copy_to_cast_info_handle info,
+                                                                    idx_t index, duckdb_v2_logical_type_handle *type,
+                                                                    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the type the column at the given index is written as: the engine casts the column to it. Setting the type the
+ * column already has leaves it as it is. Fails if the index is out of bounds, or the type is not a fully defined
+ * concrete type.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param info The cast info handle.
+ * @param index The index of the column.
+ * @param type The type to write the column as. Borrowed and copied.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_copy_to_cast_set_column_type(duckdb_v2_copy_to_cast_info_handle info,
+                                                                    idx_t index, duckdb_v2_logical_type_handle type,
+                                                                    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets how many bytes of rows a batch should carry at most, as a second target the engine cuts batches at, whichever of
+ * the two it reaches first - the counterpart of a statement's `BATCH_SIZE_BYTES`. Optional: without it, batches are
+ * only cut by their number of rows. Like the target in rows, it only applies to a statement that does not set
+ * `BATCH_SIZE` itself, since the batch size callback is not consulted otherwise, and a statement that sets
+ * `BATCH_SIZE_BYTES` keeps its own.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param info The batch size info handle.
+ * @param bytes The number of bytes a batch should carry at most. Must be greater than 0.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_copy_to_batch_size_set_target_bytes(
+    duckdb_v2_copy_to_batch_size_info_handle info, idx_t bytes, duckdb_v2_error_info_handle *err);
 #endif
 
 /* --- Struct definitions for copy --- */
@@ -11139,6 +11488,48 @@ typedef enum DUCKDB_V2_TABLE_PARTITION_INFO {
 	DUCKDB_V2_TABLE_PARTITION_INFO_MAX_ENUM = 0x7FFFFFFF,
 } DUCKDB_V2_TABLE_PARTITION_INFO;
 
+/*!
+ * What a table filter is known to evaluate to for every row a set of statistics describes. Reported by
+ * `duckdb_v2_table_filter_check_statistics()`.
+ */
+typedef enum DUCKDB_V2_FILTER_PROPAGATE_RESULT {
+	//! Nothing is known - some of the rows may pass the filter, and some may not.
+	DUCKDB_V2_FILTER_PROPAGATE_RESULT_NO_PRUNING_POSSIBLE = 0,
+
+	//! Every row passes the filter.
+	DUCKDB_V2_FILTER_PROPAGATE_RESULT_ALWAYS_TRUE = 1,
+
+	//! No row passes the filter, so the rows can be skipped without being read.
+	DUCKDB_V2_FILTER_PROPAGATE_RESULT_ALWAYS_FALSE = 2,
+
+	//! Every row passes the filter, or makes it evaluate to NULL.
+	DUCKDB_V2_FILTER_PROPAGATE_RESULT_TRUE_OR_NULL = 3,
+
+	/*!
+	 * No row passes the filter: it evaluates to false or to NULL for every row, so the rows can be skipped without
+	 * being read.
+	 */
+	DUCKDB_V2_FILTER_PROPAGATE_RESULT_FALSE_OR_NULL = 4,
+	DUCKDB_V2_FILTER_PROPAGATE_RESULT_MAX_ENUM = 0x7FFFFFFF,
+} DUCKDB_V2_FILTER_PROPAGATE_RESULT;
+
+/*!
+ * A column a table function can produce on top of the columns it declares in bind, which a query only reads when it
+ * names it. Declared with `duckdb_v2_table_function_add_virtual_column()`. Each kind has a fixed name and type.
+ */
+typedef enum DUCKDB_V2_VIRTUAL_COLUMN {
+	//! Not a virtual column - a column declared in bind.
+	DUCKDB_V2_VIRTUAL_COLUMN_NONE = 0,
+
+	/*!
+	 * `file_row_number BIGINT`: the position of the row within the file it was read from, counting from 0. A multi-file
+	 * function registered with `duckdb_v2_connection_register_multi_file_function()` or
+	 * `duckdb_v2_extension_register_multi_file_function()` offers it when the single-file function it wraps does.
+	 */
+	DUCKDB_V2_VIRTUAL_COLUMN_FILE_ROW_NUMBER = 1,
+	DUCKDB_V2_VIRTUAL_COLUMN_MAX_ENUM = 0x7FFFFFFF,
+} DUCKDB_V2_VIRTUAL_COLUMN;
+
 /* --- Struct forward declarations for table --- */
 
 /* --- Types for table --- */
@@ -11247,6 +11638,34 @@ typedef struct _duckdb_v2_table_function_get_bind_info_info {
 } * duckdb_v2_table_function_get_bind_info_info_handle;
 
 /*!
+ * A borrowed opaque handle to a filter the query applies to one column of a table function's rows, pushed into the scan
+ * of a function that enables `duckdb_v2_table_function_set_table_filter_pushdown()`. Obtained from
+ * `duckdb_v2_table_function_init_global_get_table_filter()`, and valid for as long as the global state of the scan is:
+ * it can be kept in the global state and used from every later callback of the scan.
+ */
+typedef struct _duckdb_v2_table_filter {
+	void *internal_ptr;
+} * duckdb_v2_table_filter_handle;
+
+/*!
+ * A borrowed opaque handle to the arguments supplied to a table function when the optimizer asks for the statistics of
+ * one of the columns of a bound call. The "statistics" callback receives this handle and can use it to report what is
+ * known about the values of the column.
+ */
+typedef struct _duckdb_v2_table_function_statistics_info {
+	void *internal_ptr;
+} * duckdb_v2_table_function_statistics_info_handle;
+
+/*!
+ * A borrowed opaque handle to the arguments supplied to a table function when the profiler collects the metrics of its
+ * scan. The "metrics" callback receives this handle and can use it to report how much of what it could have read the
+ * scan actually read.
+ */
+typedef struct _duckdb_v2_table_function_metrics_info {
+	void *internal_ptr;
+} * duckdb_v2_table_function_metrics_info_handle;
+
+/*!
  * An owned opaque handle to a multi-file table function being built. A multi-file function wraps an already registered
  * table function that reads a single file, and adds everything that is needed to read many files at once on top of it:
  * globbing, lists of files, hive partitioning, the `filename` column, `union_by_name` and the like. Created with
@@ -11303,6 +11722,14 @@ typedef void (*duckdb_v2_table_function_claim_batch_callback_fn)(duckdb_v2_table
 typedef void (*duckdb_v2_table_function_get_bind_info_callback_fn)(
     duckdb_v2_table_function_get_bind_info_info_handle info, duckdb_v2_context_handle context,
     duckdb_v2_error_info_handle *err);
+
+typedef void (*duckdb_v2_table_function_statistics_callback_fn)(duckdb_v2_table_function_statistics_info_handle info,
+                                                                duckdb_v2_context_handle context,
+                                                                duckdb_v2_error_info_handle *err);
+
+typedef void (*duckdb_v2_table_function_metrics_callback_fn)(duckdb_v2_table_function_metrics_info_handle info,
+                                                             duckdb_v2_context_handle context,
+                                                             duckdb_v2_error_info_handle *err);
 
 /* --- Functions for table --- */
 
@@ -11495,7 +11922,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_set_exec_callback(
  *
  * The progress callback is invoked on demand during execution to report how far the scan has advanced, which the engine
  * surfaces as the query's progress. It is invoked concurrently with the exec callback, so it must read the global state
- * in a thread-safe way.
+ * in a thread-safe way. It is not invoked before the scan's global state is set up - a scan that has not started yet,
+ * such as a file a multi-file function has not opened, reports no progress.
  *
  * history:
  * - stable: v2.0.0
@@ -12781,6 +13209,459 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_get_bind_info_set_column_i
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_get_bind_info_set_option(
     duckdb_v2_table_function_get_bind_info_info_handle info, duckdb_v2_str *key, duckdb_v2_value_handle value,
     duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets whether the filters a query applies to single columns of the function's rows are pushed into its scan. Defaults
+ * to false.
+ *
+ * With table filter pushdown, the global init callback can read the filters with
+ * `duckdb_v2_table_function_init_global_get_table_filter()`, and use them to skip the parts of what it reads that no
+ * row of which can pass - e.g. by checking the statistics it keeps of those parts with
+ * `duckdb_v2_table_filter_check_statistics()`. The function does not have to apply the filters itself: the engine
+ * applies them to every row the exec callback produces, so a function that skips nothing still produces the right
+ * result. A filter may only be pushed for a column the scan produces, which the scan then produces also when the query
+ * does not otherwise use it.
+ *
+ * A multi-file function registered with `duckdb_v2_connection_register_multi_file_function()` or
+ * `duckdb_v2_extension_register_multi_file_function()` pushes the filters of its scan into the single-file function it
+ * wraps when that function enables this, after rewriting them to the columns and types of each file.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param function The function to configure.
+ * @param enable Whether filters are pushed into the scan of the function.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_set_table_filter_pushdown(
+    duckdb_v2_table_function_handle function, bool enable, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Returns how many filters are pushed into the scan. They are combined with `AND`.
+ *
+ * Always zero unless the function enables `duckdb_v2_table_function_set_table_filter_pushdown()`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param info The global init info handle.
+ * @param count Receives the number of filters.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_init_global_get_table_filter_count(
+    duckdb_v2_table_function_init_global_info_handle info, idx_t *count, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Returns one of the filters pushed into the scan. Fails if the index is out of bounds.
+ *
+ * The filter is borrowed from the scan, and stays valid for as long as its global state does.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param info The global init info handle.
+ * @param index The index of the filter, in [0, `duckdb_v2_table_function_init_global_get_table_filter_count()`).
+ * @param filter Receives the borrowed filter.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_init_global_get_table_filter(
+    duckdb_v2_table_function_init_global_info_handle info, idx_t index, duckdb_v2_table_filter_handle *filter,
+    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Returns which of the scan's columns the filter applies to: the index of the vector of the output chunk the filter is
+ * applied to. Resolve it to the column it stands for with `duckdb_v2_table_function_init_global_get_column_index()`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param filter The filter.
+ * @param index Receives the index of the column in the scan's output.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_filter_get_scan_index(duckdb_v2_table_filter_handle filter, idx_t *index,
+                                                                   duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Returns the filter as a bound expression evaluating to BOOLEAN, e.g. to recognize an equality with a constant.
+ *
+ * The column the filter applies to appears in the expression as an `EXPRESSION_TYPE_BOUND_COLUMN_REF` node whose index
+ * (`duckdb_v2_expression_column_ref_get_index()`) is the filter's scan index, as reported by
+ * `duckdb_v2_table_filter_get_scan_index()`. A filter the engine only adds as an optional hint - one implied by the
+ * other filters of the query, which the engine may skip applying - is presented as the predicate it wraps. The
+ * expression is borrowed from the filter, and is valid for as long as the filter is.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param filter The filter.
+ * @param expression Receives the borrowed expression.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_filter_get_expression(duckdb_v2_table_filter_handle filter,
+                                                                   duckdb_v2_expression_handle *expression,
+                                                                   duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Checks the filter against statistics of the column it applies to: what the filter evaluates to for every row the
+ * statistics describe. A function uses this to skip the parts of what it reads that no row of which can pass the
+ * filter.
+ *
+ * The statistics must be of the type the scan produces the column as. Statistics that say nothing about the values
+ * always give `FILTER_PROPAGATE_RESULT_NO_PRUNING_POSSIBLE`. Safe to call from several threads at once.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param filter The filter.
+ * @param statistics Statistics of the column the filter applies to. Borrowed.
+ * @param result Receives what the filter evaluates to for the rows the statistics describe.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_filter_check_statistics(duckdb_v2_table_filter_handle filter,
+                                                                     duckdb_v2_column_statistics_handle statistics,
+                                                                     DUCKDB_V2_FILTER_PROPAGATE_RESULT *result,
+                                                                     duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Declares a virtual column the function can produce: a column on top of the ones declared in bind, which is only
+ * scanned when a query names it, and does not appear in `SELECT *`.
+ *
+ * When a query reads a virtual column, the scan's columns include it: e.g.
+ * `duckdb_v2_table_function_exec_get_virtual_column()` reports which virtual column a vector of the output chunk stands
+ * for, and `duckdb_v2_table_function_exec_get_column_index()` reports an index past every declared column for it.
+ * Declaring the same virtual column again is a no-op.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param function The function to configure.
+ * @param column The virtual column the function can produce. Must not be `VIRTUAL_COLUMN_NONE`.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_add_virtual_column(duckdb_v2_table_function_handle function,
+                                                                         DUCKDB_V2_VIRTUAL_COLUMN column,
+                                                                         duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Returns which virtual column the scan's column at the given index is, or `VIRTUAL_COLUMN_NONE` when it is a column
+ * declared in bind. Fails if the index is out of bounds.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param info The global init info handle.
+ * @param index The index of the column in the scan's output.
+ * @param column Receives the virtual column, or `VIRTUAL_COLUMN_NONE`.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_init_global_get_virtual_column(
+    duckdb_v2_table_function_init_global_info_handle info, idx_t index, DUCKDB_V2_VIRTUAL_COLUMN *column,
+    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Returns which virtual column the scan's column at the given index is, or `VIRTUAL_COLUMN_NONE` when it is a column
+ * declared in bind. Fails if the index is out of bounds.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param info The local init info handle.
+ * @param index The index of the column in the scan's output.
+ * @param column Receives the virtual column, or `VIRTUAL_COLUMN_NONE`.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_init_local_get_virtual_column(
+    duckdb_v2_table_function_init_local_info_handle info, idx_t index, DUCKDB_V2_VIRTUAL_COLUMN *column,
+    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Returns which virtual column the output chunk's vector at the given index must be filled with, or
+ * `VIRTUAL_COLUMN_NONE` when it is a column declared in bind. Fails if the index is out of bounds.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param info The exec info handle.
+ * @param index The index of the column in the scan's output.
+ * @param column Receives the virtual column, or `VIRTUAL_COLUMN_NONE`.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR
+duckdb_v2_table_function_exec_get_virtual_column(duckdb_v2_table_function_exec_info_handle info, idx_t index,
+                                                 DUCKDB_V2_VIRTUAL_COLUMN *column, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the optional statistics callback of the table function.
+ *
+ * The optimizer invokes the callback with the bind data of a bound call to learn what is known about the values of one
+ * of its columns - e.g. the bounds a file format records for them - which it uses to simplify the query and to estimate
+ * how many rows a filter keeps. A callback that returns without reporting statistics reports that nothing is known. A
+ * multi-file function registered with `duckdb_v2_connection_register_multi_file_function()` or
+ * `duckdb_v2_extension_register_multi_file_function()` asks the function it wraps for the statistics of the columns of
+ * its files, and combines them.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param function The function to set the callback of.
+ * @param callback The statistics callback to set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_set_statistics_callback(
+    duckdb_v2_table_function_handle function, duckdb_v2_table_function_statistics_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Retrieves the user data set via `duckdb_v2_table_function_set_user_data()`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param info The statistics info handle.
+ * @param data Receives the user data pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_statistics_get_user_data(
+    duckdb_v2_table_function_statistics_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Retrieves the bind data the function's bind callback set for the bound call.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param info The statistics info handle.
+ * @param data Receives the bind data pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_statistics_get_bind_data(
+    duckdb_v2_table_function_statistics_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Returns which column statistics are asked for: an index into the columns declared with
+ * `duckdb_v2_table_function_bind_add_result_column()`, or, for a virtual column, an index past all of them - see
+ * `duckdb_v2_table_function_statistics_get_virtual_column()`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param info The statistics info handle.
+ * @param column_index Receives the index of the column.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_statistics_get_column_index(
+    duckdb_v2_table_function_statistics_info_handle info, idx_t *column_index, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Returns which virtual column statistics are asked for, or `VIRTUAL_COLUMN_NONE` when they are asked for a column
+ * declared in bind.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param info The statistics info handle.
+ * @param column Receives the virtual column, or `VIRTUAL_COLUMN_NONE`.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_statistics_get_virtual_column(
+    duckdb_v2_table_function_statistics_info_handle info, DUCKDB_V2_VIRTUAL_COLUMN *column,
+    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Reports the statistics of the column. The statistics must be of the column's type, and are copied. Reporting
+ * statistics again replaces the ones reported before.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param info The statistics info handle.
+ * @param statistics The statistics of the column. Borrowed and copied.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_statistics_set_statistics(
+    duckdb_v2_table_function_statistics_info_handle info, duckdb_v2_column_statistics_handle statistics,
+    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the optional metrics callback of the table function.
+ *
+ * The profiler invokes the callback while a profiled query runs and once it is done, to collect how much of what the
+ * scan could have read it actually read, in "row groups": whatever units the function's input is split into, e.g. the
+ * parts of a file the function can skip without reading them. They are reported as the `operator.row_groups_scanned`
+ * and `operator.total_row_groups_to_scan` metrics of the scan. The callback receives the global state of the scan,
+ * which other threads may be updating concurrently. A multi-file function registered with
+ * `duckdb_v2_connection_register_multi_file_function()` or `duckdb_v2_extension_register_multi_file_function()` sums
+ * the metrics the function it wraps reports for each of its files.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param function The function to set the callback of.
+ * @param callback The metrics callback to set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_set_metrics_callback(
+    duckdb_v2_table_function_handle function, duckdb_v2_table_function_metrics_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Retrieves the user data set via `duckdb_v2_table_function_set_user_data()`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param info The metrics info handle.
+ * @param data Receives the user data pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_metrics_get_user_data(
+    duckdb_v2_table_function_metrics_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Retrieves the bind data set by the function's bind callback.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param info The metrics info handle.
+ * @param data Receives the bind data pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_metrics_get_bind_data(
+    duckdb_v2_table_function_metrics_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Retrieves the global state set by the function's global init callback.
+ *
+ * The scan may still be running, so the state must be read in a thread-safe way.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param info The metrics info handle.
+ * @param data Receives the global state pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_metrics_get_global_state(
+    duckdb_v2_table_function_metrics_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Reports row groups the scan read since the callback last reported. The engine sums what every invocation reports, so
+ * each row group read must be reported exactly once.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param info The metrics info handle.
+ * @param count The number of row groups read since the last report.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_metrics_add_row_groups_scanned(
+    duckdb_v2_table_function_metrics_info_handle info, idx_t count, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Reports how many row groups the scan could have read in total, as far as it knows so far: e.g. the row groups of the
+ * parts of its input it has opened. Unlike the row groups scanned this is not summed, so every invocation reports the
+ * total as a whole.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param info The metrics info handle.
+ * @param count The total number of row groups.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_metrics_set_total_row_groups(
+    duckdb_v2_table_function_metrics_info_handle info, idx_t count, duckdb_v2_error_info_handle *err);
 #endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE

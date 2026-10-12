@@ -110,6 +110,8 @@ class TableFunction;
 class CopyFunction;
 class Factory;
 class Extension;
+class ColumnStatistics;
+class TableFilter;
 
 //----------------------------------------------------------------------------------------------------------------------
 // Internal Implementation Details
@@ -4325,6 +4327,107 @@ private:
 };
 
 //----------------------------------------------------------------------------------------------------------------------
+// Column Statistics
+//----------------------------------------------------------------------------------------------------------------------
+// What is known about the values of a column without reading them: bounds on the values, and whether they can be NULL.
+// A table function reports them for its columns (`TableFunction::SetStatisticsCallback`), and checks the filters
+// pushed into its scan against them (`TableFilter::CheckStatistics`) to skip what no row of which can pass.
+// Unstable API.
+
+/// The statistics of a column of one type. They start out knowing nothing - any value, NULL or not - and every setter
+/// narrows what they allow. Bounds are only bounds: every value lies within them, but no value has to equal either.
+/// Owned and self-contained.
+class ColumnStatistics final : public detail::Handle<ColumnStatistics> {
+	friend detail::HandleFactory;
+
+public:
+	/// Statistics of a column of `type` that know nothing about its values. Bounds can be set for the numeric types
+	/// (including DECIMAL), the date and time types, and for VARCHAR and BLOB.
+	/// @throws InvalidInputException When the type is not a fully defined concrete type.
+	explicit ColumnStatistics(const LogicalType &type);
+
+	ColumnStatistics(ColumnStatistics &&) noexcept = default;
+	ColumnStatistics &operator=(ColumnStatistics &&) noexcept = default;
+
+	~ColumnStatistics() override;
+
+	/// Sets a lower bound on the values: no value is less than it. The value is cast to the type of the statistics;
+	/// a NULL value leaves the lower bound unknown. A VARCHAR or BLOB bound may be truncated, e.g. a prefix of the true
+	/// minimum.
+	/// @throws InvalidInputException When the type has no bounds, or the value does not cast to it.
+	auto SetMin(const Value &value) -> ColumnStatistics &;
+
+	/// Sets an upper bound on the values: no value is greater than it. See `SetMin`.
+	auto SetMax(const Value &value) -> ColumnStatistics &;
+
+	/// Sets whether the column can hold NULLs. True unless set.
+	auto SetCanHaveNull(bool can_have_null) -> ColumnStatistics &;
+
+	/// Sets whether the column can hold values other than NULL. True unless set: false says every row is NULL.
+	auto SetCanHaveValid(bool can_have_valid) -> ColumnStatistics &;
+
+private:
+	explicit ColumnStatistics(void *impl);
+};
+
+//----------------------------------------------------------------------------------------------------------------------
+// Table Filter
+//----------------------------------------------------------------------------------------------------------------------
+
+/// What a filter is known to evaluate to for every row a set of statistics describes.
+enum class FilterPropagateResult : uint8_t {
+	/// Nothing is known: some of the rows may pass the filter, and some may not.
+	NO_PRUNING_POSSIBLE = 0,
+	/// Every row passes the filter.
+	ALWAYS_TRUE = 1,
+	/// No row passes the filter, so the rows can be skipped without being read.
+	ALWAYS_FALSE = 2,
+	/// Every row passes the filter, or makes it evaluate to NULL.
+	TRUE_OR_NULL = 3,
+	/// No row passes the filter - it is false or NULL for every row - so the rows can be skipped without being read.
+	FALSE_OR_NULL = 4,
+};
+
+/// A filter the query applies to one column of a table function's rows, pushed into the scan of a function that
+/// enables `TableFunction::SetTableFilterPushdown`. Borrowed from the scan, and valid for as long as its global state
+/// is: it can be kept in the global state and used from every later callback of the scan. Unstable API.
+class TableFilter final : public detail::Handle<TableFilter> {
+	friend detail::HandleFactory;
+
+public:
+	TableFilter(TableFilter &&) noexcept = default;
+	TableFilter &operator=(TableFilter &&) noexcept = default;
+	~TableFilter() override = default;
+
+	/// Which of the scan's columns the filter applies to: the index of the vector of the output chunk. Resolve it to
+	/// the column it stands for with `InitGlobalInput::GetColumnIndex`.
+	auto GetScanIndex() const -> idx_t;
+
+	/// The filter as a bound expression evaluating to BOOLEAN. The column appears in it as a `BOUND_COLUMN_REF` whose
+	/// index is `GetScanIndex()`. A filter the engine only adds as an optional hint - implied by the other filters of
+	/// the query - is presented as the predicate it wraps.
+	/// @return A borrowed expression, valid for as long as this filter is.
+	auto GetExpression() const -> Expression;
+
+	/// What the filter evaluates to for every row the statistics describe. Safe to call from several threads at once.
+	/// @param statistics Statistics of the column, of the type the scan produces it as.
+	/// @throws InvalidInputException When the statistics are of another type.
+	auto CheckStatistics(const ColumnStatistics &statistics) const -> FilterPropagateResult;
+
+private:
+	explicit TableFilter(void *impl);
+};
+
+/// A column a table function can produce on top of the ones it declares in bind, which a query only reads when it
+/// names it. Declared with `TableFunction::AddVirtualColumn`. Unstable API.
+enum class VirtualColumn : uint8_t {
+	/// Not a virtual column - a column declared in bind.
+	NONE = 0,
+	/// `file_row_number BIGINT`: the position of the row within the file it was read from, counting from 0.
+	FILE_ROW_NUMBER = 1,
+};
+
+//----------------------------------------------------------------------------------------------------------------------
 // Table Function
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -4357,6 +4460,8 @@ public:
 	class PartitioningInput;
 	class ClaimBatchInput;
 	class GetBindInfoInput;
+	class StatisticsInput;
+	class MetricsInput;
 
 	/// Whether, and how, the scan is partitioned by a set of columns. Reported from the partitioning callback.
 	enum class PartitionInfo : uint8_t {
@@ -4400,6 +4505,12 @@ public:
 	/// identifiers, and exposes the options as the metadata of the reader of the file. May be called more than once
 	/// for the same bind data: only report what the bind already determined. Optional; unstable API.
 	using GetBindInfoCallback = void (*)(GetBindInfoInput &input);
+	/// Called while a query is optimized with the bind data of a bound call, to report what is known about the values
+	/// of one of its columns. Optional; unstable API.
+	using StatisticsCallback = void (*)(StatisticsInput &input);
+	/// Called while a profiled query runs, to report how much of what the scan could have read it actually read.
+	/// Optional; unstable API.
+	using MetricsCallback = void (*)(MetricsInput &input);
 
 	TableFunction(TableFunction &&) noexcept = default;
 	TableFunction &operator=(TableFunction &&) noexcept = default;
@@ -4460,6 +4571,28 @@ public:
 	auto SetClaimBatchCallback(ClaimBatchCallback callback) & -> TableFunction &;
 	/// Lets the function describe what a bound call reads: see `GetBindInfoCallback`. Unstable API.
 	auto SetGetBindInfoCallback(GetBindInfoCallback callback) & -> TableFunction &;
+	/// Lets the optimizer ask what is known about the values of the columns of a bound call - e.g. the bounds a file
+	/// format records - to simplify the query. A `MultiFileFunction` wrapping the function combines the statistics of
+	/// its files. A callback that reports nothing reports that nothing is known. Unstable API.
+	auto SetStatisticsCallback(StatisticsCallback callback) & -> TableFunction &;
+	/// Lets the profiler ask how many "row groups" - whatever units the function's input is split into - the scan read
+	/// out of how many it could have read, reported as the `operator.row_groups_scanned` and
+	/// `operator.total_row_groups_to_scan` metrics. A `MultiFileFunction` wrapping the function sums them across its
+	/// files. Unstable API.
+	auto SetMetricsCallback(MetricsCallback callback) & -> TableFunction &;
+
+	/// Declares whether the filters a query applies to single columns of the function's rows are pushed into its
+	/// scan. Defaults to false. With it, the global init callback can read them (`InitGlobalInput::GetTableFilter`)
+	/// and skip the parts of what it reads that no row of which can pass, e.g. by checking statistics of those parts
+	/// with `TableFilter::CheckStatistics`. The function does not have to apply the filters: the engine applies them
+	/// to every row the exec callback produces. A `MultiFileFunction` wrapping the function pushes the filters of its
+	/// scan into it, rewritten to the columns and types of each file. Unstable API.
+	auto SetTableFilterPushdown(bool enable) & -> TableFunction &;
+
+	/// Declares a virtual column the function can produce: one on top of those declared in bind, which is only scanned
+	/// when a query names it and does not appear in `SELECT *`. The scan's columns then include it, and e.g.
+	/// `ExecInput::GetVirtualColumn` says which vector stands for it. Requires projection pushdown. Unstable API.
+	auto AddVirtualColumn(VirtualColumn column) & -> TableFunction &;
 
 	/// Declares whether the function supports projection pushdown. Defaults to false. With it, the engine asks for
 	/// only the columns a query uses: the exec callback's output chunk holds one vector per requested column, and
@@ -4484,6 +4617,8 @@ private:
 	PartitioningCallback partitioning_callback = nullptr;
 	ClaimBatchCallback claim_batch_callback = nullptr;
 	GetBindInfoCallback get_bind_info_callback = nullptr;
+	StatisticsCallback statistics_callback = nullptr;
+	MetricsCallback metrics_callback = nullptr;
 	detail::UserData user_data;
 
 public:
@@ -4564,9 +4699,21 @@ public:
 		/// of vectors in the exec callback's output chunk; without it, the columns declared in bind.
 		auto GetColumnCount() const -> idx_t;
 		/// Which declared column (in `BindInput::AddResultColumn` order) the scan's column at `index` stands for. The
-		/// identity without projection pushdown.
+		/// identity without projection pushdown. For a virtual column, an index past every declared column: see
+		/// `GetVirtualColumn`.
 		/// @throws InvalidInputException When the index is out of bounds.
 		auto GetColumnIndex(idx_t index) const -> idx_t;
+		/// Which virtual column the scan's column at `index` is, or `VirtualColumn::NONE` for a declared column.
+		/// Unstable API.
+		/// @throws InvalidInputException When the index is out of bounds.
+		auto GetVirtualColumn(idx_t index) const -> VirtualColumn;
+
+		/// How many filters are pushed into the scan, combined with `AND`. Zero unless the function enables
+		/// `SetTableFilterPushdown`. Unstable API.
+		auto GetTableFilterCount() const -> idx_t;
+		/// A filter pushed into the scan. Borrowed, and valid for as long as the scan's global state is. Unstable API.
+		/// @throws InvalidInputException When the index is out of bounds.
+		auto GetTableFilter(idx_t index) const -> TableFilter;
 
 		/// The scan's context. Borrowed, valid only for the callback duration.
 		auto GetContext() -> Context &;
@@ -4624,6 +4771,9 @@ public:
 		/// Which declared column the scan's column at `index` stands for; see `InitGlobalInput::GetColumnIndex`.
 		/// @throws InvalidInputException When the index is out of bounds.
 		auto GetColumnIndex(idx_t index) const -> idx_t;
+		/// Which virtual column the scan's column at `index` is; see `InitGlobalInput::GetVirtualColumn`. Unstable API.
+		/// @throws InvalidInputException When the index is out of bounds.
+		auto GetVirtualColumn(idx_t index) const -> VirtualColumn;
 
 		/// The scan's context. Borrowed, valid only for the callback duration.
 		auto GetContext() -> Context &;
@@ -4687,6 +4837,10 @@ public:
 		/// `InitGlobalInput::GetColumnIndex`.
 		/// @throws InvalidInputException When the index is out of bounds.
 		auto GetColumnIndex(idx_t index) const -> idx_t;
+		/// Which virtual column the output chunk's vector at `index` must be filled with, or `VirtualColumn::NONE`
+		/// for a declared column. Unstable API.
+		/// @throws InvalidInputException When the index is out of bounds.
+		auto GetVirtualColumn(idx_t index) const -> VirtualColumn;
 
 		/// The execution context. Borrowed, valid only for the callback duration.
 		auto GetContext() -> Context &;
@@ -5046,6 +5200,98 @@ public:
 		void *GetBindDataInternal() const;
 		void *GetUserDataInternal() const;
 	};
+
+	/// What the statistics callback works with. Borrowed, valid only for the callback duration. Unstable API.
+	class StatisticsInput {
+		friend detail::HandleFactory;
+
+	public:
+		/// The bind data set via `BindInput::SetBindData` for the bound call statistics are asked for.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetBindData() const -> const T & {
+			return *static_cast<const T *>(GetBindDataInternal());
+		}
+
+		/// The user data set via `TableFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// Which column statistics are asked for: an index into the columns declared in bind, or for a virtual column
+		/// an index past all of them - see `GetVirtualColumn`.
+		auto GetColumnIndex() const -> idx_t;
+		/// Which virtual column statistics are asked for, or `VirtualColumn::NONE` for a declared column.
+		auto GetVirtualColumn() const -> VirtualColumn;
+
+		/// Reports the statistics of the column. They must be of the column's type, and are copied.
+		/// @throws InvalidInputException When the statistics are of another type.
+		auto SetStatistics(const ColumnStatistics &statistics) -> void;
+
+		/// The context of the query being optimized. Borrowed, valid only for the callback duration.
+		auto GetContext() -> Context &;
+
+	private:
+		StatisticsInput(void *args, void *context)
+		    : args(args), context(detail::HandleFactory::Make<Context>(context)) {
+		}
+
+		void *args;
+		Context context;
+
+		void *GetBindDataInternal() const;
+		void *GetUserDataInternal() const;
+	};
+
+	/// What the metrics callback works with. Borrowed, valid only for the callback duration. Unstable API.
+	class MetricsInput {
+		friend detail::HandleFactory;
+
+	public:
+		/// The bind data set via `BindInput::SetBindData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetBindData() const -> const T & {
+			return *static_cast<const T *>(GetBindDataInternal());
+		}
+
+		/// The global state set via `InitGlobalInput::SetGlobalState`, or null when the scan has not set one up yet.
+		/// The scan may still be running, so the state must be read in a thread-safe way.
+		template <class T>
+		auto GetGlobalState() const -> T * {
+			return static_cast<T *>(GetGlobalStateInternal());
+		}
+
+		/// The user data set via `TableFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// Reports row groups the scan read since the callback last reported. The engine sums every report, so each
+		/// row group read must be reported exactly once.
+		auto AddRowGroupsScanned(idx_t count) -> void;
+		/// Reports how many row groups the scan could have read in total, as far as it knows so far. Not summed: every
+		/// invocation reports the total as a whole.
+		auto SetTotalRowGroups(idx_t count) -> void;
+
+		/// The execution context. Borrowed, valid only for the callback duration.
+		auto GetContext() -> Context &;
+
+	private:
+		MetricsInput(void *args, void *context) : args(args), context(detail::HandleFactory::Make<Context>(context)) {
+		}
+
+		void *args;
+		Context context;
+
+		void *GetBindDataInternal() const;
+		void *GetGlobalStateInternal() const;
+		void *GetUserDataInternal() const;
+	};
 };
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -5170,6 +5416,7 @@ class CopyFunction final : public detail::Handle<CopyFunction> {
 
 public:
 	class CopyToBindInput;
+	class CopyToCastInput;
 	class CopyToBatchSizeInput;
 	class CopyToInitInput;
 	class CopyToBatchInput;
@@ -5184,6 +5431,9 @@ public:
 
 	/// Called once per `COPY ... TO` statement while it is bound. Optional.
 	using CopyToBindCallback = void (*)(CopyToBindInput &input);
+	/// Called once per `COPY ... TO` statement while it is bound, before the bind callback, to choose the types the
+	/// columns are written as; the engine casts the columns to them. Optional; unstable API.
+	using CopyToCastCallback = void (*)(CopyToCastInput &input);
 	/// Called after bind, for a `COPY ... TO` statement that sets no `BATCH_SIZE` itself, to report how many rows a
 	/// batch should carry; must call `SetTarget`. Optional: without it, a batch is cut for every chunk of rows sunk,
 	/// i.e. a vector at a time.
@@ -5234,6 +5484,10 @@ public:
 	}
 
 	auto SetCopyToBindCallback(CopyToBindCallback callback) & -> CopyFunction &;
+	/// Lets the function choose the types the columns are written as - e.g. a type the file format can represent for
+	/// one it cannot. The engine casts each column to the type chosen for it, so the bind callback and every batch see
+	/// the chosen types only. Unstable API.
+	auto SetCopyToCastCallback(CopyToCastCallback callback) & -> CopyFunction &;
 	auto SetCopyToBatchSizeCallback(CopyToBatchSizeCallback callback) & -> CopyFunction &;
 	auto SetCopyToInitCallback(CopyToInitCallback callback) & -> CopyFunction &;
 	auto SetCopyToBatchCallback(CopyToBatchCallback callback) & -> CopyFunction &;
@@ -5247,6 +5501,17 @@ public:
 	auto SetCopyFromExecCallback(CopyFromExecCallback callback) & -> CopyFunction &;
 	auto SetCopyFromProgressCallback(CopyFromProgressCallback callback) & -> CopyFunction &;
 
+	/// Sets the extension of the files the function writes, without a leading dot, e.g. "parquet". A `COPY ... TO`
+	/// statement writing to a path with that extension then selects the function without a `FORMAT` option. Unstable
+	/// API.
+	auto SetFileExtension(const std::string &extension) & -> CopyFunction &;
+
+	/// Makes `COPY ... FROM` read through a registered `MultiFileFunction` instead of the `COPY ... FROM` callbacks:
+	/// its path may then be a glob or a list, it takes the options of the multi-file function, and every file is read
+	/// as the columns of the target table. Set either this or the `COPY ... FROM` callbacks. Unstable API.
+	/// @param name The name of the registered multi-file function.
+	auto SetCopyFromMultiFileFunction(const std::string &name) & -> CopyFunction &;
+
 private:
 	explicit CopyFunction(void *impl);
 	//! Moves what the callbacks need into the C handle, right before it is registered.
@@ -5255,6 +5520,7 @@ private:
 	auto SetUserDataInternal(void *data, void (*destructor)(void *)) -> void;
 
 	CopyToBindCallback copy_to_bind_callback = nullptr;
+	CopyToCastCallback copy_to_cast_callback = nullptr;
 	CopyToBatchSizeCallback copy_to_batch_size_callback = nullptr;
 	CopyToInitCallback copy_to_init_callback = nullptr;
 	CopyToBatchCallback copy_to_batch_callback = nullptr;
@@ -5338,6 +5604,48 @@ public:
 		void *GetUserDataInternal() const;
 	};
 
+	/// What the `COPY ... TO` cast callback works with. Borrowed, valid only for the callback duration. Unstable API.
+	class CopyToCastInput {
+		friend detail::HandleFactory;
+
+	public:
+		/// The user data set via `CopyFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// How many columns the statement writes.
+		auto GetColumnCount() const -> idx_t;
+
+		/// One column's name.
+		/// @throws InvalidInputException When the index is out of range.
+		auto GetColumnName(idx_t index) const -> std::string;
+
+		/// One column's type, as the statement produces it.
+		/// @throws InvalidInputException When the index is out of range.
+		auto GetColumnType(idx_t index) const -> LogicalType;
+
+		/// Sets the type a column is written as: the engine casts the column to it. A value that does not cast fails
+		/// the statement.
+		/// @throws InvalidInputException When the index is out of range, or the type is not concrete.
+		auto SetColumnType(idx_t index, const LogicalType &type) -> void;
+
+		/// The binding context. Borrowed, valid only for the callback duration.
+		auto GetContext() -> Context &;
+
+	private:
+		CopyToCastInput(void *args, void *context)
+		    : args(args), context(detail::HandleFactory::Make<Context>(context)) {
+		}
+
+		void *args;
+		Context context;
+
+		void *GetUserDataInternal() const;
+	};
+
 	/// What the `COPY ... TO` batch size callback works with. Borrowed, valid only for the callback duration.
 	class CopyToBatchSizeInput {
 		friend detail::HandleFactory;
@@ -5362,6 +5670,12 @@ public:
 		/// `BATCH_SIZE_BYTES` cuts it first).
 		/// @param rows The number of rows a batch should carry; must be greater than 0.
 		auto SetTarget(idx_t rows) -> void;
+
+		/// Reports how many bytes of rows a batch should carry at most, as a second target the engine cuts batches
+		/// at, whichever it reaches first. Not calling this cuts batches by rows only. A statement that sets
+		/// `BATCH_SIZE_BYTES` keeps its own. Unstable API.
+		/// @param bytes The number of bytes a batch should carry at most; must be greater than 0.
+		auto SetTargetBytes(idx_t bytes) -> void;
 
 		/// The binding context. Borrowed, valid only for the callback duration.
 		auto GetContext() -> Context &;

@@ -110,6 +110,8 @@ struct CopyToSelectInput {
 	identifier_map_t<vector<Value>> &options;
 	vector<unique_ptr<Expression>> select_list;
 	CopyToType copy_to_type;
+	//! The info of the copy function the statement is bound to
+	optional_ptr<CopyFunctionInfo> function_info;
 };
 
 struct CopyOption {
@@ -258,6 +260,8 @@ public:
 	copy_flush_batch_t flush_batch;
 	copy_file_size_bytes_t file_size_bytes;
 	copy_desired_batch_size_t desired_batch_size;
+	//! The number of bytes a batch should carry at most, when the statement does not set BATCH_SIZE_BYTES itself
+	copy_desired_batch_size_t desired_batch_size_bytes = nullptr;
 
 	copy_to_serialize_t serialize;
 	copy_to_deserialize_t deserialize;

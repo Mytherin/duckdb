@@ -16,6 +16,12 @@ handles:
       of a `COPY ... TO` statement. The "bind" callback receives this handle and can use it to e.g. inspect the names
       and types of the columns being written, read the statement's options and initialize some constant state.
 
+  copy_to_cast_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to a copy function when a `COPY ... TO` statement is bound,
+      before its bind callback runs. The "cast" callback receives this handle and can use it to choose the types the
+      columns are written as.
+
   copy_to_batch_size_info:
     description: |
       A borrowed opaque handle to the arguments supplied to a copy function during the "batch size" phase of a
@@ -96,6 +102,20 @@ callbacks:
       context:
         type: context
         description: Borrowed handle to the context of the query currently executing the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+  copy_to_cast_callback:
+    parameters:
+      info:
+        type: copy_to_cast_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      context:
+        type: context
+        description: Borrowed handle to the context of the statement being bound.
       err:
         type: error_info
         indirection: 1
@@ -2016,6 +2036,225 @@ functions:
       file_size_bytes:
         type: idx
         description: The size of the file in bytes.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # File extension
+  #---------------------------------------------------------------------------------------------------------------------
+  copy_function_set_file_extension:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-10-09" ]
+    description: |
+      Sets the file extension of the files the function writes, e.g. "parquet".
+
+      Optional. With a file extension, a `COPY ... TO` statement that writes to a path with that extension selects
+      the function without a `FORMAT` option, e.g. `COPY t TO 'out.parquet'`. The extension is given without a
+      leading dot, and is borrowed and copied.
+    parameters:
+      function:
+        type: copy_function
+        description: The function to set the file extension of.
+      extension:
+        type: str
+        indirection: 1
+        description: The file extension, without a leading dot. Borrowed and copied.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # COPY FROM through a multi-file function
+  #---------------------------------------------------------------------------------------------------------------------
+  copy_from_set_multi_file_function:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-10-09" ]
+    description: |
+      Makes the `COPY ... FROM` side of the function read through a registered multi-file function, instead of
+      through the `COPY ... FROM` callbacks.
+
+      The statement then reads the way the multi-file function does: its path may be a glob or a list of files,
+      it accepts the options of the multi-file function (e.g. `union_by_name`) and the named parameters of the
+      single-file function it wraps, and every file is read as the columns of the target table. The multi-file
+      function must be registered with `[[connection_register_multi_file_function]]` or `[[extension_register_multi_file_function]]` before the copy function is registered.
+      This replaces the `COPY ... FROM` callbacks: a function sets either this or those. The name is borrowed and
+      copied.
+    parameters:
+      function:
+        type: copy_function
+        description: The function to configure.
+      name:
+        type: str
+        indirection: 1
+        description: The name of the registered multi-file function. Borrowed and copied.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # COPY TO column types
+  #---------------------------------------------------------------------------------------------------------------------
+  copy_to_set_cast_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-10-09" ]
+    description: |
+      Sets the optional cast callback of the `COPY ... TO` side.
+
+      The cast callback is invoked once per `COPY ... TO` statement while it is bound, before the bind callback. It
+      sees the types of the columns being written, and can choose another type for any of them with
+      `[[copy_to_cast_set_column_type]]` - e.g. a type the file format can represent, for one it cannot. The engine
+      then casts the column to that type before its rows reach the function, so the bind callback and every batch
+      see the chosen types only. A value that does not cast fails the statement.
+    parameters:
+      function:
+        type: copy_function
+        description: The function to set the callback of.
+      callback:
+        type: copy_to_cast_callback
+        description: The callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_cast_get_user_data:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-10-09" ]
+    description: Retrieves the user data set on the copy function via `[[copy_function_set_user_data]]`.
+    parameters:
+      info:
+        type: copy_to_cast_info
+        description: The cast info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_cast_get_column_count:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-10-09" ]
+    description: Retrieves how many columns the statement writes.
+    parameters:
+      info:
+        type: copy_to_cast_info
+        description: The cast info handle.
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of columns.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_cast_get_column_name:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-10-09" ]
+    description: |
+      Retrieves the name of the column at the given index. Fails if the index is out of bounds. The name is borrowed
+      from the statement, valid for the duration of the callback.
+    parameters:
+      info:
+        type: copy_to_cast_info
+        description: The cast info handle.
+      index:
+        type: idx
+        description: The index of the column to get the name of.
+      name:
+        type: identifier
+        indirection: 1
+        kind: OUT_BORROW
+        description: Receives a borrowed view of the column name.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_cast_get_column_type:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-10-09" ]
+    description: |
+      Retrieves the type of the column at the given index, as the statement produces it.
+
+      Fails if the index is out of bounds. The returned type is owned by the caller and must be destroyed via
+      `[[logical_type_destroy]]`.
+    parameters:
+      info:
+        type: copy_to_cast_info
+        description: The cast info handle.
+      index:
+        type: idx
+        description: The index of the column to get the type of.
+      type:
+        type: logical_type
+        indirection: 1
+        kind: OUT
+        description: Receives the column type. Owned by the caller; destroy via `[[logical_type_destroy]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_cast_set_column_type:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-10-09" ]
+    description: |
+      Sets the type the column at the given index is written as: the engine casts the column to it. Setting the
+      type the column already has leaves it as it is. Fails if the index is out of bounds, or the type is not a
+      fully defined concrete type.
+    parameters:
+      info:
+        type: copy_to_cast_info
+        description: The cast info handle.
+      index:
+        type: idx
+        description: The index of the column.
+      type:
+        type: logical_type
+        description: The type to write the column as. Borrowed and copied.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # COPY TO batch size in bytes
+  #---------------------------------------------------------------------------------------------------------------------
+  copy_to_batch_size_set_target_bytes:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-10-09" ]
+    description: |
+      Sets how many bytes of rows a batch should carry at most, as a second target the engine cuts batches at,
+      whichever of the two it reaches first - the counterpart of a statement's `BATCH_SIZE_BYTES`. Optional: without
+      it, batches are only cut by their number of rows. Like the target in rows, it only applies to a statement that
+      does not set `BATCH_SIZE` itself, since the batch size callback is not consulted otherwise, and a statement
+      that sets `BATCH_SIZE_BYTES` keeps its own.
+    parameters:
+      info:
+        type: copy_to_batch_size_info
+        description: The batch size info handle.
+      bytes:
+        type: idx
+        description: The number of bytes a batch should carry at most. Must be greater than 0.
       err:
         type: error_info
         indirection: 1

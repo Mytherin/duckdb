@@ -312,12 +312,17 @@ bool TableFunctionFileReader::TryInitializeScan(ClientContext &context, GlobalTa
 	SetScanState(gstate);
 	InitializeFunctionState(context);
 	auto &lstate = lstate_p.Cast<TableFunctionMultiFileLocalState>();
-	if (!function.init_local) {
-		// the wrapped function has no local state - it can only be scanned by a single thread
+	// a function without a local state, or one whose file can only be scanned by a single thread, is scanned by the
+	// first thread that gets to it - unless it scans in batches, which every thread claims from it in turn
+	const bool single_threaded =
+	    !function.init_local || (!settings.claim_batch && (!global_state || global_state->MaxThreads() <= 1));
+	if (single_threaded) {
 		bool expected = false;
 		if (!file_is_assigned.compare_exchange_strong(expected, true)) {
 			return false;
 		}
+	}
+	if (!function.init_local) {
 		lstate.local_state = nullptr;
 	} else if (lstate.reader.get() != this && !(settings.reuses_local_state && lstate.local_state)) {
 		// we are moving to a new file - initialize a local state for it, unless the function carries what it has
@@ -350,7 +355,7 @@ AsyncResult TableFunctionFileReader::ScheduleIO(ClientContext &context, GlobalTa
 	return result;
 }
 
-AsyncResult TableFunctionFileReader::Scan(ClientContext &context, GlobalTableFunctionState &,
+AsyncResult TableFunctionFileReader::Scan(ClientContext &context, GlobalTableFunctionState &gstate,
                                           LocalTableFunctionState &lstate_p, DataChunk &chunk) {
 	auto &lstate = lstate_p.Cast<TableFunctionMultiFileLocalState>();
 	TableFunctionInput input(bind_data.get(), lstate.local_state.get(), global_state.get());
@@ -358,10 +363,14 @@ AsyncResult TableFunctionFileReader::Scan(ClientContext &context, GlobalTableFun
 	input.async_result = AsyncResultType::IMPLICIT;
 	input.results_execution_mode = AsyncResultsExecutionMode::SYNCHRONOUS;
 	function.function(context, input, chunk);
-	if (chunk.size() == 0 && !settings.claim_batch) {
+	if (chunk.size() == 0) {
 		// an empty chunk signals the end of the scan for this thread - when the function scans in batches it only
 		// signals the end of the current batch, and the next batch is claimed by TryInitializeScan
-		exhausted = true;
+		if (!settings.claim_batch) {
+			exhausted = true;
+		}
+		// the file may already have been finished while this thread was still scanning it - collect what it counted
+		CollectMetrics(context, gstate);
 	}
 	return AsyncResult::FromChunk(chunk);
 }
@@ -557,6 +566,9 @@ void TableFunctionMultiFileWrapper::CombineSchemas(ClientContext &context,
 
 void TableFunctionMultiFileWrapper::GetVirtualColumns(ClientContext &context, MultiFileBindData &bind_data,
                                                       virtual_column_map_t &result) {
+	for (auto &entry : settings.virtual_columns) {
+		result.insert(entry);
+	}
 	if (!function.get_virtual_columns) {
 		return;
 	}

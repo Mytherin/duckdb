@@ -518,7 +518,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	if (function.copy_to_select) {
 		auto bindings = select_node.plan->GetColumnBindings();
 
-		CopyToSelectInput input = {context, stmt.info->options, {}, copy_to_type};
+		CopyToSelectInput input = {context, stmt.info->options, {}, copy_to_type, function.function_info.get()};
 		input.select_list.reserve(bindings.size());
 
 		// Create column references for the select list
@@ -614,6 +614,9 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	// This must be set
 	if (!copy->batch_size.IsValid() && copy->function.desired_batch_size) {
 		copy->batch_size = copy->function.desired_batch_size(context, *copy->bind_data);
+	}
+	if (!copy->batch_size_bytes.IsValid() && copy->function.desired_batch_size_bytes) {
+		copy->batch_size_bytes = copy->function.desired_batch_size_bytes(context, *copy->bind_data);
 	}
 
 	BoundStatement result;

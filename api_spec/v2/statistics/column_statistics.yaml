@@ -1,0 +1,144 @@
+module: column statistics
+#
+# What is known about the values of a column without reading them: bounds on the values, and whether they can be
+# NULL. A table function reports them for its columns through `[[table_function_set_statistics_callback]]`, which
+# the optimizer uses to simplify a query, and checks the filters pushed into its scan against them with
+# `[[table_filter_check_statistics]]`, to skip what no row of which can pass.
+#
+# Statistics start out knowing nothing - any value, NULL or not - and every setter narrows what they allow. Bounds
+# are only bounds: every value lies within them, but no value has to be equal to either.
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Handles
+#-----------------------------------------------------------------------------------------------------------------------
+handles:
+  column_statistics:
+    description: |
+      An owned opaque handle to the statistics of a column of one type. Created with `[[column_statistics_create]]`,
+      narrowed with the setters (e.g. `[[column_statistics_set_min]]`), and destroyed with
+      `[[column_statistics_destroy]]`.
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Functions
+#-----------------------------------------------------------------------------------------------------------------------
+functions:
+  column_statistics_create:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-10-09" ]
+    description: |
+      Creates statistics of a column of the given type that know nothing about its values: they may be anything,
+      and may be NULL.
+
+      Bounds can be set for the numeric types (including DECIMAL), the date and time types, and for VARCHAR and BLOB.
+      For the other types only whether the column can hold NULLs or values can be set. The caller owns the returned
+      handle and must destroy it with `[[column_statistics_destroy]]`.
+    parameters:
+      type:
+        type: logical_type
+        description: The type of the column. Borrowed.
+      statistics:
+        type: column_statistics
+        indirection: 1
+        kind: OUT
+        description: On success, receives the new statistics. Owned by the caller; destroy via `[[column_statistics_destroy]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  column_statistics_set_min:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-10-09" ]
+    description: |
+      Sets a lower bound on the values of the column: no value is less than it. A NULL value is NULL rather than a
+      bound, and leaves the lower bound unknown.
+
+      The value is cast to the type of the statistics. Fails with `ERROR_INPUT_INVALID` when the type has no bounds
+      (see `[[column_statistics_create]]`), or the value does not cast to it. A VARCHAR or BLOB bound may be a
+      truncated form of the true minimum, e.g. a prefix of it.
+    parameters:
+      statistics:
+        type: column_statistics
+        description: The statistics to narrow.
+      value:
+        type: value
+        description: The lower bound. Borrowed and copied.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  column_statistics_set_max:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-10-09" ]
+    description: |
+      Sets an upper bound on the values of the column: no value is greater than it. A NULL value is NULL rather
+      than a bound, and leaves the upper bound unknown.
+
+      The value is cast to the type of the statistics. Fails with `ERROR_INPUT_INVALID` when the type has no bounds
+      (see `[[column_statistics_create]]`), or the value does not cast to it.
+    parameters:
+      statistics:
+        type: column_statistics
+        description: The statistics to narrow.
+      value:
+        type: value
+        description: The upper bound. Borrowed and copied.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  column_statistics_set_can_have_null:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-10-09" ]
+    description: Sets whether the column can hold NULLs. True unless set.
+    parameters:
+      statistics:
+        type: column_statistics
+        description: The statistics to narrow.
+      can_have_null:
+        type: bool
+        description: Whether the column can hold NULLs.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  column_statistics_set_can_have_valid:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-10-09" ]
+    description: |
+      Sets whether the column can hold values other than NULL. True unless set: setting it to false says that every
+      row of the column is NULL.
+    parameters:
+      statistics:
+        type: column_statistics
+        description: The statistics to narrow.
+      can_have_valid:
+        type: bool
+        description: Whether the column can hold values other than NULL.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  column_statistics_destroy:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-10-09" ]
+    description: |
+      Destroys the statistics, releasing their resources.
+
+      Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on return to prevent
+      double-destruction.
+    parameters:
+      statistics:
+        type: column_statistics
+        description: The statistics to destroy.
+        indirection: 1
+    return_type: ERROR

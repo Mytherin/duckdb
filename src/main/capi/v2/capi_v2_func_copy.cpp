@@ -1,10 +1,13 @@
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/main/capi_v2/capi_v2_internal.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
+#include "duckdb/common/multi_file/table_function_multi_file.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
 
 #include <algorithm>
@@ -15,6 +18,7 @@ class CV2CopyFunctionInfo final : public CopyFunctionInfo {
 public:
 	// COPY ... TO
 	duckdb_v2_copy_to_bind_callback_fn to_bind_cb = nullptr;
+	duckdb_v2_copy_to_cast_callback_fn to_cast_cb = nullptr;
 	duckdb_v2_copy_to_batch_size_callback_fn to_batch_size_cb = nullptr;
 	duckdb_v2_copy_to_init_callback_fn to_init_cb = nullptr;
 	duckdb_v2_copy_to_batch_callback_fn to_batch_cb = nullptr;
@@ -28,14 +32,20 @@ public:
 	duckdb_v2_copy_from_exec_callback_fn from_exec_cb = nullptr;
 	duckdb_v2_copy_from_progress_callback_fn from_progress_cb = nullptr;
 
+	//! The registered multi-file function COPY ... FROM reads through instead of the callbacks above, if any
+	Identifier from_multi_file_function;
+
 	shared_ptr<CV2UserData> user_data = nullptr;
 
 	bool HasCopyTo() const {
-		return to_bind_cb || to_batch_size_cb || to_init_cb || to_batch_cb || to_flush_cb || to_finalize_cb ||
-		       to_statistics_cb;
+		return to_bind_cb || to_cast_cb || to_batch_size_cb || to_init_cb || to_batch_cb || to_flush_cb ||
+		       to_finalize_cb || to_statistics_cb;
+	}
+	bool HasCopyFromCallbacks() const {
+		return from_bind_cb || from_init_global_cb || from_init_local_cb || from_exec_cb || from_progress_cb;
 	}
 	bool HasCopyFrom() const {
-		return from_bind_cb || from_init_global_cb || from_init_local_cb || from_exec_cb || from_progress_cb;
+		return HasCopyFromCallbacks() || !from_multi_file_function.empty();
 	}
 };
 
@@ -61,6 +71,9 @@ public:
 	bool cardinality_is_exact = false;
 	bool cardinality_set = false;
 
+	// The target in bytes the COPY TO batch size callback reported alongside its target in rows
+	optional_idx batch_target_bytes;
+
 	auto Copy() const -> unique_ptr<FunctionData> override {
 		auto copy = make_uniq<CV2CopyFunctionData>();
 		copy->handle = handle;
@@ -68,6 +81,7 @@ public:
 		copy->cardinality = cardinality;
 		copy->cardinality_is_exact = cardinality_is_exact;
 		copy->cardinality_set = cardinality_set;
+		copy->batch_target_bytes = batch_target_bytes;
 		return std::move(copy);
 	}
 
@@ -148,12 +162,30 @@ static auto Convert(CV2CopyToBindInfo *info) -> duckdb_v2_copy_to_bind_info_hand
 	return reinterpret_cast<duckdb_v2_copy_to_bind_info_handle>(info);
 }
 
+class CV2CopyToCastInfo {
+public:
+	void *in_user_data = nullptr;
+	vector<Identifier> in_names;
+	vector<LogicalType> in_types;
+
+	//! The type each column is written as, when the callback chose another
+	vector<optional<LogicalType>> out_types;
+};
+
+static auto Convert(duckdb_v2_copy_to_cast_info_handle info) -> CV2CopyToCastInfo * {
+	return reinterpret_cast<CV2CopyToCastInfo *>(info);
+}
+static auto Convert(CV2CopyToCastInfo *info) -> duckdb_v2_copy_to_cast_info_handle {
+	return reinterpret_cast<duckdb_v2_copy_to_cast_info_handle>(info);
+}
+
 class CV2CopyToBatchSizeInfo {
 public:
 	void *in_user_data = nullptr;
 	void *in_bind_data = nullptr;
 
 	optional_idx out_target;
+	optional_idx out_target_bytes;
 };
 
 static auto Convert(duckdb_v2_copy_to_batch_size_info_handle info) -> CV2CopyToBatchSizeInfo * {
@@ -393,7 +425,56 @@ static auto CV2CopyToBind(ClientContext &context, CopyFunctionBindInput &input, 
 	return std::move(result);
 }
 
+//! Lets the cast callback choose the types the columns are written as, and casts the columns to them
+static auto CV2CopyToSelect(CopyToSelectInput &input) -> vector<unique_ptr<Expression>> {
+	if (!input.function_info) {
+		throw InvalidInputException("The COPY TO select of a copy function was called without its function info");
+	}
+	const auto &info = input.function_info->Cast<CV2CopyFunctionInfo>();
+
+	CV2CopyToCastInfo args;
+	args.in_user_data = GetUserData(info);
+	for (auto &expr : input.select_list) {
+		args.in_names.push_back(Identifier(expr->GetAlias()));
+		args.in_types.push_back(expr->GetReturnType());
+	}
+	args.out_types.resize(input.select_list.size());
+
+	CV2ErrorInfo err = {};
+	auto err_ptr = Convert(&err);
+	CV2CallbackContext callback_context(input.context);
+	info.to_cast_cb(Convert(&args), Convert(&callback_context), &err_ptr);
+	if (err.HasError()) {
+		err.ThrowAsException();
+	}
+
+	bool any_cast = false;
+	for (idx_t i = 0; i < args.out_types.size(); i++) {
+		any_cast = any_cast || (args.out_types[i] && *args.out_types[i] != args.in_types[i]);
+	}
+	if (!any_cast) {
+		// an empty select list keeps the statement as it is
+		return {};
+	}
+	vector<unique_ptr<Expression>> result;
+	for (idx_t i = 0; i < input.select_list.size(); i++) {
+		auto &expr = input.select_list[i];
+		if (!args.out_types[i] || *args.out_types[i] == args.in_types[i]) {
+			result.push_back(std::move(expr));
+			continue;
+		}
+		auto name = expr->GetAlias();
+		auto cast = BoundCastExpression::AddCastToType(input.context, std::move(expr), *args.out_types[i]);
+		cast->SetAlias(name);
+		result.push_back(std::move(cast));
+	}
+	return result;
+}
+
+//! Asks the batch size callback for its targets, which it reports both at once. It is only consulted for a statement
+//! that sets no BATCH_SIZE itself.
 static auto CV2CopyToBatchSize(ClientContext &context, FunctionData &bind_data) -> optional_idx {
+	auto &data = bind_data.Cast<CV2CopyFunctionData>();
 	const auto &info = GetFunctionInfo(bind_data);
 
 	CV2CopyToBatchSizeInfo args = {};
@@ -411,7 +492,17 @@ static auto CV2CopyToBatchSize(ClientContext &context, FunctionData &bind_data) 
 	if (args.out_target.IsValid() && args.out_target == 0) {
 		throw InvalidInputException("The batch size callback must set a target greater than 0.");
 	}
+	if (args.out_target_bytes.IsValid() && args.out_target_bytes == 0) {
+		throw InvalidInputException("The batch size callback must set a target in bytes greater than 0.");
+	}
+	// the target in bytes is handed over separately, unless the statement sets one itself
+	data.batch_target_bytes = args.out_target_bytes;
 	return args.out_target;
+}
+
+//! The target in bytes the batch size callback reported alongside its target in rows, if it was consulted
+static auto CV2CopyToBatchSizeBytes(ClientContext &context, FunctionData &bind_data) -> optional_idx {
+	return bind_data.Cast<CV2CopyFunctionData>().batch_target_bytes;
 }
 
 static auto CV2CopyToInitGlobal(ClientContext &context, FunctionData &bind_data, const string &file_path)
@@ -752,7 +843,9 @@ public:
 	}
 
 	//! Validates the configuration and builds the copy function to register on `target`.
-	CopyFunction Build(DatabaseInstance &target) {
+	//! `lookup_table_function` looks up the table function catalog entry COPY ... FROM reads through.
+	CopyFunction Build(DatabaseInstance &target,
+	                   const std::function<optional_ptr<CatalogEntry>(const Identifier &)> &lookup_table_function) {
 		CheckRegistrationTarget(db, target, "copy function");
 		if (name.empty()) {
 			throw InvalidInputException("Function name cannot be empty.");
@@ -771,7 +864,7 @@ public:
 				throw InvalidInputException("Flush callback must be set for the COPY TO side of the function.");
 			}
 		}
-		if (has_copy_from) {
+		if (has_copy_from && info.from_multi_file_function.empty()) {
 			if (!info.from_bind_cb) {
 				throw InvalidInputException("Bind callback must be set for the COPY FROM side of the function.");
 			}
@@ -779,12 +872,26 @@ public:
 				throw InvalidInputException("Exec callback must be set for the COPY FROM side of the function.");
 			}
 		}
+		if (!info.from_multi_file_function.empty() && info.HasCopyFromCallbacks()) {
+			throw InvalidInputException("The COPY FROM side of the function reads through multi-file function \"%s\", "
+			                            "so its COPY FROM callbacks cannot be set.",
+			                            info.from_multi_file_function);
+		}
+		// Looked up before the info is moved from below
+		optional<TableFunction> from_multi_file;
+		if (!info.from_multi_file_function.empty()) {
+			from_multi_file = SelectMultiFileFunction(lookup_table_function(info.from_multi_file_function),
+			                                          info.from_multi_file_function);
+		}
 
 		auto function_info = make_shared_ptr<CV2CopyFunctionInfo>(std::move(info));
 
 		CopyFunction function(name);
 		if (has_copy_to) {
 			function.copy_to_bind = CV2CopyToBind;
+			if (function_info->to_cast_cb) {
+				function.copy_to_select = CV2CopyToSelect;
+			}
 			function.copy_to_initialize_global = CV2CopyToInitGlobal;
 			function.prepare_batch = CV2CopyToPrepareBatch;
 			function.flush_batch = CV2CopyToFlushBatch;
@@ -794,12 +901,17 @@ public:
 			function.copy_to_combine = CV2CopyToCombine;
 			if (function_info->to_batch_size_cb) {
 				function.desired_batch_size = CV2CopyToBatchSize;
+				function.desired_batch_size_bytes = CV2CopyToBatchSizeBytes;
 			}
 			if (function_info->to_statistics_cb) {
 				function.copy_to_get_written_statistics = CV2CopyToGetWrittenStatistics;
 			}
 		}
-		if (has_copy_from) {
+		if (from_multi_file) {
+			// The multi-file function binds the statement itself, reading every file as the columns of the table.
+			function.copy_from_bind = TableFunctionMultiFileWrapper::MultiFileBindCopy;
+			function.copy_from_function = std::move(*from_multi_file);
+		} else if (has_copy_from) {
 			// The engine reads through a table function whose own bind is skipped in favour of copy_from_bind.
 			TableFunction reader(name, {}, CV2CopyFromExec, nullptr, CV2CopyFromInitGlobal, CV2CopyFromInitLocal);
 			// Always wired: it serves the static estimate a bind callback may set, which is not known at registration.
@@ -811,9 +923,31 @@ public:
 			function.copy_from_bind = CV2CopyFromBind;
 			function.copy_from_function = std::move(reader);
 		}
+		if (!file_extension.empty()) {
+			function.extension = file_extension;
+		}
 		function.function_info = std::move(function_info);
 
 		return function;
+	}
+
+private:
+	//! The overload of the multi-file function that reads a single path or glob
+	static TableFunction SelectMultiFileFunction(optional_ptr<CatalogEntry> entry, const Identifier &function_name) {
+		if (entry) {
+			for (auto &function : entry->Cast<TableFunctionCatalogEntry>().functions.functions) {
+				if (!dynamic_cast<const TableFunctionMultiFileInfo *>(function->function_info.get())) {
+					continue;
+				}
+				auto &signature = function->GetSignature();
+				if (signature.GetPositionalParameterCount() == 1 &&
+				    signature.GetParameter(0).GetType() == LogicalType::VARCHAR) {
+					return *function;
+				}
+			}
+		}
+		throw InvalidInputException("Multi-file function \"%s\" to read COPY FROM through does not exist.",
+		                            function_name);
 	}
 
 public:
@@ -821,6 +955,7 @@ public:
 	DatabaseInstance &db;
 	CV2CopyFunctionInfo info;
 	Identifier name;
+	string file_extension;
 };
 
 static auto Convert(duckdb_v2_copy_function_handle func) -> CV2CopyFunction * {
@@ -1481,9 +1616,14 @@ DUCKDB_V2_ERROR duckdb_v2_connection_register_copy_function(duckdb_v2_connection
 	return WithErrorHandler(err, [&]() {
 		auto &context = *Convert(conn)->context;
 		context.RunFunctionInTransaction([&]() {
-			auto info = duckdb::CreateCopyFunctionInfo(Convert(function)->Build(*context.db));
-			info.on_conflict = duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
 			auto &catalog = duckdb::Catalog::GetSystemCatalog(context);
+			auto lookup = [&](const duckdb::Identifier &name) {
+				return catalog.GetEntry(context, duckdb::CatalogType::TABLE_FUNCTION_ENTRY,
+				                        duckdb::Identifier::DefaultSchema(), name,
+				                        duckdb::OnEntryNotFound::RETURN_NULL);
+			};
+			auto info = duckdb::CreateCopyFunctionInfo(Convert(function)->Build(*context.db, lookup));
+			info.on_conflict = duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
 			catalog.CreateCopyFunction(context, info);
 		});
 	});
@@ -1496,7 +1636,10 @@ DUCKDB_V2_ERROR duckdb_v2_extension_register_copy_function(duckdb_v2_extension_h
 	DUCKDB_CHECK_ARG(function);
 	return WithErrorHandler(err, [&]() {
 		auto &loader = GetExtensionLoader(extension);
-		loader.RegisterFunction(Convert(function)->Build(loader.GetDatabaseInstance()));
+		auto lookup = [&](const duckdb::Identifier &name) {
+			return loader.TryGetTableFunction(name);
+		};
+		loader.RegisterFunction(Convert(function)->Build(loader.GetDatabaseInstance(), lookup));
 	});
 }
 
@@ -1554,4 +1697,113 @@ DUCKDB_V2_ERROR duckdb_v2_copy_to_statistics_set_file_size(duckdb_v2_copy_to_sta
                                                            idx_t file_size_bytes, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	return WithErrorHandler(err, [&]() { Convert(info)->out_file_size_bytes = file_size_bytes; });
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// File extension
+//----------------------------------------------------------------------------------------------------------------------
+DUCKDB_V2_ERROR duckdb_v2_copy_function_set_file_extension(duckdb_v2_copy_function_handle function,
+                                                           duckdb_v2_str *extension, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(function);
+	DUCKDB_CHECK_ARG(extension);
+	return WithErrorHandler(err, [&]() {
+		auto file_extension = duckdb::string(Convert(*extension));
+		if (duckdb::StringUtil::StartsWith(file_extension, ".")) {
+			throw duckdb::InvalidInputException("The file extension \"%s\" must be given without a leading dot",
+			                                    file_extension);
+		}
+		Convert(function)->file_extension = std::move(file_extension);
+	});
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// COPY FROM through a multi-file function
+//----------------------------------------------------------------------------------------------------------------------
+DUCKDB_V2_ERROR duckdb_v2_copy_from_set_multi_file_function(duckdb_v2_copy_function_handle function,
+                                                            duckdb_v2_str *name, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(function);
+	DUCKDB_CHECK_ARG(name);
+	return WithErrorHandler(
+	    err, [&]() { Convert(function)->info.from_multi_file_function = duckdb::Identifier(Convert(*name)); });
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// COPY TO column types
+//----------------------------------------------------------------------------------------------------------------------
+DUCKDB_V2_ERROR duckdb_v2_copy_to_set_cast_callback(duckdb_v2_copy_function_handle function,
+                                                    duckdb_v2_copy_to_cast_callback_fn callback,
+                                                    duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(function);
+	return WithErrorHandler(err, [&]() { Convert(function)->info.to_cast_cb = callback; });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_copy_to_cast_get_user_data(duckdb_v2_copy_to_cast_info_handle info, void **data,
+                                                     duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(data);
+	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_user_data; });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_copy_to_cast_get_column_count(duckdb_v2_copy_to_cast_info_handle info, idx_t *count,
+                                                        duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(count);
+	return WithErrorHandler(err, [&]() { *count = Convert(info)->in_types.size(); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_copy_to_cast_get_column_name(duckdb_v2_copy_to_cast_info_handle info, idx_t index,
+                                                       duckdb_v2_identifier_t *name, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(name);
+	*name = duckdb_v2_identifier_t {nullptr, 0};
+	return WithErrorHandler(err, [&]() {
+		const auto &names = Convert(info)->in_names;
+		if (index >= names.size()) {
+			throw duckdb::InvalidInputException("Index out of bounds in duckdb_v2_copy_to_cast_get_column_name");
+		}
+		*name = Convert(names[index]);
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_copy_to_cast_get_column_type(duckdb_v2_copy_to_cast_info_handle info, idx_t index,
+                                                       duckdb_v2_logical_type_handle *type,
+                                                       duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(type);
+	*type = nullptr;
+	return WithErrorHandler(err, [&]() {
+		const auto &types = Convert(info)->in_types;
+		if (index >= types.size()) {
+			throw duckdb::InvalidInputException("Index out of bounds in duckdb_v2_copy_to_cast_get_column_type");
+		}
+		*type = Convert(types[index]);
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_copy_to_cast_set_column_type(duckdb_v2_copy_to_cast_info_handle info, idx_t index,
+                                                       duckdb_v2_logical_type_handle type,
+                                                       duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(type);
+	return WithErrorHandler(err, [&]() {
+		auto &args = *Convert(info);
+		if (index >= args.out_types.size()) {
+			throw duckdb::InvalidInputException("Index out of bounds in duckdb_v2_copy_to_cast_set_column_type");
+		}
+		auto column_type_ref = Convert(type);
+		const auto &column_type = *column_type_ref;
+		if (!column_type.IsComplete()) {
+			throw duckdb::InvalidInputException("A column must be written as a fully defined concrete type");
+		}
+		args.out_types[index] = column_type;
+	});
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// COPY TO batch size in bytes
+//----------------------------------------------------------------------------------------------------------------------
+DUCKDB_V2_ERROR duckdb_v2_copy_to_batch_size_set_target_bytes(duckdb_v2_copy_to_batch_size_info_handle info,
+                                                              idx_t bytes, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	return WithErrorHandler(err, [&]() { Convert(info)->out_target_bytes = bytes; });
 }

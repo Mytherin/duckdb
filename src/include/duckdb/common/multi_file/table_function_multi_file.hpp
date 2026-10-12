@@ -203,6 +203,9 @@ struct TableFunctionMultiFileSettings {
 	//! TableFunctionFileInitInput::cast_map. The function then reports the schema of its own file, and still
 	//! produces the types of the scan
 	bool supports_cast_map = false;
+	//! The virtual columns the function can produce for every file it reads - on top of what its
+	//! "get_virtual_columns" reports, which needs the bind data of a file to tell
+	virtual_column_map_t virtual_columns;
 };
 
 //! The function info of a multi-file wrapper - holds the single-file function that is wrapped

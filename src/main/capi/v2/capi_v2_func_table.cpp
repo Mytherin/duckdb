@@ -4,12 +4,17 @@
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/common/multi_file/multi_file_data.hpp"
 #include "duckdb/common/multi_file/table_function_multi_file.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/partition_info.hpp"
 #include "duckdb/function/partition_stats.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
+#include "duckdb/storage/table/column_segment.hpp"
 
 namespace duckdb::capiv2 {
 
@@ -49,6 +54,24 @@ public:
 	}
 };
 
+//! A filter pushed into the scan, as the function sees it
+class CV2TableFilter {
+public:
+	CV2TableFilter(idx_t scan_index, const ExpressionFilter &filter, LogicalType type,
+	               unique_ptr<Expression> expression)
+	    : scan_index(scan_index), filter(filter), type(std::move(type)), expression(std::move(expression)) {
+	}
+
+	//! The vector of the output chunk the filter applies to
+	idx_t scan_index;
+	//! The filter itself, owned by the global state of the scan
+	const ExpressionFilter &filter;
+	//! The type the scan produces the column as, which statistics checked against the filter must be of
+	LogicalType type;
+	//! The filter as an expression over a column reference, with optional filters replaced by what they wrap
+	unique_ptr<Expression> expression;
+};
+
 class CV2TableGlobalState final : public GlobalTableFunctionState {
 public:
 	auto MaxThreads() const -> idx_t override {
@@ -58,8 +81,21 @@ public:
 	CV2UserData handle;
 	idx_t max_threads = 1;
 
-	// The declared column each vector of the output chunk stands for, kept here so the exec callback can ask.
+	// The column each vector of the output chunk stands for, kept here so the exec callback can ask: a declared
+	// column, or the id of a virtual column.
 	vector<column_t> scan_columns;
+
+	//! The filters pushed into the scan, applied to every row the exec callback produces
+	unique_ptr<TableFilterSet> filters;
+	//! The vector of the output chunk each of the filters applies to, in the order of the filter set
+	vector<idx_t> filter_columns;
+	//! The filters the function is handed - those on columns the function produces as the type the filter is of
+	vector<unique_ptr<CV2TableFilter>> table_filters;
+	//! The expressions that turn a vector the function produced into the one the filters and our caller expect,
+	//! keyed by the vector they apply to - see TableFunctionFileInitInput::expression_map
+	unordered_map<idx_t, unique_ptr<Expression>> expressions;
+	//! The types the function produces the vectors of the output chunk as, when there are expressions
+	vector<LogicalType> function_types;
 };
 
 class CV2TableLocalState final : public LocalTableFunctionState {
@@ -72,6 +108,13 @@ public:
 	//! Written into by the exec callback when the scan requests no columns, as the function produces its rows through
 	//! its first column
 	unique_ptr<DataChunk> row_chunk;
+	//! The state of each filter pushed into the scan, in the order of the filter set
+	vector<unique_ptr<TableFilterState>> filter_states;
+	SelectionVector filter_sel;
+	//! Written into by the exec callback when expressions turn some of its vectors into other types
+	unique_ptr<DataChunk> function_chunk;
+	//! The executors of those expressions, keyed by the vector they apply to
+	unordered_map<idx_t, unique_ptr<ExpressionExecutor>> executors;
 
 	// Requested partition columns as declared columns, fixed for the lifetime of the local state's pipeline.
 	const vector<column_t> &PartitionColumns(const OperatorPartitionInfo &partition_info,
@@ -148,6 +191,7 @@ public:
 	void *in_user_data = nullptr;
 	void *in_bind_data = nullptr;
 	const vector<column_t> *in_scan_columns = nullptr;
+	const vector<unique_ptr<CV2TableFilter>> *in_table_filters = nullptr;
 
 	duckdb_v2_opaque out_global_state = {};
 	idx_t out_max_threads = 1;
@@ -332,8 +376,12 @@ public:
 	duckdb_v2_table_function_partitioning_callback_fn partitioning_cb = nullptr;
 	duckdb_v2_table_function_claim_batch_callback_fn claim_batch_cb = nullptr;
 	duckdb_v2_table_function_get_bind_info_callback_fn get_bind_info_cb = nullptr;
+	duckdb_v2_table_function_statistics_callback_fn statistics_cb = nullptr;
+	duckdb_v2_table_function_metrics_callback_fn metrics_cb = nullptr;
 	shared_ptr<CV2UserData> user_data = nullptr;
 	bool projection_pushdown = false;
+	bool table_filter_pushdown = false;
+	vector<DUCKDB_V2_VIRTUAL_COLUMN> virtual_columns;
 
 	Identifier name;
 };
@@ -384,6 +432,158 @@ static auto CV2TableGetBindInfo(TableFunctionGetBindInfoInput &input) -> BindInf
 	return std::move(args.out_bind_info);
 }
 
+//----------------------------------------------------------------------------------------------------------------------
+// Virtual columns
+//----------------------------------------------------------------------------------------------------------------------
+//! The id the engine knows a virtual column by
+static auto CV2VirtualColumnId(DUCKDB_V2_VIRTUAL_COLUMN column) -> column_t {
+	switch (column) {
+	case DUCKDB_V2_VIRTUAL_COLUMN_FILE_ROW_NUMBER:
+		return MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER;
+	default:
+		throw InvalidInputException("Invalid virtual column %d", static_cast<int>(column));
+	}
+}
+
+//! Which virtual column the column with the given id is - NONE for a declared column, or a virtual column the API
+//! does not expose
+static auto CV2GetVirtualColumn(column_t column_id) -> DUCKDB_V2_VIRTUAL_COLUMN {
+	if (column_id == MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER) {
+		return DUCKDB_V2_VIRTUAL_COLUMN_FILE_ROW_NUMBER;
+	}
+	return DUCKDB_V2_VIRTUAL_COLUMN_NONE;
+}
+
+static auto CV2VirtualColumnDefinition(DUCKDB_V2_VIRTUAL_COLUMN column) -> TableColumn {
+	switch (column) {
+	case DUCKDB_V2_VIRTUAL_COLUMN_FILE_ROW_NUMBER:
+		return TableColumn("file_row_number", LogicalType::BIGINT);
+	default:
+		throw InvalidInputException("Invalid virtual column %d", static_cast<int>(column));
+	}
+}
+
+static auto CV2TableGetVirtualColumns(ClientContext &context, optional_ptr<FunctionData> bind_data)
+    -> virtual_column_map_t;
+
+//! The type the scan produces the column with the given id as
+static auto CV2TableColumnType(const CV2TableFunctionData &bind_data, column_t column_id) -> LogicalType {
+	if (IsVirtualColumn(column_id)) {
+		auto column = CV2GetVirtualColumn(column_id);
+		if (column == DUCKDB_V2_VIRTUAL_COLUMN_NONE) {
+			throw InternalException(
+			    "Table function \"%s\" was asked for virtual column %llu, which it does not declare",
+			    bind_data.info->name, column_id);
+		}
+		return CV2VirtualColumnDefinition(column).type;
+	}
+	if (column_id >= bind_data.column_types.size()) {
+		throw InternalException("Table function \"%s\" was asked for column %llu, but declared %llu",
+		                        bind_data.info->name, column_id, bind_data.column_types.size());
+	}
+	return bind_data.column_types[column_id];
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Statistics
+//----------------------------------------------------------------------------------------------------------------------
+class CV2TableStatisticsInfo {
+public:
+	void *in_user_data = nullptr;
+	void *in_bind_data = nullptr;
+	column_t in_column_index = 0;
+	//! The type of the column, which the statistics reported for it must be of
+	LogicalType in_column_type;
+
+	unique_ptr<BaseStatistics> out_statistics;
+};
+
+static auto Convert(duckdb_v2_table_function_statistics_info_handle info) -> CV2TableStatisticsInfo * {
+	return reinterpret_cast<CV2TableStatisticsInfo *>(info);
+}
+static auto Convert(CV2TableStatisticsInfo *info) -> duckdb_v2_table_function_statistics_info_handle {
+	return reinterpret_cast<duckdb_v2_table_function_statistics_info_handle>(info);
+}
+
+static auto CV2TableStatistics(ClientContext &context, const FunctionData *bind_data_p, column_t column_index)
+    -> unique_ptr<BaseStatistics> {
+	if (!bind_data_p) {
+		return nullptr;
+	}
+	const auto &bind_data = bind_data_p->Cast<CV2TableFunctionData>();
+	const auto &info = *bind_data.info;
+	if (IsVirtualColumn(column_index) ? CV2GetVirtualColumn(column_index) == DUCKDB_V2_VIRTUAL_COLUMN_NONE
+	                                  : column_index >= bind_data.column_types.size()) {
+		// nothing the function could know about
+		return nullptr;
+	}
+
+	CV2TableStatisticsInfo args;
+	args.in_user_data = info.user_data ? info.user_data->GetData() : nullptr;
+	args.in_bind_data = bind_data.handle ? bind_data.handle->GetData() : nullptr;
+	args.in_column_index = column_index;
+	args.in_column_type = CV2TableColumnType(bind_data, column_index);
+
+	CV2ErrorInfo err = {};
+	auto err_ptr = Convert(&err);
+	CV2CallbackContext callback_context(context);
+	info.statistics_cb(Convert(&args), Convert(&callback_context), &err_ptr);
+
+	if (err.HasError()) {
+		err.ThrowAsException();
+	}
+	return std::move(args.out_statistics);
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Metrics
+//----------------------------------------------------------------------------------------------------------------------
+class CV2TableMetricsInfo {
+public:
+	void *in_user_data = nullptr;
+	void *in_bind_data = nullptr;
+	void *in_global_state = nullptr;
+
+	idx_t out_row_groups_scanned = 0;
+	optional_idx out_total_row_groups;
+};
+
+static auto Convert(duckdb_v2_table_function_metrics_info_handle info) -> CV2TableMetricsInfo * {
+	return reinterpret_cast<CV2TableMetricsInfo *>(info);
+}
+static auto Convert(CV2TableMetricsInfo *info) -> duckdb_v2_table_function_metrics_info_handle {
+	return reinterpret_cast<duckdb_v2_table_function_metrics_info_handle>(info);
+}
+
+static auto CV2TableGetMetrics(TableFunctionGetMetricsInput &input) -> void {
+	if (!input.bind_data) {
+		return;
+	}
+	const auto &bind_data = input.bind_data->Cast<CV2TableFunctionData>();
+	const auto &info = *bind_data.info;
+
+	CV2TableMetricsInfo args;
+	args.in_user_data = info.user_data ? info.user_data->GetData() : nullptr;
+	args.in_bind_data = bind_data.handle ? bind_data.handle->GetData() : nullptr;
+	if (input.global_state) {
+		args.in_global_state = input.global_state->Cast<CV2TableGlobalState>().handle.GetData();
+	}
+
+	CV2ErrorInfo err = {};
+	auto err_ptr = Convert(&err);
+	CV2CallbackContext callback_context(input.context);
+	info.metrics_cb(Convert(&args), Convert(&callback_context), &err_ptr);
+
+	if (err.HasError()) {
+		err.ThrowAsException();
+	}
+	// the row groups scanned are summed across reports, the total is the size of the scan as a whole
+	input.operator_metrics.row_groups_scanned += args.out_row_groups_scanned;
+	if (args.out_total_row_groups.IsValid()) {
+		input.operator_metrics.total_row_groups_to_scan = args.out_total_row_groups.GetIndex();
+	}
+}
+
 static auto CV2TableBind(ClientContext &context, TableFunctionBindInput &input, vector<LogicalType> &return_types,
                          vector<Identifier> &names) -> unique_ptr<FunctionData> {
 	const auto &info = input.info->Cast<CV2TableFunctionInfo>();
@@ -426,8 +626,9 @@ static auto CV2TableBind(ClientContext &context, TableFunctionBindInput &input, 
 	return std::move(result);
 }
 
-//! The declared column behind each vector of the output chunk. With projection pushdown the engine sizes the chunk
-//! to the columns it asked for; without it the chunk always holds every declared column, whatever the engine asked.
+//! The column behind each vector of the output chunk: a declared column, or the id of a virtual column. With
+//! projection pushdown the engine sizes the chunk to the columns it asked for; without it the chunk always holds every
+//! declared column, whatever the engine asked.
 static auto CV2TableScanColumns(const CV2TableFunctionData &bind_data, const TableFunctionInitInput &input)
     -> vector<column_t> {
 	if (bind_data.info->projection_pushdown) {
@@ -435,13 +636,85 @@ static auto CV2TableScanColumns(const CV2TableFunctionData &bind_data, const Tab
 			// the scan only produces rows (e.g. for count(*)) - the function produces them through its first column
 			return {0};
 		}
-		return input.column_ids;
+		auto result = input.column_ids;
+		auto &file_input = TableFunctionFileInitInput::Get(input);
+		if (file_input.virtual_columns) {
+			// a multi-file scan projects a virtual column under an index of its own, past the columns of the file
+			for (auto &column : result) {
+				auto entry = file_input.virtual_columns->find(column);
+				if (entry != file_input.virtual_columns->end()) {
+					column = entry->second;
+				}
+			}
+		}
+		return result;
 	}
 	vector<column_t> columns;
 	for (idx_t i = 0; i < bind_data.column_types.size(); i++) {
 		columns.push_back(i);
 	}
 	return columns;
+}
+
+//! Presents a filter to the function: the column it applies to as a reference to the scan index of that column, and
+//! optional filters - which are implied by the other filters of the query - as the predicate they wrap
+static auto CV2TableFilterExpression(const Expression &expr, const Expression &column) -> unique_ptr<Expression> {
+	auto optional_child = ExpressionFilter::GetOptionalFilterChild(expr);
+	if (optional_child) {
+		return CV2TableFilterExpression(*optional_child, column);
+	}
+	if (expr.GetExpressionType() == ExpressionType::BOUND_REF) {
+		return column.Copy();
+	}
+	auto result = expr.Copy();
+	ExpressionIterator::EnumerateChildren(
+	    *result, [&](unique_ptr<Expression> &child) { child = CV2TableFilterExpression(*child, column); });
+	return result;
+}
+
+//! Takes the filters pushed into the scan, and the expressions to evaluate before applying them, from the input
+static auto CV2TableInitFilters(const CV2TableFunctionData &bind_data, const TableFunctionInitInput &input,
+                                CV2TableGlobalState &state) -> void {
+	auto &file_input = TableFunctionFileInitInput::Get(input);
+	if (file_input.expression_map && !file_input.expression_map->empty()) {
+		// our caller could not express some of the filters in the types the function produces - those vectors are
+		// produced as the result of an expression on what the function produced instead
+		for (auto &entry : *file_input.expression_map) {
+			if (entry.second.column_indexes.size() != 1) {
+				throw NotImplementedException("Table function \"%s\" cannot evaluate a filter expression on %llu "
+				                              "columns at once",
+				                              bind_data.info->name, entry.second.column_indexes.size());
+			}
+			state.expressions[entry.first.GetIndex()] = entry.second.expression->Copy();
+		}
+		for (auto &column : state.scan_columns) {
+			state.function_types.push_back(CV2TableColumnType(bind_data, column));
+		}
+	}
+	if (!input.filters || !input.filters->HasFilters()) {
+		return;
+	}
+	if (input.filters->HasMultiColumnFilters()) {
+		throw InternalException("Table function \"%s\" received a multi-column filter", bind_data.info->name);
+	}
+	state.filters = input.filters->Copy();
+	for (auto &entry : *state.filters) {
+		// the filter set is keyed by the scan's columns - without projection pushdown the output chunk holds every
+		// declared column instead
+		auto scan_index = bind_data.info->projection_pushdown ? entry.GetIndex().GetIndex()
+		                                                      : input.column_ids[entry.GetIndex().GetIndex()];
+		state.filter_columns.push_back(scan_index);
+		if (state.expressions.find(scan_index) != state.expressions.end()) {
+			// the filter is of the type of the expression's result, not of what the function produces
+			continue;
+		}
+		auto &filter = ExpressionFilter::GetExpressionFilter(entry.Filter(), "CV2TableInitFilters");
+		auto type = CV2TableColumnType(bind_data, state.scan_columns[scan_index]);
+		BoundColumnRefExpression column(type, ColumnBinding(TableIndex(0), ProjectionIndex(scan_index)));
+		auto expression = CV2TableFilterExpression(*filter.expr, column);
+		state.table_filters.push_back(
+		    make_uniq<CV2TableFilter>(scan_index, filter, std::move(type), std::move(expression)));
+	}
 }
 
 static auto CV2TableInitGlobal(ClientContext &context, TableFunctionInitInput &input)
@@ -452,6 +725,7 @@ static auto CV2TableInitGlobal(ClientContext &context, TableFunctionInitInput &i
 	// Always produced, even without a callback: it carries the thread count and column list the scan runs with.
 	auto result = make_uniq<CV2TableGlobalState>();
 	result->scan_columns = CV2TableScanColumns(bind_data, input);
+	CV2TableInitFilters(bind_data, input, *result);
 	if (!info.init_global_cb) {
 		return std::move(result);
 	}
@@ -460,6 +734,7 @@ static auto CV2TableInitGlobal(ClientContext &context, TableFunctionInitInput &i
 	args.in_user_data = info.user_data ? info.user_data->GetData() : nullptr;
 	args.in_bind_data = bind_data.handle ? bind_data.handle->GetData() : nullptr;
 	args.in_scan_columns = &result->scan_columns;
+	args.in_table_filters = &result->table_filters;
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
@@ -485,8 +760,24 @@ static auto CV2TableInitLocal(ExecutionContext &context, TableFunctionInitInput 
 	const auto &bind_data = input.bind_data->Cast<CV2TableFunctionData>();
 	const auto &info = *bind_data.info;
 
-	// Always produced, even without a callback: get_partition_data keeps its per-thread guard state here.
+	// Always produced, even without a callback: get_partition_data keeps its per-thread guard state here, and the
+	// filters pushed into the scan are applied with the state kept here.
 	auto result = make_uniq<CV2TableLocalState>();
+	if (global_state) {
+		auto &gstate = global_state->Cast<CV2TableGlobalState>();
+		if (gstate.filters) {
+			for (auto &entry : *gstate.filters) {
+				result->filter_states.push_back(TableFilterState::Initialize(context.client, entry.Filter()));
+			}
+		}
+		if (!gstate.expressions.empty()) {
+			result->function_chunk = make_uniq<DataChunk>();
+			result->function_chunk->Initialize(context.client, gstate.function_types);
+			for (auto &entry : gstate.expressions) {
+				result->executors[entry.first] = make_uniq<ExpressionExecutor>(context.client, *entry.second);
+			}
+		}
+	}
 	if (!info.init_local_cb) {
 		return std::move(result);
 	}
@@ -578,7 +869,79 @@ static auto CV2TableExec(ClientContext &context, TableFunctionInput &input, Data
 	}
 }
 
+static auto CV2TableExecCallback(ClientContext &context, TableFunctionInput &input, DataChunk &output) -> void;
+
+//! Turns the vectors the function produced into the ones the expressions make of them
+static auto CV2TableEvaluateExpressions(CV2TableLocalState &local_state, DataChunk &output) -> void {
+	auto &function_chunk = *local_state.function_chunk;
+	const auto row_count = function_chunk.data[0].size();
+	function_chunk.SetChildCardinality(row_count);
+	for (idx_t i = 0; i < output.ColumnCount(); i++) {
+		auto entry = local_state.executors.find(i);
+		if (entry == local_state.executors.end()) {
+			output.data[i].Reference(function_chunk.data[i]);
+			continue;
+		}
+		// the expression reads the one vector it replaces
+		DataChunk expression_input;
+		expression_input.InitializeEmpty({function_chunk.data[i].GetType()});
+		expression_input.data[0].Reference(function_chunk.data[i]);
+		expression_input.SetCardinality(row_count);
+		entry->second->ExecuteExpression(expression_input, output.data[i]);
+	}
+	output.SetCardinality(row_count);
+}
+
+//! Runs the exec callback until it produces rows that pass the filters pushed into the scan, or no rows at all
+static auto CV2TableExecFiltered(ClientContext &context, TableFunctionInput &input, DataChunk &output) -> void {
+	auto &global_state = input.global_state->Cast<CV2TableGlobalState>();
+	auto &local_state = input.local_state->Cast<CV2TableLocalState>();
+	while (true) {
+		output.Reset();
+		if (local_state.function_chunk) {
+			local_state.function_chunk->Reset();
+			CV2TableExecCallback(context, input, *local_state.function_chunk);
+			if (local_state.function_chunk->data[0].size() == 0) {
+				return;
+			}
+			CV2TableEvaluateExpressions(local_state, output);
+		} else {
+			CV2TableExecCallback(context, input, output);
+		}
+		const auto row_count = output.size();
+		if (row_count == 0 || global_state.filter_columns.empty()) {
+			return;
+		}
+		idx_t approved_count = row_count;
+		local_state.filter_sel.Initialize(nullptr);
+		for (idx_t i = 0; i < global_state.filter_columns.size() && approved_count > 0; i++) {
+			auto &vector = output.data[global_state.filter_columns[i]];
+			ColumnSegment::FilterSelection(local_state.filter_sel, vector, *local_state.filter_states[i], row_count,
+			                               approved_count);
+		}
+		if (approved_count == 0) {
+			// every row was filtered out - the function has more to produce, an empty chunk would end the scan
+			continue;
+		}
+		if (approved_count != row_count) {
+			output.Slice(local_state.filter_sel, approved_count);
+		}
+		return;
+	}
+}
+
 static auto CV2TableExecBatch(ClientContext &context, TableFunctionInput &input, DataChunk &output) -> void {
+	if (input.global_state) {
+		auto &global_state = input.global_state->Cast<CV2TableGlobalState>();
+		if (!global_state.filter_columns.empty() || !global_state.expressions.empty()) {
+			CV2TableExecFiltered(context, input, output);
+			return;
+		}
+	}
+	CV2TableExecCallback(context, input, output);
+}
+
+static auto CV2TableExecCallback(ClientContext &context, TableFunctionInput &input, DataChunk &output) -> void {
 	const auto &bind_data = input.bind_data->Cast<CV2TableFunctionData>();
 	const auto &info = *bind_data.info;
 
@@ -645,14 +1008,16 @@ static auto CV2TableProgress(ClientContext &context, const FunctionData *bind_da
                              const GlobalTableFunctionState *global_state) -> double {
 	const auto &data = bind_data->Cast<CV2TableFunctionData>();
 	const auto &info = *data.info;
+	if (!global_state) {
+		// The scan has not started yet - e.g. a file a multi-file scan has not opened
+		return 0;
+	}
 
 	CV2TableProgressInfo args = {};
 	args.in_user_data = info.user_data ? info.user_data->GetData() : nullptr;
 	args.in_bind_data = data.handle ? data.handle->GetData() : nullptr;
-	if (global_state) {
-		// The callback runs concurrently with the scan, so the state it reads is the shared one, unsynchronized.
-		args.in_global_state = global_state->Cast<CV2TableGlobalState>().handle.GetData();
-	}
+	// The callback runs concurrently with the scan, so the state it reads is the shared one, unsynchronized.
+	args.in_global_state = global_state->Cast<CV2TableGlobalState>().handle.GetData();
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
@@ -779,6 +1144,20 @@ static auto CV2TableGetPartitionInfo(ClientContext &context, TableFunctionPartit
 	return args.out_partition_info;
 }
 
+static auto CV2TableGetVirtualColumns(ClientContext &context, optional_ptr<FunctionData> bind_data)
+    -> virtual_column_map_t {
+	// Reached through the bind data when there is one, and otherwise through the function being bound - but every
+	// call site of a function declares the same virtual columns, so the bind data is only needed to find them.
+	virtual_column_map_t result;
+	if (!bind_data) {
+		return result;
+	}
+	for (auto column : bind_data->Cast<CV2TableFunctionData>().info->virtual_columns) {
+		result.insert(make_pair(CV2VirtualColumnId(column), CV2VirtualColumnDefinition(column)));
+	}
+	return result;
+}
+
 class CV2TableFunction {
 public:
 	explicit CV2TableFunction(DatabaseInstance &db) : db(db) {
@@ -803,6 +1182,10 @@ public:
 		// A table function declares the columns it returns from its bind callback, not through a return type.
 		if (signature.GetReturnType().id() != LogicalTypeId::INVALID) {
 			throw InvalidInputException("A table function signature cannot set a return type.");
+		}
+		// Without projection pushdown the output chunk holds the declared columns only, so there is no room for them.
+		if (!info.virtual_columns.empty() && !info.projection_pushdown) {
+			throw InvalidInputException("Projection pushdown must be enabled for a function with virtual columns.");
 		}
 
 		signature.Verify();
@@ -829,6 +1212,18 @@ public:
 		function.projection_pushdown = info.projection_pushdown;
 		if (info.get_bind_info_cb) {
 			function.get_bind_info = CV2TableGetBindInfo;
+		}
+		// The filters are applied to whatever the exec callback produces, which makes pushing them into the scan
+		// safe - the function only uses them to skip what it does not need to read.
+		function.filter_pushdown = info.table_filter_pushdown;
+		if (info.statistics_cb) {
+			function.statistics = CV2TableStatistics;
+		}
+		if (info.metrics_cb) {
+			function.get_metrics = CV2TableGetMetrics;
+		}
+		if (!info.virtual_columns.empty()) {
+			function.get_virtual_columns = CV2TableGetVirtualColumns;
 		}
 
 		info.name = name;
@@ -886,9 +1281,15 @@ public:
 		}
 		auto single_file = SelectSingleFileFunction(std::move(single_file_overloads));
 		if (single_file.function == CV2TableExec && single_file.function_info) {
+			auto &info = single_file.function_info->Cast<CV2TableFunctionInfo>();
 			// the multi-file scan claims the batches of a C API function that scans one batch at a time
-			if (single_file.function_info->Cast<CV2TableFunctionInfo>().claim_batch_cb) {
+			if (info.claim_batch_cb) {
 				settings.claim_batch = CV2TableClaimBatch;
+			}
+			// the virtual columns of a C API function are the same for every file it reads
+			for (auto column : info.virtual_columns) {
+				settings.virtual_columns.insert(
+				    make_pair(CV2VirtualColumnId(column), CV2VirtualColumnDefinition(column)));
 			}
 		}
 		auto function = TableFunctionMultiFileWrapper::CreateFunctionSet(std::move(single_file), name, settings);
@@ -1809,4 +2210,260 @@ DUCKDB_V2_ERROR duckdb_v2_multi_file_function_destroy(duckdb_v2_multi_file_funct
 			*function = nullptr;
 		}
 	});
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Table filters
+//----------------------------------------------------------------------------------------------------------------------
+static auto Convert(duckdb_v2_table_filter_handle filter) -> CV2TableFilter * {
+	return reinterpret_cast<CV2TableFilter *>(filter);
+}
+static auto Convert(CV2TableFilter *filter) -> duckdb_v2_table_filter_handle {
+	return reinterpret_cast<duckdb_v2_table_filter_handle>(filter);
+}
+
+static_assert(static_cast<int>(duckdb::FilterPropagateResult::NO_PRUNING_POSSIBLE) ==
+                  DUCKDB_V2_FILTER_PROPAGATE_RESULT_NO_PRUNING_POSSIBLE,
+              "FilterPropagateResult::NO_PRUNING_POSSIBLE mismatch");
+static_assert(static_cast<int>(duckdb::FilterPropagateResult::FILTER_ALWAYS_TRUE) ==
+                  DUCKDB_V2_FILTER_PROPAGATE_RESULT_ALWAYS_TRUE,
+              "FilterPropagateResult::FILTER_ALWAYS_TRUE mismatch");
+static_assert(static_cast<int>(duckdb::FilterPropagateResult::FILTER_ALWAYS_FALSE) ==
+                  DUCKDB_V2_FILTER_PROPAGATE_RESULT_ALWAYS_FALSE,
+              "FilterPropagateResult::FILTER_ALWAYS_FALSE mismatch");
+static_assert(static_cast<int>(duckdb::FilterPropagateResult::FILTER_TRUE_OR_NULL) ==
+                  DUCKDB_V2_FILTER_PROPAGATE_RESULT_TRUE_OR_NULL,
+              "FilterPropagateResult::FILTER_TRUE_OR_NULL mismatch");
+static_assert(static_cast<int>(duckdb::FilterPropagateResult::FILTER_FALSE_OR_NULL) ==
+                  DUCKDB_V2_FILTER_PROPAGATE_RESULT_FALSE_OR_NULL,
+              "FilterPropagateResult::FILTER_FALSE_OR_NULL mismatch");
+
+DUCKDB_V2_ERROR duckdb_v2_table_function_set_table_filter_pushdown(duckdb_v2_table_function_handle function,
+                                                                   bool enable, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(function);
+	return WithErrorHandler(err, [&]() { Convert(function)->info.table_filter_pushdown = enable; });
+}
+
+DUCKDB_V2_ERROR
+duckdb_v2_table_function_init_global_get_table_filter_count(duckdb_v2_table_function_init_global_info_handle info,
+                                                            idx_t *count, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(count);
+	return WithErrorHandler(err, [&]() { *count = Convert(info)->in_table_filters->size(); });
+}
+
+DUCKDB_V2_ERROR
+duckdb_v2_table_function_init_global_get_table_filter(duckdb_v2_table_function_init_global_info_handle info,
+                                                      idx_t index, duckdb_v2_table_filter_handle *filter,
+                                                      duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(filter);
+	*filter = nullptr;
+	return WithErrorHandler(err, [&]() {
+		const auto &filters = *Convert(info)->in_table_filters;
+		if (index >= filters.size()) {
+			throw duckdb::InvalidInputException(
+			    "Index out of bounds in duckdb_v2_table_function_init_global_get_table_filter");
+		}
+		*filter = Convert(filters[index].get());
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_table_filter_get_scan_index(duckdb_v2_table_filter_handle filter, idx_t *index,
+                                                      duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(filter);
+	DUCKDB_CHECK_ARG(index);
+	return WithErrorHandler(err, [&]() { *index = Convert(filter)->scan_index; });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_table_filter_get_expression(duckdb_v2_table_filter_handle filter,
+                                                      duckdb_v2_expression_handle *expression,
+                                                      duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(filter);
+	DUCKDB_CHECK_ARG(expression);
+	*expression = nullptr;
+	return WithErrorHandler(err, [&]() { *expression = Convert(Convert(filter)->expression.get()); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_table_filter_check_statistics(duckdb_v2_table_filter_handle filter,
+                                                        duckdb_v2_column_statistics_handle statistics,
+                                                        DUCKDB_V2_FILTER_PROPAGATE_RESULT *result,
+                                                        duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(filter);
+	DUCKDB_CHECK_ARG(statistics);
+	DUCKDB_CHECK_ARG(result);
+	return WithErrorHandler(err, [&]() {
+		auto &table_filter = *Convert(filter);
+		auto &stats = *Convert(statistics);
+		if (stats.GetType() != table_filter.type) {
+			throw duckdb::InvalidInputException("duckdb_v2_table_filter_check_statistics: the filter applies to a "
+			                                    "column of type %s, but the statistics are of type %s",
+			                                    table_filter.type.ToString(), stats.GetType().ToString());
+		}
+		*result = static_cast<DUCKDB_V2_FILTER_PROPAGATE_RESULT>(table_filter.filter.CheckStatistics(stats));
+	});
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Virtual columns
+//----------------------------------------------------------------------------------------------------------------------
+DUCKDB_V2_ERROR duckdb_v2_table_function_add_virtual_column(duckdb_v2_table_function_handle function,
+                                                            DUCKDB_V2_VIRTUAL_COLUMN column,
+                                                            duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(function);
+	return WithErrorHandler(err, [&]() {
+		// rejects NONE and anything that is not a virtual column
+		CV2VirtualColumnId(column);
+		auto &columns = Convert(function)->info.virtual_columns;
+		if (std::find(columns.begin(), columns.end(), column) == columns.end()) {
+			columns.push_back(column);
+		}
+	});
+}
+
+//! Which virtual column the scan's column at the given index is
+static auto CV2ScanVirtualColumn(const duckdb::vector<duckdb::column_t> &columns, idx_t index, const char *function)
+    -> DUCKDB_V2_VIRTUAL_COLUMN {
+	if (index >= columns.size()) {
+		throw duckdb::InvalidInputException("Index out of bounds in %s", function);
+	}
+	return CV2GetVirtualColumn(columns[index]);
+}
+
+DUCKDB_V2_ERROR
+duckdb_v2_table_function_init_global_get_virtual_column(duckdb_v2_table_function_init_global_info_handle info,
+                                                        idx_t index, DUCKDB_V2_VIRTUAL_COLUMN *column,
+                                                        duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(column);
+	return WithErrorHandler(err, [&]() {
+		*column = CV2ScanVirtualColumn(*Convert(info)->in_scan_columns, index,
+		                               "duckdb_v2_table_function_init_global_get_virtual_column");
+	});
+}
+
+DUCKDB_V2_ERROR
+duckdb_v2_table_function_init_local_get_virtual_column(duckdb_v2_table_function_init_local_info_handle info,
+                                                       idx_t index, DUCKDB_V2_VIRTUAL_COLUMN *column,
+                                                       duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(column);
+	return WithErrorHandler(err, [&]() {
+		*column = CV2ScanVirtualColumn(*Convert(info)->in_scan_columns, index,
+		                               "duckdb_v2_table_function_init_local_get_virtual_column");
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_table_function_exec_get_virtual_column(duckdb_v2_table_function_exec_info_handle info,
+                                                                 idx_t index, DUCKDB_V2_VIRTUAL_COLUMN *column,
+                                                                 duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(column);
+	return WithErrorHandler(err, [&]() {
+		*column = CV2ScanVirtualColumn(*Convert(info)->in_scan_columns, index,
+		                               "duckdb_v2_table_function_exec_get_virtual_column");
+	});
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Statistics
+//----------------------------------------------------------------------------------------------------------------------
+DUCKDB_V2_ERROR
+duckdb_v2_table_function_set_statistics_callback(duckdb_v2_table_function_handle function,
+                                                 duckdb_v2_table_function_statistics_callback_fn callback,
+                                                 duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(function);
+	return WithErrorHandler(err, [&]() { Convert(function)->info.statistics_cb = callback; });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_table_function_statistics_get_user_data(duckdb_v2_table_function_statistics_info_handle info,
+                                                                  void **data, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(data);
+	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_user_data; });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_table_function_statistics_get_bind_data(duckdb_v2_table_function_statistics_info_handle info,
+                                                                  void **data, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(data);
+	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_bind_data; });
+}
+
+DUCKDB_V2_ERROR
+duckdb_v2_table_function_statistics_get_column_index(duckdb_v2_table_function_statistics_info_handle info,
+                                                     idx_t *column_index, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(column_index);
+	return WithErrorHandler(err, [&]() { *column_index = Convert(info)->in_column_index; });
+}
+
+DUCKDB_V2_ERROR
+duckdb_v2_table_function_statistics_get_virtual_column(duckdb_v2_table_function_statistics_info_handle info,
+                                                       DUCKDB_V2_VIRTUAL_COLUMN *column,
+                                                       duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(column);
+	return WithErrorHandler(err, [&]() { *column = CV2GetVirtualColumn(Convert(info)->in_column_index); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_table_function_statistics_set_statistics(duckdb_v2_table_function_statistics_info_handle info,
+                                                                   duckdb_v2_column_statistics_handle statistics,
+                                                                   duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(statistics);
+	return WithErrorHandler(err, [&]() {
+		auto &args = *Convert(info);
+		auto &stats = *Convert(statistics);
+		if (stats.GetType() != args.in_column_type) {
+			throw duckdb::InvalidInputException("duckdb_v2_table_function_statistics_set_statistics: the column is "
+			                                    "of type %s, but the statistics are of type %s",
+			                                    args.in_column_type.ToString(), stats.GetType().ToString());
+		}
+		args.out_statistics = stats.ToUnique();
+	});
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Metrics
+//----------------------------------------------------------------------------------------------------------------------
+DUCKDB_V2_ERROR duckdb_v2_table_function_set_metrics_callback(duckdb_v2_table_function_handle function,
+                                                              duckdb_v2_table_function_metrics_callback_fn callback,
+                                                              duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(function);
+	return WithErrorHandler(err, [&]() { Convert(function)->info.metrics_cb = callback; });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_table_function_metrics_get_user_data(duckdb_v2_table_function_metrics_info_handle info,
+                                                               void **data, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(data);
+	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_user_data; });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_table_function_metrics_get_bind_data(duckdb_v2_table_function_metrics_info_handle info,
+                                                               void **data, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(data);
+	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_bind_data; });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_table_function_metrics_get_global_state(duckdb_v2_table_function_metrics_info_handle info,
+                                                                  void **data, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(data);
+	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_global_state; });
+}
+
+DUCKDB_V2_ERROR
+duckdb_v2_table_function_metrics_add_row_groups_scanned(duckdb_v2_table_function_metrics_info_handle info, idx_t count,
+                                                        duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	return WithErrorHandler(err, [&]() { Convert(info)->out_row_groups_scanned += count; });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_table_function_metrics_set_total_row_groups(duckdb_v2_table_function_metrics_info_handle info,
+                                                                      idx_t count, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	return WithErrorHandler(err, [&]() { Convert(info)->out_total_row_groups = count; });
 }

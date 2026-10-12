@@ -670,6 +670,16 @@ inline auto Convert(CV2Expression *expression) -> duckdb_v2_expression_handle {
 	return reinterpret_cast<duckdb_v2_expression_handle>(expression);
 }
 
+using CV2ColumnStatistics = duckdb::BaseStatistics;
+
+inline auto Convert(duckdb_v2_column_statistics_handle statistics) -> CV2ColumnStatistics * {
+	return reinterpret_cast<CV2ColumnStatistics *>(statistics);
+}
+
+inline auto Convert(CV2ColumnStatistics *statistics) -> duckdb_v2_column_statistics_handle {
+	return reinterpret_cast<duckdb_v2_column_statistics_handle>(statistics);
+}
+
 using CV2DataChunk = duckdb::DataChunk;
 
 inline auto Convert(duckdb_v2_data_chunk_handle chunk) -> CV2DataChunk * {
